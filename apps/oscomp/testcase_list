@@ -1,1 +1,2 @@
-/musl/busybox sh /musl/libctest_testcode.sh
+/musl/busybox mkdir test_dir
+/musl/busybox rmdir test_dir

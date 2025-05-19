@@ -247,6 +247,10 @@ pub fn sys_unlinkat(dirfd: c_int, path: UserConstPtr<c_char>, flags: u32) -> Lin
     Ok(0)
 }
 
+pub fn sys_rmdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
+    sys_unlinkat(AT_FDCWD, path, AT_REMOVEDIR)
+}
+
 pub fn sys_unlink(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     sys_unlinkat(AT_FDCWD, path, 0)
 }
@@ -415,5 +419,21 @@ pub fn sys_renameat2(
     // fixme: flags
     axfs::api::rename(old_path.as_str(), new_path.as_str())?;
 
+    Ok(0)
+}
+
+pub fn sys_symlink(
+    old_path: UserConstPtr<c_char>,
+    new_path: UserConstPtr<c_char>,
+) -> LinuxResult<isize> {
+    sys_symlinkat(old_path, AT_FDCWD, new_path)
+}
+
+pub fn sys_symlinkat(
+    _old_path: UserConstPtr<c_char>,
+    _new_dirfd: c_int,
+    _new_path: UserConstPtr<c_char>,
+) -> LinuxResult<isize> {
+    warn!("Unimplemented syscall: SYS_SYMLINKAT");
     Ok(0)
 }
