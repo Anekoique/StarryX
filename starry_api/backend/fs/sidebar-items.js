@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AX_FILE_LIMIT"],"enum":["LinkError"],"fn":["add_file_like","close_file_like","get_file_like","get_file_like_at","handle_file_path","init_stdio","stdin","stdout"],"static":["HARDLINK_MANAGER"],"struct":["Directory","FD_TABLE","File","FilePath","HardlinkManager","Kstat","Pipe","Stdin","Stdout"],"trait":["FileLike"]};
