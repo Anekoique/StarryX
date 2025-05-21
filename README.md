@@ -1,5 +1,13 @@
 # Todo
 
+## 5.20
+
+- add docs
+- new filesystem (reffer to axfs-ng/axfs-ng-vfs/axfs)
+- testcode (shmem need)
+  - libctest (pthread_cancel_points pthread_robust_detach)
+  - iozone
+
 ## 5.18
 
 - add docs
@@ -289,6 +297,129 @@ classDiagram
 ### 发送信号
 
 ## Futex
+
+## FileSystem
+
+### axfs-ng
+
+```mermaid
+graph TD
+    %% Top level - Userspace syscalls
+    Syscalls["System Calls (open, read, write, etc.)"]
+    
+    %% API Layer
+    ApiLayer["API Layer (starry-Mivik/api)"]
+    FileOps["FileLike Trait\n(read, write, stat, etc.)"]
+    FdTable["FD_TABLE\n(File Descriptor Management)"]
+    KStat["Kstat Struct\n(File metadata in Linux format)"]
+    
+    %% File implementations
+    FileImpl["File Implementations"]
+    RegularFile["File\n(Regular File)"]
+    DirFile["Directory\n(Directory File)"]
+    Pipe["Pipe"]
+    Socket["Socket"]
+    Stdio["Standard IO"]
+    
+    %% AXFS-NG Layer
+    AxfsLayer["axfs-ng Layer"]
+    FsContext["FsContext<M>\n(Filesystem Context)"]
+    HighLevelFile["File<M>\n(High-level file operations)"]
+    OpenOptions["OpenOptions\n(File open parameters)"]
+    ReadDir["ReadDir\n(Directory iterator)"]
+    
+    %% VFS Layer
+    VfsLayer["VFS Layer (axfs-ng-vfs)"]
+    Location["Location<M>\n(File/Dir reference)"]
+    Metadata["Metadata\n(File attributes)"]
+    Path["Path\n(Filesystem paths)"]
+    FileNode["FileNode\n(File operations)"]
+    
+    %% Filesystem implementations
+    FsImpl["Filesystem Implementations"]
+    Ext4["Ext4 Filesystem\n(lwext4_rust)"]
+    Fat["FAT Filesystem\n(fatfs)"]
+    
+    %% Physical storage
+    BlockDevice["Block Device Layer"]
+    
+    %% Relationships - Top to bottom
+    Syscalls --> ApiLayer
+    
+    ApiLayer --> FileOps
+    ApiLayer --> FdTable
+    ApiLayer --> KStat
+    
+    FileOps --> FileImpl
+    
+    FileImpl --> RegularFile
+    FileImpl --> DirFile
+    FileImpl --> Pipe
+    FileImpl --> Socket
+    FileImpl --> Stdio
+    
+    RegularFile --> AxfsLayer
+    DirFile --> AxfsLayer
+    
+    AxfsLayer --> FsContext
+    AxfsLayer --> HighLevelFile
+    AxfsLayer --> OpenOptions
+    AxfsLayer --> ReadDir
+    
+    FsContext --> VfsLayer
+    HighLevelFile --> VfsLayer
+    
+    VfsLayer --> Location
+    VfsLayer --> Metadata
+    VfsLayer --> Path
+    VfsLayer --> FileNode
+    
+    Location --> FsImpl
+    
+    FsImpl --> Ext4
+    FsImpl --> Fat
+    
+    Ext4 --> BlockDevice
+    Fat --> BlockDevice
+    
+    %% Key functional flows
+    subgraph Key_Operations
+        ResolveAt["resolve_at()\n(Path resolution)"]
+        WithFs["with_fs()\n(FS context access)"]
+    end
+    
+    ApiLayer --> ResolveAt
+    ApiLayer --> WithFs
+    ResolveAt --> FsContext
+    WithFs --> FsContext
+    
+    FsContext -.-> |"resolve()"| Location
+    HighLevelFile -.-> |"read/write/seek"| FileNode
+```
+
+starry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## ArceOS change
 
