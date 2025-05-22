@@ -1,40 +1,28 @@
-/musl/busybox mkdir /lib
+# /musl/busybox echo "#### OS COMP TEST GROUP START busybox-glibc ####"
+# /musl/busybox echo "#### OS COMP TEST GROUP START busybox-musl ####"
+# ./busybox sh -c 'sleep 5' & ./busybox kill $!
+# ./busybox sleep 2
+# ./busybox mkdir test_dir
+# ./busybox mv test_dir test
+# ./busybox rmdir test
+# /musl/busybox echo "#### OS COMP TEST GROUP END busybox-musl ####"
+# /musl/busybox echo "#### OS COMP TEST GROUP END busybox-glibc ####"
 
-# /musl/busybox ln -s /musl/lib/libc.so /lib/libc.so
-/musl/busybox sh -c "/musl/busybox cp /musl/*.so /lib/"
-
-# /musl/busybox ln -s libc.so /lib/ld-musl-riscv64.so.1
-# /musl/busybox ln -s libc.so /lib/ld-musl-aarch64.so.1
-# /musl/busybox ln -s libc.so /lib/ld-musl-x86_64.so.1
-# /musl/busybox ln -s libc.so /lib/ld-musl-loongarch-lp64d.so.1
-
-# /musl/busybox cp -r /lib /lib64
-
-# /musl/busybox ls /lib64
-
-/musl/busybox echo "#### OS COMP TEST GROUP START basic-glibc ####"
-/musl/busybox echo "#### OS COMP TEST GROUP START basic-musl ####"
-/musl/busybox sh -c "cd basic && ../busybox sh run-all.sh"
-/musl/busybox echo "#### OS COMP TEST GROUP END basic-musl ####"
-/musl/busybox echo "#### OS COMP TEST GROUP END basic-glibc ####"
-
-/musl/busybox echo "#### OS COMP TEST GROUP START libctest-glibc ####"
-/musl/busybox sh libctest_testcode.sh
-/musl/busybox echo "#### OS COMP TEST GROUP END libctest-glibc ####"
-
-/musl/busybox echo "#### OS COMP TEST GROUP START lua-glibc ####"
-/musl/busybox sh lua_testcode.sh
-/musl/busybox echo "#### OS COMP TEST GROUP END lua-glibc ####"
-
-/musl/busybox echo "#### OS COMP TEST GROUP START iozone-glibc ####"
-/musl/busybox sh /musl/iozone_testcode.sh
-/musl/busybox echo "#### OS COMP TEST GROUP END iozone-glibc ####"
-
-/musl/busybox echo "#### OS COMP TEST GROUP START busybox-glibc ####"
-/musl/busybox mkdir /bin
-/musl/busybox cp /musl/busybox /bin/ls
-/musl/busybox cp /musl/busybox /bin/sleep
-/musl/busybox sh busybox_testcode.sh
-/musl/busybox echo "#### OS COMP TEST GROUP END busybox-glibc ####"
-
-# /musl/busybox hwclock
+./busybox echo "#### OS COMP TEST GROUP START iozone-glibc ####"
+./busybox echo iozone automatic measurements
+./iozone -a -r 1k -s 4m
+./busybox echo iozone throughput write/read measurements
+./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
+./busybox echo iozone throughput random-read measurements
+./iozone -t 4 -i 0 -i 2 -r 1k -s 1m
+./busybox echo iozone throughput read-backwards measurements
+./iozone -t 4 -i 0 -i 3 -r 1k -s 1m
+./busybox echo iozone throughput stride-read measurements
+./iozone -t 4 -i 0 -i 5 -r 1k -s 1m
+./busybox echo iozone throughput fwrite/fread measurements
+./iozone -t 4 -i 6 -i 7 -r 1k -s 1m
+./busybox echo iozone throughput pwrite/pread measurements
+./iozone -t 4 -i 9 -i 10 -r 1k -s 1m
+./busybox echo iozone throughtput pwritev/preadv measurements
+./iozone -t 4 -i 11 -i 12 -r 1k -s 1m
+./busybox echo "#### OS COMP TEST GROUP END iozone-glibc ####"
