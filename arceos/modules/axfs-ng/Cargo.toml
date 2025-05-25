@@ -1,0 +1,51 @@
+[package]
+name = "axfs-ng"
+version = "0.1.0"
+edition.workspace = true
+authors = ["Mivik <mivikq@gmail.com>"]
+license.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+fat = ["dep:fatfs"]
+ext4 = ["dep:lwext4_rust"]
+thread-local = ["dep:axns", "dep:axsync"]
+std = ["lwext4_rust?/std"]
+
+[dependencies]
+axdriver = { workspace = true, features = ["block"] }
+axerrno = "0.1.0"
+axio = { version = "0.1.1", features = ["alloc"] }
+axns = { workspace = true, optional = true }
+axsync = { workspace = true, optional = true }
+
+bitflags = "2.9.0"
+chrono = { version = "0.4.40", default-features = false }
+lock_api = "0.4.12"
+log = "=0.4.21"
+spin = { version = "0.10.0", features = ["lock_api"] }
+
+axfs-ng-vfs = { workspace = true }
+cfg-if = "1.0.0"
+slab = { version = "0.4.9", default-features = false }
+
+[dependencies.lwext4_rust]
+git = "https://github.com/Mivik/lwext4_rust"
+rev = "ebd38f6"
+default-features = false
+optional = true
+
+[dependencies.fatfs]
+git = "https://github.com/Mivik/rust-fatfs"
+rev = "2685439"
+default-features = false
+optional = true
+features = ["alloc", "lfn", "log_level_trace", "unicode"]
+
+[dev-dependencies]
+axdriver = { workspace = true, features = ["block", "ramdisk"] }
+axdriver_block = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", features = [
+    "ramdisk",
+] }
+env_logger = "0.11.8"

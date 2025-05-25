@@ -24,7 +24,7 @@ irq = ["axfeat/irq"]
 alloc = ["dep:axalloc", "axfeat/alloc"]
 multitask = ["axtask/multitask", "axfeat/multitask", "axsync/multitask"]
 fd = ["alloc", "dep:axns"]
-fs = ["dep:axfs", "axfeat/fs", "fd"]
+fs = ["dep:axfs-ng", "dep:axfs-ng-vfs", "axfeat/fs", "fd"]
 net = ["dep:axnet", "axfeat/net", "fd"]
 pipe = ["fd"]
 select = ["fd"]
@@ -41,7 +41,8 @@ axhal = { workspace = true }
 axsync = { workspace = true }
 axalloc = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
-axfs = { workspace = true, optional = true }
+axfs-ng = { workspace = true, optional = true }
+axfs-ng-vfs = { workspace = true, optional = true }
 axnet = { workspace = true, optional = true }
 axns = { workspace = true, optional = true }
 

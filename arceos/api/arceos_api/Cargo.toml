@@ -17,11 +17,9 @@ alloc = ["dep:axalloc", "axfeat/alloc"]
 paging = ["dep:axmm", "axfeat/paging"]
 dma = ["dep:axdma", "axfeat/dma"]
 multitask = ["axtask/multitask", "axsync/multitask", "axfeat/multitask"]
-fs = ["dep:axfs", "dep:axdriver", "axfeat/fs"]
+fs = ["dep:axfs-ng", "dep:axdriver", "axfeat/fs"]
 net = ["dep:axnet", "dep:axdriver", "axfeat/net"]
 display = ["dep:axdisplay", "dep:axdriver", "axfeat/display"]
-
-myfs = ["axfeat/myfs"]
 
 # Use dummy functions if the feature is not enabled
 dummy-if-not-enabled = []
@@ -40,6 +38,6 @@ axmm = { workspace = true, optional = true }
 axdma = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
 axdriver = { workspace = true, optional = true }
-axfs = { workspace = true, optional = true }
+axfs-ng = { workspace = true, optional = true }
 axnet = { workspace = true, optional = true }
 axdisplay = { workspace = true, optional = true }
