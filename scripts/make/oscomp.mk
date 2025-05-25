@@ -14,9 +14,11 @@ oscomp_build:
 	RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=riscv64 AX_TESTCASE=oscomp BUS=mmio FEATURES=lwext4_rs 
 	RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=loongarch64 AX_TESTCASE=oscomp FEATURES=lwext4_rs
 
+TIMEOUT ?= 5m
+
 oscomp_test: defconfig
 	# Test for os competition online
-	@./scripts/oscomp_test.sh
+	@set -o pipefail; timeout --foreground $(TIMEOUT) $(MAKE) ACCEL=n oscomp_run | tee apps/oscomp/actual.out
 
 IMG_URL := https://github.com/Azure-stars/testsuits-for-oskernel/releases/download/v0.2/sdcard-$(ARCH).img.gz
 

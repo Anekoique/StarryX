@@ -1,6 +1,6 @@
 use axerrno::{LinuxError, LinuxResult};
 use axhal::time::{monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time};
-use linux_raw_sys::general::{__kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME};
+use linux_raw_sys::general::{__kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, timeval};
 use starry_core::task::time_stat_output;
 
 use crate::{ptr::UserPtr, time::*};
@@ -24,8 +24,8 @@ pub fn sys_clock_gettime(
     Ok(0)
 }
 
-pub fn sys_get_time_of_day(ts: UserPtr<timeval>) -> LinuxResult<isize> {
-    *ts.get_as_mut()? = timevalue_to_timeval(monotonic_time());
+pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
+    *ts.get_as_mut()? = timevalue_to_timeval(wall_time());
     Ok(0)
 }
 

@@ -45,34 +45,6 @@ pub fn get_file_like(fd: c_int) -> LinuxResult<Arc<dyn FileLike>> {
         .ok_or(LinuxError::EBADF)
 }
 
-// /// Get a file-like object by `dirfd` and `path`.
-// pub fn get_file_like_at(dirfd: c_int, path: &str) -> LinuxResult<Arc<dyn FileLike>> {
-//     let dir = if path.starts_with('/') || dirfd == AT_FDCWD {
-//         None
-//     } else {
-//         Some(Directory::from_fd(dirfd)?)
-//     };
-//
-//     let mut opt = OpenOptions::new();
-//     opt.read(true);
-//     opt.write(true);
-//     match dir.as_ref().map_or_else(
-//         || axfs::fops::File::open(path, &opt),
-//         |dir| dir.inner().open_file_at(path, &opt),
-//     ) {
-//         Err(AxError::IsADirectory) => {}
-//         r => return Ok(Arc::new(File::new(r?, path.into()))),
-//     }
-//
-//     Ok(Arc::new(Directory::new(
-//         dir.map_or_else(
-//             || axfs::fops::Directory::open_dir(path, &opt),
-//             |dir| dir.inner().open_dir_at(path, &opt),
-//         )?,
-//         path.into(),
-//     )))
-// }
-
 /// Add a file to the file descriptor table.
 pub fn add_file_like(f: Arc<dyn FileLike>) -> LinuxResult<c_int> {
     let curr = current();

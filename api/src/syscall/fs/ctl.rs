@@ -1,7 +1,6 @@
 use core::{
     ffi::{c_char, c_int, c_void},
     mem::offset_of,
-    time::Duration,
 };
 
 use alloc::ffi::CString;
@@ -13,6 +12,7 @@ use chrono::{Datelike, Timelike};
 use linux_raw_sys::{
     general::{
         AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, UTIME_NOW, UTIME_OMIT, linux_dirent64, timespec,
+        timeval,
     },
     ioctl::RTC_RD_TIME,
 };
@@ -21,7 +21,7 @@ use starry_core::vfs::RTC0_DEVICE_ID;
 use crate::{
     fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{timespec_to_timevalue, timeval_to_timevalue},
+    time::{TimeValue, timeval_to_timevalue, wall_time_nanos},
 };
 
 #[repr(C)]
@@ -50,7 +50,7 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
     let f = get_file_like(fd)?;
     let stat = f.stat()?;
     if op == RTC_RD_TIME as _ && stat.rdev == RTC0_DEVICE_ID {
-        let wall = chrono::DateTime::from_timestamp_nanos(axhal::time::wall_time_nanos() as _);
+        let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
         *argp.cast::<rtc_time>().get_as_mut()? = rtc_time {
             tm_sec: wall.second() as _,
             tm_min: wall.minute() as _,
@@ -80,7 +80,6 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     })
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_mkdir(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     sys_mkdirat(AT_FDCWD, path, mode)
 }
@@ -233,7 +232,6 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
     })
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_rmdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     sys_unlinkat(AT_FDCWD, path, AT_REMOVEDIR as _)
 }
@@ -263,7 +261,6 @@ pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_symlink(
     target: UserConstPtr<c_char>,
     linkpath: UserConstPtr<c_char>,
@@ -285,7 +282,6 @@ pub fn sys_symlinkat(
     })
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_readlink(
     path: UserConstPtr<c_char>,
     buf: UserPtr<u8>,
@@ -312,11 +308,9 @@ pub fn sys_readlinkat(
     })
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_chown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
     sys_fchownat(AT_FDCWD, path, uid, gid, 0)
 }
-#[cfg(target_arch = "x86_64")]
 pub fn sys_lchown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
     use linux_raw_sys::general::AT_SYMLINK_NOFOLLOW;
     sys_fchownat(AT_FDCWD, path, uid, gid, AT_SYMLINK_NOFOLLOW)
@@ -344,7 +338,6 @@ pub fn sys_fchownat(
     Ok(0)
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_chmod(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     sys_fchmodat(AT_FDCWD, path, mode, 0)
 }
@@ -370,7 +363,6 @@ pub fn sys_fchmodat(
     Ok(0)
 }
 
-#[cfg(target_arch = "x86_64")]
 #[allow(non_camel_case_types)]
 pub struct utimbuf {
     actime: linux_raw_sys::general::__kernel_old_time_t,
@@ -380,8 +372,8 @@ pub struct utimbuf {
 fn update_times(
     dirfd: i32,
     path: UserConstPtr<c_char>,
-    atime: Option<Duration>,
-    mtime: Option<Duration>,
+    atime: Option<TimeValue>,
+    mtime: Option<TimeValue>,
     flags: u32,
 ) -> LinuxResult<()> {
     let path = nullable!(path.get_as_str())?;
@@ -396,22 +388,15 @@ fn update_times(
     Ok(())
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> LinuxResult<isize> {
     let times = nullable!(times.get_as_ref())?;
-    let atime = times.map_or_else(wall_time, |it| Duration::from_secs(it.actime as _));
-    let mtime = times.map_or_else(wall_time, |it| Duration::from_secs(it.modtime as _));
+    let atime = times.map_or_else(wall_time, |it| TimeValue::from_secs(it.actime as _));
+    let mtime = times.map_or_else(wall_time, |it| TimeValue::from_secs(it.modtime as _));
     update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
     Ok(0)
 }
 
-#[cfg(target_arch = "x86_64")]
-pub fn sys_utimes(
-    path: UserConstPtr<c_char>,
-    times: UserConstPtr<linux_raw_sys::general::timeval>,
-) -> LinuxResult<isize> {
-    use crate::timeval_to_timevalue;
-
+pub fn sys_utimes(path: UserConstPtr<c_char>, times: UserConstPtr<timeval>) -> LinuxResult<isize> {
     let times = nullable!(times.get_as_slice(2))?;
     let atime = times.map_or_else(wall_time, |it| timeval_to_timevalue(it[0]));
     let mtime = times.map_or_else(wall_time, |it| timeval_to_timevalue(it[1]));
@@ -428,11 +413,11 @@ pub fn sys_utimensat(
     if path.is_null() {
         flags |= AT_EMPTY_PATH;
     }
-    fn utime_to_duration(time: &timespec) -> Option<Duration> {
+    fn utime_to_duration(time: &timespec) -> Option<TimeValue> {
         match time.tv_nsec {
             val if val == UTIME_OMIT as _ => None,
             val if val == UTIME_NOW as _ => Some(wall_time()),
-            _ => Some(timespec_to_timevalue(*time)),
+            _ => Some(TimeValue::from_nanos(time.tv_nsec as _)),
         }
     }
     let times = nullable!(times.get_as_slice(2))?;
@@ -448,7 +433,6 @@ pub fn sys_utimensat(
     Ok(0)
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_rename(
     old_path: UserConstPtr<c_char>,
     new_path: UserConstPtr<c_char>,
@@ -464,6 +448,7 @@ pub fn sys_renameat(
 ) -> LinuxResult<isize> {
     sys_renameat2(old_dirfd, old_path, new_dirfd, new_path, 0)
 }
+
 pub fn sys_renameat2(
     old_dirfd: i32,
     old_path: UserConstPtr<c_char>,

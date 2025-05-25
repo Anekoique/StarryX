@@ -1,7 +1,8 @@
 use core::ffi::c_char;
 
 use axerrno::LinuxResult;
-use linux_raw_sys::system::new_utsname;
+use linux_raw_sys::system::{new_utsname, sysinfo};
+use starry_core::task::processes;
 
 use crate::ptr::UserPtr;
 
@@ -45,7 +46,23 @@ pub fn sys_uname(name: UserPtr<new_utsname>) -> LinuxResult<isize> {
     Ok(0)
 }
 
-pub fn sys_getrandom(_buf: UserPtr<u8>, _len: usize, _flags: u32) -> LinuxResult<isize> {
-    warn!("getrandom is not implemented");
+pub fn sys_sysinfo(info: UserPtr<sysinfo>) -> LinuxResult<isize> {
+    let info = info.get_as_mut()?;
+    info.uptime = 0;
+    info.loads = [0, 0, 0];
+    info.totalram = 0;
+    info.freeram = 0;
+    info.sharedram = 0;
+    info.bufferram = 0;
+    info.totalswap = 0;
+    info.freeswap = 0;
+    info.procs = processes().len() as _;
+    info.totalhigh = 0;
+    info.freehigh = 0;
+    info.mem_unit = 1;
+    Ok(0)
+}
+
+pub fn sys_syslog(_type: i32, _buf: UserPtr<c_char>, _len: usize) -> LinuxResult<isize> {
     Ok(0)
 }

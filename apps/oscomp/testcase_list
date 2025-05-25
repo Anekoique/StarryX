@@ -1,1 +1,1 @@
-/musl/busybox sh -c "cd basic && ../busybox sh run-all.sh"
+/musl/busybox sh /musl/libctest_testcode.sh
