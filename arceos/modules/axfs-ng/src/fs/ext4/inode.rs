@@ -2,7 +2,9 @@ use core::any::Any;
 
 use alloc::{borrow::ToOwned, string::String, sync::Arc};
 use axfs_ng_vfs::{
-    DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, FilesystemOps, Metadata, MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, VfsError, VfsResult, WeakDirEntry
+    DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, FilesystemOps,
+    Metadata, MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, VfsError, VfsResult,
+    WeakDirEntry,
 };
 use lock_api::RawMutex;
 use lwext4_rust::{FileAttr, InodeType};

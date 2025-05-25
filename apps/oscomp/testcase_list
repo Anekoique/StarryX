@@ -1,2 +1,1 @@
-/musl/busybox mkdir test_dir
-/musl/busybox rmdir test_dir
+/musl/busybox sh -c "cd basic && ../busybox sh run-all.sh"

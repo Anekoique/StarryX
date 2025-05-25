@@ -10,7 +10,8 @@ repository.workspace = true
 axfeat.workspace = true
 
 axconfig.workspace = true
-axfs.workspace = true
+axfs-ng.workspace = true
+axfs-ng-vfs.workspace = true
 axhal.workspace = true
 axlog.workspace = true
 axmm.workspace = true
@@ -26,16 +27,21 @@ axerrno.workspace = true
 bitflags.workspace = true
 cfg-if.workspace = true
 linkme.workspace = true
-linux-raw-sys.workspace = true
+linux-raw-sys = { workspace = true, features = ["ioctl"] }
 memory_addr.workspace = true
 spin.workspace = true
 
 starry-core.workspace = true
 
 axio = "0.1.1"
+chrono = { version = "0.4.41", default-features = false }
 ctor_bare = "0.2.1"
 flatten_objects = "0.2.3"
 num_enum = { version = "0.7", default-features = false }
+
+lazy_static = { version = "1.5", features = ["spin_no_std"] }
+page_table_multiarch = "0.5"
+page_table_entry = "0.5"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86 = "0.52"

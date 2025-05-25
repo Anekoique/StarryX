@@ -38,6 +38,9 @@ axtask = { git = "https://github.com/oscomp/arceos.git" }
 axprocess = { git = "https://github.com/Starry-OS/axprocess.git" }
 axsignal = { git = "https://github.com/Starry-OS/axsignal.git", rev = "b5b6089" }
 
+axfs-ng = { path = "./arceos/modules/axfs-ng" }
+axfs-ng-vfs = { git = "https://github.com/Mivik/axfs-ng-vfs", rev = "517cd09" }
+
 axerrno = "0.1"
 bitflags = "2.6"
 cfg-if = "1.0"
@@ -68,8 +71,9 @@ lwext4_rs = ["axfeat/lwext4_rs"]
 
 [dependencies]
 axfeat.workspace = true
+
 axconfig.workspace = true
-axfs.workspace = true
+axfs-ng.workspace = true
 axhal.workspace = true
 axlog.workspace = true
 axruntime.workspace = true

@@ -2,7 +2,6 @@ use core::ffi::c_char;
 
 use alloc::{string::ToString, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
-use axfs::api::canonicalize;
 use axhal::arch::TrapFrame;
 use axtask::{TaskExtRef, current};
 use starry_core::mm::{load_user_app, map_trampoline};
@@ -17,7 +16,7 @@ pub fn sys_execve(
 ) -> LinuxResult<isize> {
     let path = path.get_as_str()?.to_string();
 
-    let mut args = argv
+    let args = argv
         .get_as_null_terminated()?
         .iter()
         .map(|arg| arg.get_as_str().map(Into::into))
@@ -47,9 +46,8 @@ pub fn sys_execve(
     map_trampoline(&mut aspace)?;
     axhal::arch::flush_tlb(None);
 
-    args[0] = path.clone();
-    let (entry_point, user_stack_base) =
-        load_user_app(&mut aspace, &args, &envs).map_err(|_| {
+    let (entry_point, user_stack_base) = load_user_app(&mut aspace, Some(&path), &args, &envs)
+        .map_err(|_| {
             error!("Failed to load app {}", path);
             LinuxError::ENOENT
         })?;
@@ -59,7 +57,7 @@ pub fn sys_execve(
         .rsplit_once('/')
         .map_or(path.as_str(), |(_, name)| name);
     curr.set_name(name);
-    *curr_ext.process_data().exe_path.write() = canonicalize(path.as_str())?;
+    *curr_ext.process_data().exe_path.write() = path;
 
     // TODO: fd close-on-exec
 

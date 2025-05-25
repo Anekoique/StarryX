@@ -2,7 +2,6 @@ use core::any::Any;
 
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
-use axfs::api::{TimesMask, Timestamp};
 use axio::PollState;
 use axsync::Mutex;
 use linux_raw_sys::general::S_IFIFO;
@@ -203,9 +202,5 @@ impl FileLike for Pipe {
 
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
-    }
-
-    fn set_times(&self, _times: Timestamp, _mask: TimesMask) -> LinuxResult {
-        Err(LinuxError::ENOSYS)
     }
 }

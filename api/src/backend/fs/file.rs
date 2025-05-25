@@ -1,16 +1,75 @@
-use alloc::{string::String, sync::Arc};
+use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs::{
-    api::{TimesMask, Timestamp},
-    fops::DirEntry,
-};
-use axio::PollState;
-use axsync::{Mutex, MutexGuard};
-use linux_raw_sys::general::{S_IFDIR, stat, statx};
+use axfs_ng::{FS_CONTEXT, FsContext};
+use axfs_ng_vfs::DeviceId;
+use axfs_ng_vfs::{Location, Metadata};
+use axio::{PollState, Read};
+use axsync::{Mutex, MutexGuard, RawMutex};
+use linux_raw_sys::general::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx};
 
 use super::{add_file_like, get_file_like};
+
+pub fn with_fs<R>(
+    dirfd: c_int,
+    f: impl FnOnce(&mut FsContext<RawMutex>) -> LinuxResult<R>,
+) -> LinuxResult<R> {
+    let mut fs = FS_CONTEXT.lock();
+    if dirfd == AT_FDCWD {
+        f(&mut fs)
+    } else {
+        let dir = Directory::from_fd(dirfd)?.inner.clone();
+        f(&mut fs.with_current_dir(dir)?)
+    }
+}
+
+pub enum ResolveAtResult {
+    File(Location<RawMutex>),
+    Other(Arc<dyn FileLike>),
+}
+impl ResolveAtResult {
+    pub fn into_file(self) -> Option<Location<RawMutex>> {
+        match self {
+            Self::File(file) => Some(file),
+            Self::Other(_) => None,
+        }
+    }
+
+    pub fn stat(&self) -> LinuxResult<Kstat> {
+        match self {
+            Self::File(file) => file.metadata().map(|it| metadata_to_kstat(&it)),
+            Self::Other(file_like) => file_like.stat(),
+        }
+    }
+}
+
+pub fn resolve_at(dirfd: c_int, path: Option<&str>, flags: u32) -> LinuxResult<ResolveAtResult> {
+    match path {
+        Some("") | None => {
+            if flags & AT_EMPTY_PATH == 0 {
+                return Err(LinuxError::ENOENT);
+            }
+            let file_like = get_file_like(dirfd)?;
+            let f = file_like.clone().into_any();
+            Ok(if let Some(file) = f.downcast_ref::<File>() {
+                ResolveAtResult::File(file.inner().inner().clone())
+            } else if let Some(dir) = f.downcast_ref::<Directory>() {
+                ResolveAtResult::File(dir.inner().clone())
+            } else {
+                ResolveAtResult::Other(file_like)
+            })
+        }
+        Some(path) => with_fs(dirfd, |fs| {
+            if flags & AT_SYMLINK_NOFOLLOW != 0 {
+                fs.resolve_no_follow(path)
+            } else {
+                fs.resolve(path)
+            }
+            .map(ResolveAtResult::File)
+        }),
+    }
+}
 
 #[allow(dead_code)]
 pub trait FileLike: Send + Sync {
@@ -20,7 +79,6 @@ pub trait FileLike: Send + Sync {
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
     fn poll(&self) -> LinuxResult<PollState>;
     fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
-    fn set_times(&self, times: Timestamp, mask: TimesMask) -> LinuxResult;
 
     fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>>
     where
@@ -42,25 +100,18 @@ pub trait FileLike: Send + Sync {
 
 /// File wrapper for `axfs::fops::File`.
 pub struct File {
-    inner: Mutex<axfs::fops::File>,
-    path: String,
+    inner: Mutex<axfs_ng::File<RawMutex>>,
 }
 
 impl File {
-    pub fn new(inner: axfs::fops::File, path: String) -> Self {
+    pub fn new(inner: axfs_ng::File<RawMutex>) -> Self {
         Self {
             inner: Mutex::new(inner),
-            path,
         }
     }
 
-    /// Get the path of the file.
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-
     /// Get the inner node of the file.
-    pub fn inner(&self) -> MutexGuard<axfs::fops::File> {
+    pub fn inner(&self) -> MutexGuard<axfs_ng::File<RawMutex>> {
         self.inner.lock()
     }
 }
@@ -71,28 +122,11 @@ impl FileLike for File {
     }
 
     fn write(&self, buf: &[u8]) -> LinuxResult<usize> {
-        Ok(self.inner().write(buf)?)
+        self.inner().write(buf)
     }
 
     fn stat(&self) -> LinuxResult<Kstat> {
-        let metadata = self.inner().get_attr()?;
-        let ty = metadata.file_type() as u8;
-        let perm = metadata.perm().bits() as u32;
-        let times = metadata.times();
-
-        Ok(Kstat {
-            mode: ((ty as u32) << 12) | perm,
-            size: metadata.size(),
-            blocks: metadata.blocks(),
-            blksize: 512,
-            atime_sec: times.atime_sec as isize,
-            atime_nsec: times.atime_nsec as isize,
-            mtime_sec: times.mtime_sec as isize,
-            mtime_nsec: times.mtime_nsec as isize,
-            ctime_sec: times.ctime_sec as isize,
-            ctime_nsec: times.ctime_nsec as isize,
-            ..Default::default()
-        })
+        Ok(metadata_to_kstat(&self.inner().metadata()?))
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -109,41 +143,25 @@ impl FileLike for File {
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
     }
-
-    fn set_times(&self, times: Timestamp, mask: TimesMask) -> LinuxResult {
-        Ok(self.inner().set_times(times, mask)?)
-    }
 }
 
 /// Directory wrapper for `axfs::fops::Directory`.
 pub struct Directory {
-    inner: Mutex<axfs::fops::Directory>,
-    path: String,
-    last_dirent: Mutex<Option<DirEntry>>,
+    inner: Location<RawMutex>,
+    pub offset: Mutex<u64>,
 }
 
 impl Directory {
-    pub fn new(inner: axfs::fops::Directory, path: String) -> Self {
+    pub fn new(inner: Location<RawMutex>) -> Self {
         Self {
-            inner: Mutex::new(inner),
-            path,
-            last_dirent: Mutex::new(None),
+            inner,
+            offset: Mutex::new(0),
         }
     }
 
-    /// Get the path of the directory.
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-
     /// Get the inner node of the directory.
-    pub fn inner(&self) -> MutexGuard<axfs::fops::Directory> {
-        self.inner.lock()
-    }
-
-    /// Get the last directory entry.
-    pub fn last_dirent(&self) -> MutexGuard<Option<DirEntry>> {
-        self.last_dirent.lock()
+    pub fn inner(&self) -> &Location<RawMutex> {
+        &self.inner
     }
 }
 
@@ -157,18 +175,7 @@ impl FileLike for Directory {
     }
 
     fn stat(&self) -> LinuxResult<Kstat> {
-        let metadata = self.inner().get_attr()?;
-        let times = metadata.times();
-        Ok(Kstat {
-            mode: S_IFDIR | 0o755u32, // rwxr-xr-x
-            atime_sec: times.atime_sec as isize,
-            atime_nsec: times.atime_nsec as isize,
-            mtime_sec: times.mtime_sec as isize,
-            mtime_nsec: times.mtime_nsec as isize,
-            ctime_sec: times.ctime_sec as isize,
-            ctime_nsec: times.ctime_nsec as isize,
-            ..Default::default()
-        })
+        Ok(metadata_to_kstat(&self.inner.metadata()?))
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -192,14 +199,11 @@ impl FileLike for Directory {
             .downcast::<Self>()
             .map_err(|_| LinuxError::ENOTDIR)
     }
-
-    fn set_times(&self, times: Timestamp, mask: TimesMask) -> LinuxResult {
-        Ok(self.inner().set_times(times, mask)?)
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Kstat {
+    pub dev: u64,
     pub ino: u64,
     pub nlink: u32,
     pub uid: u32,
@@ -208,6 +212,7 @@ pub struct Kstat {
     pub size: u64,
     pub blocks: u64,
     pub blksize: u32,
+    pub rdev: DeviceId,
     pub atime_sec: isize,
     pub atime_nsec: isize,
     pub mtime_sec: isize,
@@ -219,6 +224,7 @@ pub struct Kstat {
 impl Default for Kstat {
     fn default() -> Self {
         Self {
+            dev: 0,
             ino: 1,
             nlink: 1,
             uid: 1,
@@ -227,6 +233,7 @@ impl Default for Kstat {
             size: 0,
             blocks: 0,
             blksize: 4096,
+            rdev: DeviceId::default(),
             atime_sec: 0,
             atime_nsec: 0,
             mtime_sec: 0,
@@ -241,6 +248,8 @@ impl From<Kstat> for stat {
     fn from(value: Kstat) -> Self {
         // SAFETY: valid for stat
         let mut stat: stat = unsafe { core::mem::zeroed() };
+        stat.st_dev = value.dev as _;
+        stat.st_rdev = value.rdev.0 as _;
         stat.st_ino = value.ino as _;
         stat.st_nlink = value.nlink as _;
         stat.st_mode = value.mode as _;
@@ -272,7 +281,6 @@ impl From<Kstat> for statx {
         statx.stx_ino = value.ino as _;
         statx.stx_size = value.size as _;
         statx.stx_blocks = value.blocks as _;
-
         statx.stx_atime.tv_sec = value.atime_sec as _;
         statx.stx_atime.tv_nsec = value.atime_nsec as _;
         statx.stx_mtime.tv_sec = value.mtime_sec as _;
@@ -281,5 +289,29 @@ impl From<Kstat> for statx {
         statx.stx_ctime.tv_nsec = value.ctime_nsec as _;
 
         statx
+    }
+}
+
+pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
+    let ty = metadata.node_type as u8;
+    let perm = metadata.mode.bits() as u32;
+    let mode = ((ty as u32) << 12) | perm;
+    Kstat {
+        dev: metadata.device,
+        ino: metadata.inode,
+        mode,
+        nlink: metadata.nlink as _,
+        uid: metadata.uid,
+        gid: metadata.gid,
+        size: metadata.size,
+        blksize: metadata.block_size as _,
+        blocks: metadata.blocks,
+        rdev: metadata.rdev,
+        atime_sec: metadata.atime.as_secs() as isize,
+        atime_nsec: metadata.atime.subsec_nanos() as isize,
+        mtime_sec: metadata.mtime.as_secs() as isize,
+        mtime_nsec: metadata.mtime.subsec_nanos() as isize,
+        ctime_sec: metadata.ctime.as_secs() as isize,
+        ctime_nsec: metadata.ctime.subsec_nanos() as isize,
     }
 }

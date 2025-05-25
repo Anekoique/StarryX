@@ -3,7 +3,8 @@
 use core::ffi::CStr;
 
 use alloc::{borrow::ToOwned, string::String, vec, vec::Vec};
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
+use axfs_ng::FS_CONTEXT;
 use axhal::{mem::virt_to_phys, paging::MappingFlags};
 use axmm::{AddrSpace, kernel_aspace};
 use kernel_elf_parser::{AuxvEntry, ELFParser, app_stack_region};
@@ -60,29 +61,29 @@ fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [AuxvEn
     )
     .map_err(|_| AxError::InvalidData)?;
 
-    for segment in elf_parser.ph_load() {
+    for segement in elf_parser.ph_load() {
         debug!(
             "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
-            segment.vaddr,
-            segment.vaddr + segment.memsz as usize,
-            segment.flags
+            segement.vaddr,
+            segement.vaddr + segement.memsz as usize,
+            segement.flags
         );
-        let seg_pad = segment.vaddr.align_offset_4k();
-        assert_eq!(seg_pad, segment.offset % PAGE_SIZE_4K);
+        let seg_pad = segement.vaddr.align_offset_4k();
+        assert_eq!(seg_pad, segement.offset % PAGE_SIZE_4K);
 
         let seg_align_size =
-            (segment.memsz as usize + seg_pad + PAGE_SIZE_4K - 1) & !(PAGE_SIZE_4K - 1);
+            (segement.memsz as usize + seg_pad + PAGE_SIZE_4K - 1) & !(PAGE_SIZE_4K - 1);
         uspace.map_alloc(
-            segment.vaddr.align_down_4k(),
+            segement.vaddr.align_down_4k(),
             seg_align_size,
-            segment.flags,
+            segement.flags,
             true,
         )?;
         let seg_data = elf
             .input
-            .get(segment.offset..segment.offset + segment.filesz as usize)
+            .get(segement.offset..segement.offset + segement.filesz as usize)
             .ok_or(AxError::InvalidData)?;
-        uspace.write(segment.vaddr, seg_data)?;
+        uspace.write(segement.vaddr, seg_data)?;
         // TDOO: flush the I-cache
     }
 
@@ -104,14 +105,14 @@ fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [AuxvEn
 /// - The stack pointer of the user app.
 pub fn load_user_app(
     uspace: &mut AddrSpace,
+    path: Option<&str>,
     args: &[String],
     envs: &[String],
-) -> AxResult<(VirtAddr, VirtAddr)> {
-    if args.is_empty() {
-        return Err(AxError::InvalidInput);
-    }
-    let file_data = axfs::api::read(args[0].as_str())?;
-
+) -> LinuxResult<(VirtAddr, VirtAddr)> {
+    let path = path
+        .or_else(|| args.first().map(String::as_str))
+        .ok_or(AxError::InvalidInput)?;
+    let file_data = FS_CONTEXT.lock().read(path)?;
     if file_data.starts_with(b"#!") {
         let head = &file_data[2..file_data.len().min(256)];
         let pos = head.iter().position(|c| *c == b'\n').unwrap_or(head.len());
@@ -123,8 +124,7 @@ pub fn load_user_app(
             .map(|s| s.trim_ascii().to_owned())
             .chain(args.iter().cloned())
             .collect();
-
-        return load_user_app(uspace, &new_args, envs);
+        return load_user_app(uspace, None, &new_args, envs);
     }
 
     let elf = ElfFile::new(&file_data).map_err(|_| AxError::InvalidData)?;
@@ -138,34 +138,26 @@ pub fn load_user_app(
             _ => panic!("Invalid data in Interp Elf Program Header"),
         };
 
-        let mut interp_path = axfs::api::canonicalize(
-            CStr::from_bytes_with_nul(interp)
-                .map_err(|_| AxError::InvalidData)?
-                .to_str()
-                .map_err(|_| AxError::InvalidData)?,
-        )?;
+        let interp_path = FS_CONTEXT
+            .lock()
+            .current_dir()
+            .absolute_path()?
+            .join(
+                CStr::from_bytes_with_nul(interp)
+                    .ok()
+                    .and_then(|it| it.to_str().ok())
+                    .ok_or(LinuxError::EINVAL)?,
+            )
+            .normalize()
+            .ok_or(LinuxError::EINVAL)?;
+        let interp_path = interp_path.as_str();
 
-        if interp_path == "/lib/ld-linux-riscv64-lp64.so.1"
-            || interp_path == "/lib64/ld-linux-loongarch-lp64d.so.1"
-            || interp_path == "/lib64/ld-linux-x86-64.so.2"
-            || interp_path == "/lib/ld-linux-aarch64.so.1"
-            || interp_path == "/lib/ld-musl-x86_64.so.1"
-            || interp_path == "/lib/ld-musl-riscv64.so.1"
-            || interp_path == "/lib/ld-musl-aarch64.so.1"
-            || interp_path == "/lib/ld-musl-loongarch64.so.1"
-            || interp_path == "/lib/ld-musl-riscv64-sf.so.1"
-            || interp_path == "/lib64/ld-musl-loongarch-lp64d.so.1"
-        {
-            // TODO: Use soft link
-            interp_path = String::from("/musl/lib/libc.so");
-        }
-
-        debug!("interp_path: {}", interp_path);
+        debug!("Loading interpreter: {}", interp_path);
 
         // Set the first argument to the path of the user app.
-        let mut new_args = vec![interp_path];
+        let mut new_args = vec![interp_path.to_owned()];
         new_args.extend_from_slice(args);
-        return load_user_app(uspace, &new_args, envs);
+        return load_user_app(uspace, None, &new_args, envs);
     }
 
     let (entry, mut auxv) = map_elf(uspace, &elf)?;
@@ -189,6 +181,9 @@ pub fn load_user_app(
         true,
     )?;
 
+    let user_sp = ustack_end - stack_data.len();
+    uspace.write(user_sp, stack_data.as_slice())?;
+
     let heap_start = VirtAddr::from_usize(axconfig::plat::USER_HEAP_BASE);
     let heap_size = axconfig::plat::USER_HEAP_SIZE;
     uspace.map_alloc(
@@ -197,10 +192,6 @@ pub fn load_user_app(
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
         true,
     )?;
-
-    let user_sp = ustack_end - stack_data.len();
-
-    uspace.write(user_sp, stack_data.as_slice())?;
 
     Ok((entry, user_sp))
 }

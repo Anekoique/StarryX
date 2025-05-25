@@ -2,7 +2,6 @@ use core::net::SocketAddr;
 
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
-use axfs::api::{TimesMask, Timestamp};
 use axio::PollState;
 use axnet::{TcpSocket, UdpSocket};
 use axsync::Mutex;
@@ -108,9 +107,5 @@ impl FileLike for Socket {
             Socket::Tcp(tcpsocket) => tcpsocket.lock().set_nonblocking(nonblock),
         }
         Ok(())
-    }
-
-    fn set_times(&self, _times: Timestamp, _mask: TimesMask) -> LinuxResult {
-        Err(LinuxError::ENOSYS)
     }
 }

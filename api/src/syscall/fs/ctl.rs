@@ -1,27 +1,42 @@
 use core::{
     ffi::{c_char, c_int, c_void},
     mem::offset_of,
+    time::Duration,
 };
 
 use alloc::ffi::CString;
 use axerrno::{LinuxError, LinuxResult};
-use axfs::{
-    api::{TimesMask, Timestamp},
-    fops::DirEntry,
+use axfs_ng::FS_CONTEXT;
+use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
+use axhal::time::wall_time;
+use chrono::{Datelike, Timelike};
+use linux_raw_sys::{
+    general::{
+        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, UTIME_NOW, UTIME_OMIT, linux_dirent64, timespec,
+    },
+    ioctl::RTC_RD_TIME,
 };
-use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{
-    AT_FDCWD, AT_REMOVEDIR, DT_BLK, DT_CHR, DT_DIR, DT_FIFO, DT_LNK, DT_REG, DT_SOCK, DT_UNKNOWN,
-    UTIME_NOW, UTIME_OMIT, linux_dirent64, timespec,
-};
+use starry_core::vfs::RTC0_DEVICE_ID;
 
 use crate::{
-    fs::{
-        Directory, FileLike, HARDLINK_MANAGER, get_file_like, get_file_like_at, handle_file_path,
-    },
+    fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
     ptr::{UserConstPtr, UserPtr, nullable},
-    utils::time::wall_time,
+    time::{timespec_to_timevalue, timeval_to_timevalue},
 };
+
+#[repr(C)]
+#[allow(non_camel_case_types, dead_code)]
+struct rtc_time {
+    tm_sec: c_int,
+    tm_min: c_int,
+    tm_hour: c_int,
+    tm_mday: c_int,
+    tm_mon: c_int,
+    tm_year: c_int,
+    tm_wday: c_int,
+    tm_yday: c_int,
+    tm_isdst: c_int,
+}
 
 /// The ioctl() system call manipulates the underlying device parameters
 /// of special files.
@@ -31,62 +46,56 @@ use crate::{
 /// * `op` - The request code. It is of type unsigned long in glibc and BSD,
 ///   and of type int in musl and other UNIX systems.
 /// * `argp` - The argument to the request. It is a pointer to a memory location
-pub fn sys_ioctl(_fd: i32, _op: usize, _argp: UserPtr<c_void>) -> LinuxResult<isize> {
-    warn!("Unimplemented syscall: SYS_IOCTL");
+pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
+    let f = get_file_like(fd)?;
+    let stat = f.stat()?;
+    if op == RTC_RD_TIME as _ && stat.rdev == RTC0_DEVICE_ID {
+        let wall = chrono::DateTime::from_timestamp_nanos(axhal::time::wall_time_nanos() as _);
+        *argp.cast::<rtc_time>().get_as_mut()? = rtc_time {
+            tm_sec: wall.second() as _,
+            tm_min: wall.minute() as _,
+            tm_hour: wall.hour() as _,
+            tm_mday: wall.day() as _,
+            tm_mon: wall.month0() as _,
+            tm_year: (wall.year() - 1900) as _,
+            tm_wday: 0,
+            tm_yday: 0,
+            tm_isdst: 0,
+        };
+    }
     Ok(0)
 }
 
 pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
-    debug!("sys_chdir <= {:?}", path);
+    debug!("sys_chdir <= path: {}", path);
 
-    axfs::api::set_current_dir(path)?;
-    Ok(0)
+    with_fs(AT_FDCWD, |fs| {
+        let entry = fs.resolve(path)?;
+        fs.set_current_dir(entry)?;
+        Ok(0)
+    })
+    .inspect_err(|err| {
+        warn!("Failed to change directory: {err:?}");
+    })
 }
 
+#[cfg(target_arch = "x86_64")]
 pub fn sys_mkdir(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     sys_mkdirat(AT_FDCWD, path, mode)
 }
 
 pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
-    debug!(
-        "sys_mkdirat <= dirfd: {}, path: {}, mode: {}",
-        dirfd, path, mode
-    );
+    let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
 
-    if mode != 0 {
-        warn!("directory mode not supported.");
-    }
-
-    let path = handle_file_path(dirfd, path)?;
-    axfs::api::create_dir(path.as_str())?;
-
-    Ok(0)
-}
-
-#[allow(dead_code)]
-#[repr(u8)]
-#[derive(Debug, Clone, Copy)]
-pub enum FileType {
-    Unknown = DT_UNKNOWN as u8,
-    Fifo = DT_FIFO as u8,
-    Chr = DT_CHR as u8,
-    Dir = DT_DIR as u8,
-    Blk = DT_BLK as u8,
-    Reg = DT_REG as u8,
-    Lnk = DT_LNK as u8,
-    Socket = DT_SOCK as u8,
-}
-
-impl From<axfs::api::FileType> for FileType {
-    fn from(ft: axfs::api::FileType) -> Self {
-        match ft {
-            ft if ft.is_dir() => FileType::Dir,
-            ft if ft.is_file() => FileType::Reg,
-            _ => FileType::Unknown,
-        }
-    }
+    with_fs(dirfd, |fs| {
+        fs.create_dir(path, mode)?;
+        Ok(0)
+    })
+    .inspect_err(|err| {
+        warn!("Failed to create directory {path}: {err:?}");
+    })
 }
 
 // Directory buffer for getdents64 syscall
@@ -104,7 +113,7 @@ impl<'a> DirBuffer<'a> {
         self.buf.len().saturating_sub(self.offset)
     }
 
-    fn write_entry(&mut self, d_type: FileType, name: &[u8]) -> bool {
+    fn write_entry(&mut self, d_ino: u64, d_off: i64, d_type: NodeType, name: &[u8]) -> bool {
         const NAME_OFFSET: usize = offset_of!(linux_dirent64, d_name);
 
         let len = NAME_OFFSET + name.len() + 1;
@@ -117,9 +126,8 @@ impl<'a> DirBuffer<'a> {
         unsafe {
             let entry_ptr = self.buf.as_mut_ptr().add(self.offset);
             entry_ptr.cast::<linux_dirent64>().write(linux_dirent64 {
-                // FIXME: real inode number
-                d_ino: 1,
-                d_off: 0,
+                d_ino,
+                d_off,
                 d_reclen: len as _,
                 d_type: d_type as _,
                 d_name: Default::default(),
@@ -147,33 +155,16 @@ pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isiz
     let mut buffer = DirBuffer::new(buf);
 
     let dir = Directory::from_fd(fd)?;
+    let mut dir_offset = dir.offset.lock();
 
-    let mut last_dirent = dir.last_dirent();
-    if let Some(ent) = last_dirent.take() {
-        if !buffer.write_entry(ent.entry_type().into(), ent.name_as_bytes()) {
-            *last_dirent = Some(ent);
-            return Err(LinuxError::EINVAL);
-        }
-    }
-
-    let mut inner = dir.inner();
-    loop {
-        let mut dirents = [DirEntry::default()];
-        let cnt = inner.read_dir(&mut dirents)?;
-        if cnt == 0 {
-            break;
-        }
-
-        let [ent] = dirents;
-        if !buffer.write_entry(ent.entry_type().into(), ent.name_as_bytes()) {
-            *last_dirent = Some(ent);
-            break;
-        }
-    }
-
-    if last_dirent.is_some() && buffer.offset == 0 {
-        return Err(LinuxError::EINVAL);
-    }
+    dir.inner()
+        .read_dir(*dir_offset, &mut |name: &str, ino, node_type, offset| {
+            if !buffer.write_entry(ino, offset as _, node_type, name.as_bytes()) {
+                return false;
+            }
+            *dir_offset = offset;
+            true
+        })?;
     Ok(buffer.offset as _)
 }
 
@@ -187,12 +178,12 @@ pub fn sys_linkat(
     old_path: UserConstPtr<c_char>,
     new_dirfd: c_int,
     new_path: UserConstPtr<c_char>,
-    flags: i32,
+    flags: u32,
 ) -> LinuxResult<isize> {
-    let old_path = old_path.get_as_str()?;
+    let old_path = nullable!(old_path.get_as_str())?;
     let new_path = new_path.get_as_str()?;
     debug!(
-        "sys_linkat <= old_dirfd: {}, old_path: {}, new_dirfd: {}, new_path: {}, flags: {}",
+        "sys_linkat <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
 
@@ -200,13 +191,15 @@ pub fn sys_linkat(
         warn!("Unsupported flags: {flags}");
     }
 
-    // handle old path
-    let old_path = handle_file_path(old_dirfd, old_path)?;
-    // handle new path
-    let new_path = handle_file_path(new_dirfd, new_path)?;
+    let old = resolve_at(old_dirfd, old_path, flags)?
+        .into_file()
+        .ok_or(LinuxError::EBADF)?;
+    if old.is_dir() {
+        return Err(LinuxError::EPERM);
+    }
+    let (new_dir, new_name) = with_fs(new_dirfd, |fs| fs.resolve_nonexistent(new_path.into()))?;
 
-    HARDLINK_MANAGER.create_link(&new_path, &old_path)?;
-
+    new_dir.link(new_name, &old)?;
     Ok(0)
 }
 
@@ -222,33 +215,27 @@ pub fn sys_link(
 /// path: the name of link to be removed
 /// flags: can be 0 or AT_REMOVEDIR
 /// return 0 when success, else return -1
-pub fn sys_unlinkat(dirfd: c_int, path: UserConstPtr<c_char>, flags: u32) -> LinuxResult<isize> {
+pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
+
     debug!(
-        "sys_unlinkat <= dirfd: {}, path: {}, flags: {}",
+        "sys_unlinkat <= dirfd: {}, path: {:?}, flags: {}",
         dirfd, path, flags
     );
 
-    let path = handle_file_path(dirfd, path)?;
-
-    if flags == AT_REMOVEDIR {
-        axfs::api::remove_dir(path.as_str())?;
-    } else {
-        let metadata = axfs::api::metadata(path.as_str())?;
-        if metadata.is_dir() {
-            return Err(LinuxError::EISDIR);
+    with_fs(dirfd, |fs| {
+        if flags == AT_REMOVEDIR as _ {
+            fs.remove_dir(path)?;
         } else {
-            debug!("unlink file: {:?}", path);
-            HARDLINK_MANAGER
-                .remove_link(&path)
-                .ok_or(LinuxError::ENOENT)?;
+            fs.remove_file(path)?;
         }
-    }
-    Ok(0)
+        Ok(0)
+    })
 }
 
+#[cfg(target_arch = "x86_64")]
 pub fn sys_rmdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
-    sys_unlinkat(AT_FDCWD, path, AT_REMOVEDIR)
+    sys_unlinkat(AT_FDCWD, path, AT_REMOVEDIR as _)
 }
 
 pub fn sys_unlink(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
@@ -262,7 +249,10 @@ pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
         return Ok(0);
     };
 
-    let cwd = CString::new(axfs::api::current_dir()?).map_err(|_| LinuxError::EINVAL)?;
+    let cwd = FS_CONTEXT.lock().current_dir().absolute_path()?;
+    debug!("sys_getcwd => cwd: {}", cwd);
+
+    let cwd = CString::new(cwd.as_str()).map_err(|_| LinuxError::EINVAL)?;
     let cwd = cwd.as_bytes_with_nul();
 
     if cwd.len() <= buf.len() {
@@ -273,45 +263,29 @@ pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
     }
 }
 
-pub fn sys_readlinkat(
-    dirfd: c_int,
-    path: UserConstPtr<c_char>,
-    buf: UserPtr<u8>,
-    size: usize,
+#[cfg(target_arch = "x86_64")]
+pub fn sys_symlink(
+    target: UserConstPtr<c_char>,
+    linkpath: UserConstPtr<c_char>,
 ) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
-    debug!(
-        "sys_readlinkat <= dirfd: {}, path: {}, size: {}",
-        dirfd, path, size
-    );
-
-    let path = handle_file_path(dirfd, path)?;
-
-    // Get the target path for the symlink
-    let link = if path.as_str() == "/proc/self/exe" {
-        let curr = current();
-        let exe_path = curr.task_ext().process_data().exe_path.read();
-        debug!("exe_path: {:?}", exe_path);
-        exe_path.clone()
-    } else {
-        let real_path = HARDLINK_MANAGER.real_path(path.as_str());
-        if real_path == path.as_str() {
-            return Err(LinuxError::EINVAL);
-        }
-        real_path
-    };
-
-    // Copy the link target path to the user buffer
-    if let Some(buf) = nullable!(buf.get_as_mut_slice(size))? {
-        let bytes = link.as_bytes();
-        let len = size.min(bytes.len());
-        buf[..len].copy_from_slice(&bytes[..len]);
-        Ok(len as isize)
-    } else {
-        Ok(link.len() as isize)
-    }
+    sys_symlinkat(target, AT_FDCWD, linkpath)
 }
 
+pub fn sys_symlinkat(
+    target: UserConstPtr<c_char>,
+    new_dirfd: i32,
+    linkpath: UserConstPtr<c_char>,
+) -> LinuxResult<isize> {
+    let target = target.get_as_str()?;
+    let linkpath = linkpath.get_as_str()?;
+
+    with_fs(new_dirfd, |fs| {
+        fs.symlink(target, linkpath)?;
+        Ok(0)
+    })
+}
+
+#[cfg(target_arch = "x86_64")]
 pub fn sys_readlink(
     path: UserConstPtr<c_char>,
     buf: UserPtr<u8>,
@@ -320,120 +294,193 @@ pub fn sys_readlink(
     sys_readlinkat(AT_FDCWD, path, buf, size)
 }
 
+pub fn sys_readlinkat(
+    dirfd: i32,
+    path: UserConstPtr<c_char>,
+    buf: UserPtr<u8>,
+    size: usize,
+) -> LinuxResult<isize> {
+    let path = path.get_as_str()?;
+    let buf = buf.get_as_mut_slice(size)?;
+
+    with_fs(dirfd, |fs| {
+        let entry = fs.resolve_no_follow(path)?;
+        let link = entry.read_link()?;
+        let read = size.min(link.len());
+        buf[..read].copy_from_slice(&link.as_bytes()[..read]);
+        Ok(read as isize)
+    })
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn sys_chown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
+    sys_fchownat(AT_FDCWD, path, uid, gid, 0)
+}
+#[cfg(target_arch = "x86_64")]
+pub fn sys_lchown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
+    use linux_raw_sys::general::AT_SYMLINK_NOFOLLOW;
+    sys_fchownat(AT_FDCWD, path, uid, gid, AT_SYMLINK_NOFOLLOW)
+}
+
+pub fn sys_fchown(fd: i32, uid: u32, gid: u32) -> LinuxResult<isize> {
+    sys_fchownat(fd, 0.into(), uid, gid, AT_EMPTY_PATH)
+}
+
+pub fn sys_fchownat(
+    dirfd: i32,
+    path: UserConstPtr<c_char>,
+    uid: u32,
+    gid: u32,
+    flags: u32,
+) -> LinuxResult<isize> {
+    let path = nullable!(path.get_as_str())?;
+    resolve_at(dirfd, path, flags)?
+        .into_file()
+        .ok_or(LinuxError::EBADF)?
+        .update_metadata(MetadataUpdate {
+            owner: Some((uid, gid)),
+            ..Default::default()
+        })?;
+    Ok(0)
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn sys_chmod(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
+    sys_fchmodat(AT_FDCWD, path, mode, 0)
+}
+
+pub fn sys_fchmod(fd: i32, mode: u32) -> LinuxResult<isize> {
+    sys_fchmodat(fd, 0.into(), mode, AT_EMPTY_PATH)
+}
+
+pub fn sys_fchmodat(
+    dirfd: i32,
+    path: UserConstPtr<c_char>,
+    mode: u32,
+    flags: u32,
+) -> LinuxResult<isize> {
+    let path = nullable!(path.get_as_str())?;
+    resolve_at(dirfd, path, flags)?
+        .into_file()
+        .ok_or(LinuxError::EBADF)?
+        .update_metadata(MetadataUpdate {
+            mode: Some(NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?),
+            ..Default::default()
+        })?;
+    Ok(0)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[allow(non_camel_case_types)]
+pub struct utimbuf {
+    actime: linux_raw_sys::general::__kernel_old_time_t,
+    modtime: linux_raw_sys::general::__kernel_old_time_t,
+}
+
+fn update_times(
+    dirfd: i32,
+    path: UserConstPtr<c_char>,
+    atime: Option<Duration>,
+    mtime: Option<Duration>,
+    flags: u32,
+) -> LinuxResult<()> {
+    let path = nullable!(path.get_as_str())?;
+    resolve_at(dirfd, path, flags)?
+        .into_file()
+        .ok_or(LinuxError::EBADF)?
+        .update_metadata(MetadataUpdate {
+            atime,
+            mtime,
+            ..Default::default()
+        })?;
+    Ok(())
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> LinuxResult<isize> {
+    let times = nullable!(times.get_as_ref())?;
+    let atime = times.map_or_else(wall_time, |it| Duration::from_secs(it.actime as _));
+    let mtime = times.map_or_else(wall_time, |it| Duration::from_secs(it.modtime as _));
+    update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
+    Ok(0)
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn sys_utimes(
+    path: UserConstPtr<c_char>,
+    times: UserConstPtr<linux_raw_sys::general::timeval>,
+) -> LinuxResult<isize> {
+    use crate::timeval_to_timevalue;
+
+    let times = nullable!(times.get_as_slice(2))?;
+    let atime = times.map_or_else(wall_time, |it| timeval_to_timevalue(it[0]));
+    let mtime = times.map_or_else(wall_time, |it| timeval_to_timevalue(it[1]));
+    update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
+    Ok(0)
+}
+
 pub fn sys_utimensat(
     dirfd: i32,
     path: UserConstPtr<c_char>,
     times: UserConstPtr<timespec>,
-    _flags: i32,
+    mut flags: u32,
 ) -> LinuxResult<isize> {
-    let path = nullable!(path.get_as_str())?;
-
-    let file = if path.is_none_or(|s| s.is_empty()) {
-        get_file_like(dirfd)?
-    } else {
-        get_file_like_at(dirfd, path.unwrap_or_default())?
+    if path.is_null() {
+        flags |= AT_EMPTY_PATH;
+    }
+    fn utime_to_duration(time: &timespec) -> Option<Duration> {
+        match time.tv_nsec {
+            val if val == UTIME_OMIT as _ => None,
+            val if val == UTIME_NOW as _ => Some(wall_time()),
+            _ => Some(timespec_to_timevalue(*time)),
+        }
+    }
+    let times = nullable!(times.get_as_slice(2))?;
+    let (atime, mtime) = match times {
+        Some([atime, mtime]) => (utime_to_duration(atime), utime_to_duration(mtime)),
+        None => (Some(wall_time()), Some(wall_time())),
+        _ => unreachable!(),
     };
-
-    let current_time = wall_time();
-    let now_sec = current_time.as_secs();
-    let now_nsec = current_time.subsec_nanos();
-
-    let mut mask = TimesMask::ALL - TimesMask::CTIME - TimesMask::CTIME_NSEC;
-    // Process user-specified times or use default values
-    let (atime_sec, atime_nsec, mtime_sec, mtime_nsec) = if let Some(times) =
-        nullable!(times.get_as_slice(2))?
-    {
-        let (a_sec, a_nsec) = match times[0].tv_nsec as _ {
-            UTIME_OMIT => {
-                mask -= TimesMask::ATIME | TimesMask::ATIME_NSEC;
-                (0, 0)
-            }
-            UTIME_NOW => (now_sec, now_nsec),
-            _ => (times[0].tv_sec as u64, times[0].tv_nsec as u32),
-        };
-
-        let (m_sec, m_nsec) = match times[1].tv_nsec as _ {
-            UTIME_OMIT => {
-                mask -= TimesMask::MTIME | TimesMask::MTIME_NSEC;
-                (0, 0)
-            }
-            UTIME_NOW => (now_sec, now_nsec),
-            _ => (times[1].tv_sec as u64, times[1].tv_nsec as u32),
-        };
-
-        (a_sec, a_nsec, m_sec, m_nsec)
-    } else {
-        // If no times specified, update both atime and mtime to current time
-        mask = TimesMask::ATIME | TimesMask::MTIME | TimesMask::ATIME_NSEC | TimesMask::MTIME_NSEC;
-        (now_sec, now_nsec, now_sec, now_nsec)
-    };
-
-    // Create timestamp object and apply it
-    let new_times = Timestamp::new(
-        atime_sec,
-        atime_nsec as _,
-        mtime_sec,
-        mtime_nsec as _,
-        now_sec,
-        now_nsec as _,
-    );
-
-    file.set_times(new_times, mask)?;
-
+    if atime.is_none() && mtime.is_none() {
+        return Ok(0);
+    }
+    update_times(dirfd, path, atime, mtime, flags)?;
     Ok(0)
 }
 
+#[cfg(target_arch = "x86_64")]
 pub fn sys_rename(
     old_path: UserConstPtr<c_char>,
     new_path: UserConstPtr<c_char>,
 ) -> LinuxResult<isize> {
-    sys_renameat2(AT_FDCWD, old_path, AT_FDCWD, new_path, 0)
+    sys_renameat(AT_FDCWD, old_path, AT_FDCWD, new_path)
 }
 
 pub fn sys_renameat(
-    old_dirfd: c_int,
+    old_dirfd: i32,
     old_path: UserConstPtr<c_char>,
-    new_dirfd: c_int,
+    new_dirfd: i32,
     new_path: UserConstPtr<c_char>,
 ) -> LinuxResult<isize> {
     sys_renameat2(old_dirfd, old_path, new_dirfd, new_path, 0)
 }
-
 pub fn sys_renameat2(
-    old_dirfd: c_int,
+    old_dirfd: i32,
     old_path: UserConstPtr<c_char>,
-    new_dirfd: c_int,
+    new_dirfd: i32,
     new_path: UserConstPtr<c_char>,
     flags: u32,
 ) -> LinuxResult<isize> {
     let old_path = old_path.get_as_str()?;
     let new_path = new_path.get_as_str()?;
     debug!(
-        "sys_renameat2 <= old_dirfd: {}, old_path: {}, new_dirfd: {}, new_path: {}, flags: {}",
+        "sys_renameat2 <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
 
-    let old_path = handle_file_path(old_dirfd, old_path)?;
-    let new_path = handle_file_path(new_dirfd, new_path)?;
+    let (old_dir, old_name) = with_fs(old_dirfd, |fs| fs.resolve_parent(Path::new(old_path)))?;
+    let (new_dir, new_name) = with_fs(new_dirfd, |fs| fs.resolve_nonexistent(new_path.into()))?;
 
-    // fixme: flags
-    axfs::api::rename(old_path.as_str(), new_path.as_str())?;
-
-    Ok(0)
-}
-
-pub fn sys_symlink(
-    old_path: UserConstPtr<c_char>,
-    new_path: UserConstPtr<c_char>,
-) -> LinuxResult<isize> {
-    sys_symlinkat(old_path, AT_FDCWD, new_path)
-}
-
-pub fn sys_symlinkat(
-    _old_path: UserConstPtr<c_char>,
-    _new_dirfd: c_int,
-    _new_path: UserConstPtr<c_char>,
-) -> LinuxResult<isize> {
-    warn!("Unimplemented syscall: SYS_SYMLINKAT");
+    old_dir.rename(&old_name, &new_dir, new_name)?;
     Ok(0)
 }
