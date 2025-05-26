@@ -46,6 +46,56 @@ pub fn set_oneshot_timer(deadline_ns: u64) {
     tcfg::set_en(true);
 }
 
+pub fn init_early() {
+    // Reference: https://gitlab.com/qemu-project/qemu/-/blob/v10.0.0/hw/rtc/ls7a_rtc.c?ref_type=tags
+    #[cfg(feature = "rtc")]
+    if axconfig::devices::RTC_PADDR != 0 {
+        use crate::mem::phys_to_virt;
+        use chrono::{TimeZone, Timelike, Utc};
+        use memory_addr::PhysAddr;
+
+        const LS7A_RTC: PhysAddr = pa!(axconfig::devices::RTC_PADDR);
+
+        const SYS_TOY_READ0: usize = 0x2C;
+        const SYS_TOY_READ1: usize = 0x30;
+        const SYS_RTCCTRL: usize = 0x40;
+
+        const TOY_ENABLE: u32 = 1 << 11;
+        const OSC_ENABLE: u32 = 1 << 8;
+
+        let base = phys_to_virt(LS7A_RTC).as_usize();
+
+        fn extract_bits(value: u32, range: core::ops::Range<u32>) -> u32 {
+            (value >> range.start) & ((1 << (range.end - range.start)) - 1)
+        }
+
+        let (value, year) = unsafe {
+            ((base + SYS_RTCCTRL) as *mut u32).write_volatile(TOY_ENABLE | OSC_ENABLE);
+            let value = ((base + SYS_TOY_READ0) as *const u32).read_volatile();
+            let year = ((base + SYS_TOY_READ1) as *const u32).read_volatile();
+            (value, year)
+        };
+
+        let time = Utc
+            .with_ymd_and_hms(
+                1900 + year as i32,
+                extract_bits(value, 26..32),
+                extract_bits(value, 21..26),
+                extract_bits(value, 16..21),
+                extract_bits(value, 10..16),
+                extract_bits(value, 4..10),
+            )
+            .unwrap()
+            .with_nanosecond(extract_bits(value, 0..4) * crate::time::NANOS_PER_MILLIS as u32)
+            .unwrap();
+        let epoch_time_nanos = time.timestamp_nanos_opt().unwrap();
+
+        unsafe {
+            RTC_EPOCHOFFSET_NANOS = epoch_time_nanos as u64 - ticks_to_nanos(current_ticks());
+        }
+    }
+}
+
 pub(super) fn init_percpu() {
     #[cfg(feature = "irq")]
     {

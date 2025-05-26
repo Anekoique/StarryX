@@ -75,3 +75,6 @@ uart-paddr = 0x1FE001E0                 # uint
 
 # Timer interrupt frequency in Hz.
 timer-frequency = 100_000_000           # uint
+
+# RTC (goldfish) Address
+rtc-paddr = 0x100d_0100               # uint

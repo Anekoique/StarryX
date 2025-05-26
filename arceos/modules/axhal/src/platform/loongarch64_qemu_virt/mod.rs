@@ -30,6 +30,7 @@ unsafe extern "C" fn rust_entry(cpu_id: usize) {
     super::console::init_early();
     crate::cpu::init_primary(cpu_id);
     super::time::init_primary();
+    super::time::init_early();
     super::time::init_percpu();
 
     unsafe {
