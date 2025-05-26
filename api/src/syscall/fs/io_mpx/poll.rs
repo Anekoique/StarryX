@@ -1,11 +1,10 @@
 use axerrno::LinuxResult;
-use axhal::time::{TimeValue, wall_time};
 use linux_raw_sys::general::{POLLERR, POLLIN, POLLNVAL, POLLOUT, pollfd, sigset_t, timespec};
 
 use crate::{
     fs::get_file_like,
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::timespec_to_timevalue,
+    time::{TimeValue, timespec_to_timevalue, wall_time},
 };
 
 fn do_poll(fds: &mut [pollfd], timeout: Option<TimeValue>) -> LinuxResult<isize> {
