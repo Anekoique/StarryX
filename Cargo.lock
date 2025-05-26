@@ -1973,7 +1973,3 @@ dependencies = [
  "quote",
  "syn 2.0.101",
 ]
-
-[[patch.unused]]
-name = "axfs"
-version = "0.1.0"

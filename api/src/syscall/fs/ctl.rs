@@ -7,21 +7,20 @@ use alloc::ffi::CString;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
-use axhal::time::wall_time;
 use chrono::{Datelike, Timelike};
 use linux_raw_sys::{
     general::{
-        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, UTIME_NOW, UTIME_OMIT, linux_dirent64, timespec,
-        timeval,
+        __kernel_old_time_t, AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, UTIME_NOW, UTIME_OMIT,
+        linux_dirent64, timespec, timeval,
     },
     ioctl::RTC_RD_TIME,
 };
 use starry_core::vfs::RTC0_DEVICE_ID;
 
 use crate::{
-    fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
-    ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValue, timeval_to_timevalue, wall_time_nanos},
+    fs::{get_file_like, resolve_at, with_fs, Directory, FileLike},
+    ptr::{nullable, UserConstPtr, UserPtr},
+    time::{timeval_to_timevalue, timespec_to_timevalue, wall_time, wall_time_nanos, TimeValue},
 };
 
 #[repr(C)]
@@ -365,8 +364,8 @@ pub fn sys_fchmodat(
 
 #[allow(non_camel_case_types)]
 pub struct utimbuf {
-    actime: linux_raw_sys::general::__kernel_old_time_t,
-    modtime: linux_raw_sys::general::__kernel_old_time_t,
+    actime: __kernel_old_time_t,
+    modtime: __kernel_old_time_t,
 }
 
 fn update_times(
@@ -417,7 +416,7 @@ pub fn sys_utimensat(
         match time.tv_nsec {
             val if val == UTIME_OMIT as _ => None,
             val if val == UTIME_NOW as _ => Some(wall_time()),
-            _ => Some(TimeValue::from_nanos(time.tv_nsec as _)),
+            _ => Some(timespec_to_timevalue(*time)),
         }
     }
     let times = nullable!(times.get_as_slice(2))?;

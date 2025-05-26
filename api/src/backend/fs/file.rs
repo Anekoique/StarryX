@@ -1,13 +1,14 @@
 use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
+use axhal::time::TimeValue;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FS_CONTEXT, FsContext};
 use axfs_ng_vfs::DeviceId;
 use axfs_ng_vfs::{Location, Metadata};
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
-use linux_raw_sys::general::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx};
+use linux_raw_sys::general::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx, statx_timestamp};
 
 use super::{add_file_like, get_file_like};
 
@@ -206,19 +207,16 @@ pub struct Kstat {
     pub dev: u64,
     pub ino: u64,
     pub nlink: u32,
+    pub mode: u32,
     pub uid: u32,
     pub gid: u32,
-    pub mode: u32,
     pub size: u64,
-    pub blocks: u64,
     pub blksize: u32,
+    pub blocks: u64,
     pub rdev: DeviceId,
-    pub atime_sec: isize,
-    pub atime_nsec: isize,
-    pub mtime_sec: isize,
-    pub mtime_nsec: isize,
-    pub ctime_sec: isize,
-    pub ctime_nsec: isize,
+    pub atime: TimeValue,
+    pub mtime: TimeValue,
+    pub ctime: TimeValue,
 }
 
 impl Default for Kstat {
@@ -227,19 +225,16 @@ impl Default for Kstat {
             dev: 0,
             ino: 1,
             nlink: 1,
+            mode: 0,
             uid: 1,
             gid: 1,
-            mode: 0,
             size: 0,
-            blocks: 0,
             blksize: 4096,
+            blocks: 0,
             rdev: DeviceId::default(),
-            atime_sec: 0,
-            atime_nsec: 0,
-            mtime_sec: 0,
-            mtime_nsec: 0,
-            ctime_sec: 0,
-            ctime_nsec: 0,
+            atime: TimeValue::default(),
+            mtime: TimeValue::default(),
+            ctime: TimeValue::default(),
         }
     }
 }
@@ -249,7 +244,6 @@ impl From<Kstat> for stat {
         // SAFETY: valid for stat
         let mut stat: stat = unsafe { core::mem::zeroed() };
         stat.st_dev = value.dev as _;
-        stat.st_rdev = value.rdev.0 as _;
         stat.st_ino = value.ino as _;
         stat.st_nlink = value.nlink as _;
         stat.st_mode = value.mode as _;
@@ -258,12 +252,14 @@ impl From<Kstat> for stat {
         stat.st_size = value.size as _;
         stat.st_blksize = value.blksize as _;
         stat.st_blocks = value.blocks as _;
-        stat.st_atime = value.atime_sec as _;
-        stat.st_atime_nsec = value.atime_nsec as _;
-        stat.st_mtime = value.mtime_sec as _;
-        stat.st_mtime_nsec = value.mtime_nsec as _;
-        stat.st_ctime = value.ctime_sec as _;
-        stat.st_ctime_nsec = value.ctime_nsec as _;
+        stat.st_rdev = value.rdev.0 as _;
+
+        stat.st_atime = value.atime.as_secs() as _;
+        stat.st_atime_nsec = value.atime.subsec_nanos() as _;
+        stat.st_mtime = value.mtime.as_secs() as _;
+        stat.st_mtime_nsec = value.mtime.subsec_nanos() as _;
+        stat.st_ctime = value.ctime.as_secs() as _;
+        stat.st_ctime_nsec = value.ctime.subsec_nanos() as _;
 
         stat
     }
@@ -271,6 +267,7 @@ impl From<Kstat> for stat {
 
 impl From<Kstat> for statx {
     fn from(value: Kstat) -> Self {
+        // SAFETY: valid for statx
         let mut statx: statx = unsafe { core::mem::zeroed() };
         statx.stx_blksize = value.blksize as _;
         statx.stx_attributes = value.mode as _;
@@ -281,16 +278,27 @@ impl From<Kstat> for statx {
         statx.stx_ino = value.ino as _;
         statx.stx_size = value.size as _;
         statx.stx_blocks = value.blocks as _;
-        statx.stx_atime.tv_sec = value.atime_sec as _;
-        statx.stx_atime.tv_nsec = value.atime_nsec as _;
-        statx.stx_mtime.tv_sec = value.mtime_sec as _;
-        statx.stx_mtime.tv_nsec = value.mtime_nsec as _;
-        statx.stx_ctime.tv_sec = value.ctime_sec as _;
-        statx.stx_ctime.tv_nsec = value.ctime_nsec as _;
+        statx.stx_rdev_major = value.rdev.major();
+        statx.stx_rdev_minor = value.rdev.minor();
+
+        fn time_to_statx(time: &TimeValue) -> statx_timestamp {
+            statx_timestamp {
+                tv_sec: time.as_secs() as _,
+                tv_nsec: time.subsec_nanos() as _,
+                __reserved: 0,
+            }
+        }
+        statx.stx_atime = time_to_statx(&value.atime);
+        statx.stx_ctime = time_to_statx(&value.ctime);
+        statx.stx_mtime = time_to_statx(&value.mtime);
+
+        statx.stx_dev_major = (value.dev >> 32) as _;
+        statx.stx_dev_minor = value.dev as _;
 
         statx
     }
 }
+
 
 pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
     let ty = metadata.node_type as u8;
@@ -307,11 +315,8 @@ pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
         blksize: metadata.block_size as _,
         blocks: metadata.blocks,
         rdev: metadata.rdev,
-        atime_sec: metadata.atime.as_secs() as isize,
-        atime_nsec: metadata.atime.subsec_nanos() as isize,
-        mtime_sec: metadata.mtime.as_secs() as isize,
-        mtime_nsec: metadata.mtime.subsec_nanos() as isize,
-        ctime_sec: metadata.ctime.as_secs() as isize,
-        ctime_nsec: metadata.ctime.subsec_nanos() as isize,
+        atime: metadata.atime,
+        mtime: metadata.mtime,
+        ctime: metadata.ctime,
     }
 }
