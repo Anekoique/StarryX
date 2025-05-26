@@ -18,9 +18,9 @@ use linux_raw_sys::{
 use starry_core::vfs::RTC0_DEVICE_ID;
 
 use crate::{
-    fs::{get_file_like, resolve_at, with_fs, Directory, FileLike},
-    ptr::{nullable, UserConstPtr, UserPtr},
-    time::{timeval_to_timevalue, timespec_to_timevalue, wall_time, wall_time_nanos, TimeValue},
+    fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
+    ptr::{UserConstPtr, UserPtr, nullable},
+    time::{TimeValue, timespec_to_timevalue, timeval_to_timevalue, wall_time, wall_time_nanos},
 };
 
 #[repr(C)]

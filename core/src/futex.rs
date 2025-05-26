@@ -1,65 +1,77 @@
-//! Futex table for thread synchronization.
+//! Futex implementation.
 
-use core::ops::Deref;
+use core::{ops::Deref, sync::atomic::AtomicBool};
 
 use alloc::{collections::btree_map::BTreeMap, sync::Arc};
 use axsync::Mutex;
 use axtask::{TaskExtRef, WaitQueue, current};
 
-/// Maps futex addresses to their wait queues for efficient thread synchronization.
-pub struct FutexTable(Mutex<BTreeMap<usize, Arc<WaitQueue>>>);
+/// The futex entry structure
+pub struct FutexEntry {
+    /// The wait queue associated with this futex.
+    pub wq: WaitQueue,
 
-impl FutexTable {
-    /// Creates a new empty futex table.
-    pub fn new() -> Self {
-        Self(Mutex::new(BTreeMap::new()))
-    }
-
-    /// Gets an existing wait queue for the given address, or returns None if not found.
-    pub fn get(&self, addr: usize) -> Option<WaitQueueGuard> {
-        let wq = self.0.lock().get(&addr).cloned()?;
-        Some(WaitQueueGuard {
-            key: addr,
-            inner: wq,
-        })
-    }
-
-    /// Gets or creates a wait queue for the given address.
-    pub fn get_or_insert(&self, addr: usize) -> WaitQueueGuard {
-        let mut table = self.0.lock();
-        let wq = table
-            .entry(addr)
-            .or_insert_with(|| Arc::new(WaitQueue::new()));
-        WaitQueueGuard {
-            key: addr,
-            inner: wq.clone(),
+    /// Used by robust list, indicates if the owner of this futex is dead.
+    pub owner_dead: AtomicBool,
+}
+impl FutexEntry {
+    fn new() -> Self {
+        Self {
+            wq: WaitQueue::new(),
+            owner_dead: AtomicBool::new(false),
         }
     }
 }
 
-/// Smart pointer wrapper for wait queues that provides automatic cleanup on drop.
-pub struct WaitQueueGuard {
-    /// The memory address associated with this wait queue
-    key: usize,
-    /// The actual wait queue, wrapped in an Arc for shared ownership
-    inner: Arc<WaitQueue>,
+/// A table mapping memory addresses to futex wait queues.
+pub struct FutexTable(Mutex<BTreeMap<usize, Arc<FutexEntry>>>);
+impl FutexTable {
+    /// Creates a new `FutexTable`.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self(Mutex::new(BTreeMap::new()))
+    }
+
+    /// Gets the wait queue associated with the given address.
+    pub fn get(&self, addr: usize) -> Option<FutexGuard> {
+        let entry = self.0.lock().get(&addr).cloned()?;
+        Some(FutexGuard {
+            key: addr,
+            inner: entry,
+        })
+    }
+
+    /// Gets the wait queue associated with the given address, or inserts a a
+    /// new one if it doesn't exist.
+    pub fn get_or_insert(&self, addr: usize) -> FutexGuard {
+        let mut table = self.0.lock();
+        let entry = table
+            .entry(addr)
+            .or_insert_with(|| Arc::new(FutexEntry::new()));
+        FutexGuard {
+            key: addr,
+            inner: entry.clone(),
+        }
+    }
 }
 
-/// Allows WaitQueueGuard to be used like an Arc<WaitQueue> reference.
-impl Deref for WaitQueueGuard {
-    type Target = Arc<WaitQueue>;
+#[doc(hidden)]
+pub struct FutexGuard {
+    key: usize,
+    inner: Arc<FutexEntry>,
+}
+impl Deref for FutexGuard {
+    type Target = Arc<FutexEntry>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
-
-/// Removes the wait queue from the table when it's no longer needed.
-impl Drop for WaitQueueGuard {
+impl Drop for FutexGuard {
     fn drop(&mut self) {
         let curr = current();
         let mut table = curr.task_ext().process_data().futex_table.0.lock();
-        if Arc::strong_count(&self.inner) == 1 && self.inner.is_empty() {
+        if Arc::strong_count(&self.inner) == 1 && self.inner.wq.is_empty() {
             table.remove(&self.key);
         }
     }

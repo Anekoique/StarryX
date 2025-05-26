@@ -1,4 +1,4 @@
-use core::{alloc::Layout, ffi::c_char};
+use core::{alloc::Layout, ffi::c_char, mem::transmute, ptr, slice, str};
 
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::MappingFlags;
@@ -93,10 +93,15 @@ impl<T> From<usize> for UserPtr<T> {
         UserPtr(value as *mut _)
     }
 }
+impl<T> From<*mut T> for UserPtr<T> {
+    fn from(value: *mut T) -> Self {
+        UserPtr(value)
+    }
+}
 
 impl<T> Default for UserPtr<T> {
     fn default() -> Self {
-        Self(core::ptr::null_mut())
+        Self(ptr::null_mut())
     }
 }
 
@@ -126,7 +131,7 @@ impl<T> UserPtr<T> {
             Layout::array::<T>(len).unwrap(),
             Self::ACCESS_FLAGS,
         )?;
-        Ok(unsafe { core::slice::from_raw_parts_mut(self.0, len) })
+        Ok(unsafe { slice::from_raw_parts_mut(self.0, len) })
     }
 
     pub fn get_as_mut_null_terminated(self) -> LinuxResult<&'static mut [T]>
@@ -134,7 +139,7 @@ impl<T> UserPtr<T> {
         T: PartialEq + Default,
     {
         let len = check_null_terminated::<T>(self.address(), Self::ACCESS_FLAGS)?;
-        Ok(unsafe { core::slice::from_raw_parts_mut(self.0, len) })
+        Ok(unsafe { slice::from_raw_parts_mut(self.0, len) })
     }
 }
 
@@ -148,10 +153,15 @@ impl<T> From<usize> for UserConstPtr<T> {
         UserConstPtr(value as *const _)
     }
 }
+impl<T> From<*const T> for UserConstPtr<T> {
+    fn from(value: *const T) -> Self {
+        UserConstPtr(value)
+    }
+}
 
 impl<T> Default for UserConstPtr<T> {
     fn default() -> Self {
-        Self(core::ptr::null())
+        Self(ptr::null())
     }
 }
 
@@ -181,7 +191,7 @@ impl<T> UserConstPtr<T> {
             Layout::array::<T>(len).unwrap(),
             Self::ACCESS_FLAGS,
         )?;
-        Ok(unsafe { core::slice::from_raw_parts(self.0, len) })
+        Ok(unsafe { slice::from_raw_parts(self.0, len) })
     }
 
     pub fn get_as_null_terminated(self) -> LinuxResult<&'static [T]>
@@ -189,7 +199,7 @@ impl<T> UserConstPtr<T> {
         T: PartialEq + Default,
     {
         let len = check_null_terminated::<T>(self.address(), Self::ACCESS_FLAGS)?;
-        Ok(unsafe { core::slice::from_raw_parts(self.0, len) })
+        Ok(unsafe { slice::from_raw_parts(self.0, len) })
     }
 }
 
@@ -198,9 +208,9 @@ impl UserConstPtr<c_char> {
     pub fn get_as_str(self) -> LinuxResult<&'static str> {
         let slice = self.get_as_null_terminated()?;
         // SAFETY: c_char is u8
-        let slice = unsafe { core::mem::transmute::<&[c_char], &[u8]>(slice) };
+        let slice = unsafe { transmute::<&[c_char], &[u8]>(slice) };
 
-        core::str::from_utf8(slice).map_err(|_| LinuxError::EILSEQ)
+        str::from_utf8(slice).map_err(|_| LinuxError::EILSEQ)
     }
 }
 
