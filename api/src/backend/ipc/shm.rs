@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axmm::SharedPages;
 use axprocess::Pid;
@@ -7,8 +7,9 @@ use bitflags::bitflags;
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use page_table_entry::MappingFlags;
 
-use super::{BiBTreeMap, IpcPerm, IpcidGenerator};
+use super::{IpcPerm, IpcidGenerator};
 use crate::{
+    collections::{BTreeMap, BiBTreeMap},
     ctypes::{__kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, c_ushort},
     time::monotonic_time_nanos,
 };

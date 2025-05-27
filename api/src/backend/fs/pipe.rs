@@ -4,9 +4,9 @@ use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use axsync::Mutex;
-use linux_raw_sys::general::S_IFIFO;
 
 use super::{FileLike, Kstat};
+use crate::ctypes::S_IFIFO;
 
 #[derive(Copy, Clone, PartialEq)]
 enum RingBufferStatus {

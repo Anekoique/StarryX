@@ -1,12 +1,10 @@
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
 use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{
-    RLIM_NLIMITS, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_STACK, rlimit, rlimit64,
-};
 use starry_core::task::{ProcessData, get_process};
 
 use crate::{
+    ctypes::{RLIM_NLIMITS, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_STACK, rlimit, rlimit64},
     fs::AX_FILE_LIMIT,
     ptr::{UserConstPtr, UserPtr, nullable},
 };

@@ -3,9 +3,9 @@ use core::net::SocketAddr;
 use axerrno::{LinuxError, LinuxResult};
 use axnet::{TcpSocket, UdpSocket};
 use axsync::Mutex;
-use linux_raw_sys::net::{AF_INET, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM, SOCK_STREAM, socklen_t};
 
 use crate::{
+    ctypes::{AF_INET, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM, SOCK_STREAM, socklen_t},
     fs::FileLike,
     net::{SockAddr, Socket},
     ptr::{UserConstPtr, UserPtr},

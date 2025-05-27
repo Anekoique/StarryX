@@ -7,13 +7,12 @@ use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
 use bitflags::bitflags;
-use linux_raw_sys::general::*;
 use starry_core::{
     mm::copy_from_kernel,
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
 
-use crate::{fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr};
+use crate::{ctypes::*, fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr};
 
 bitflags! {
     /// Options for use with [`sys_clone`].

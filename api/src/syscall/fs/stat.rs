@@ -4,11 +4,9 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{Location, NodePermission};
 use axsync::RawMutex;
-use linux_raw_sys::general::{
-    __kernel_fsid_t, AT_EMPTY_PATH, R_OK, W_OK, X_OK, stat, statfs, statx,
-};
 
 use crate::{
+    ctypes::{__kernel_fsid_t, AT_EMPTY_PATH, R_OK, W_OK, X_OK, stat, statfs, statx},
     fs::resolve_at,
     ptr::{UserConstPtr, UserPtr, nullable},
 };

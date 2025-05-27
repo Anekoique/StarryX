@@ -2,18 +2,16 @@ use core::sync::atomic::Ordering;
 
 use axerrno::{LinuxError, LinuxResult};
 use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{
-    FUTEX_CMD_MASK, FUTEX_CMP_REQUEUE, FUTEX_REQUEUE, FUTEX_WAIT, FUTEX_WAKE, robust_list,
-    robust_list_head, timespec,
-};
 use starry_core::task::{ThreadData, get_thread};
 
 use crate::{
+    ctypes::{
+        FUTEX_CMD_MASK, FUTEX_CMP_REQUEUE, FUTEX_REQUEUE, FUTEX_WAIT, FUTEX_WAKE,
+        ROBUST_LIST_LIMIT, robust_list, robust_list_head, timespec,
+    },
     ptr::{UserConstPtr, UserPtr, nullable},
     time::timespec_to_timevalue,
 };
-
-pub const ROBUST_LIST_LIMIT: usize = 2048;
 
 pub fn sys_futex(
     uaddr: UserConstPtr<u32>,

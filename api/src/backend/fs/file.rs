@@ -3,16 +3,13 @@ use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FS_CONTEXT, FsContext};
-use axfs_ng_vfs::DeviceId;
-use axfs_ng_vfs::{Location, Metadata};
+use axfs_ng_vfs::{DeviceId, Location, Metadata};
 use axhal::time::TimeValue;
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
-use linux_raw_sys::general::{
-    AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx, statx_timestamp,
-};
 
 use super::{add_file_like, get_file_like};
+use crate::ctypes::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx, statx_timestamp};
 
 pub fn with_fs<R>(
     dirfd: c_int,

@@ -4,9 +4,9 @@ use alloc::{sync::Arc, vec};
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 use axio::{Seek, SeekFrom};
-use linux_raw_sys::general::{__kernel_off_t, iovec};
 
 use crate::{
+    ctypes::{__kernel_off_t, iovec},
     fs::{File, FileLike, get_file_like},
     ptr::{UserConstPtr, UserPtr, nullable},
 };

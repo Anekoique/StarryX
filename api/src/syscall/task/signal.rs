@@ -6,13 +6,13 @@ use axhal::arch::TrapFrame;
 use axprocess::{Pid, Thread};
 use axsignal::{SignalInfo, SignalSet, SignalStack, Signo};
 use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{
-    MINSIGSTKSZ, SI_TKILL, SI_USER, SIG_BLOCK, SIG_SETMASK, SIG_UNBLOCK, kernel_sigaction, siginfo,
-    timespec,
-};
 use starry_core::task::{get_process, get_process_group, get_thread, processes};
 
 use crate::{
+    ctypes::{
+        MINSIGSTKSZ, SI_TKILL, SI_USER, SIG_BLOCK, SIG_SETMASK, SIG_UNBLOCK, kernel_sigaction,
+        siginfo, timespec,
+    },
     ptr::{UserConstPtr, UserPtr, nullable},
     task::{check_signals, send_signal_process, send_signal_process_group, send_signal_thread},
     time::timespec_to_timevalue,

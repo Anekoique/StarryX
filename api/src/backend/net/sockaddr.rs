@@ -8,7 +8,8 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use linux_raw_sys::net::{
+
+use crate::ctypes::{
     __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
     sockaddr_in6, socklen_t,
 };

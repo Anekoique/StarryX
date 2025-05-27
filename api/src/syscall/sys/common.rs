@@ -1,10 +1,12 @@
 use core::ffi::c_char;
 
 use axerrno::LinuxResult;
-use linux_raw_sys::system::{new_utsname, sysinfo};
 use starry_core::task::processes;
 
-use crate::ptr::UserPtr;
+use crate::{
+    ctypes::{new_utsname, sysinfo},
+    ptr::UserPtr,
+};
 
 pub fn sys_getuid() -> LinuxResult<isize> {
     Ok(0)

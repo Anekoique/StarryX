@@ -5,10 +5,10 @@ use axerrno::{LinuxError, LinuxResult};
 use axns::{ResArc, def_resource};
 use axtask::{TaskExtRef, current};
 use flatten_objects::FlattenObjects;
-use linux_raw_sys::general::RLIMIT_NOFILE;
 use spin::RwLock;
 
 use super::{FileLike, stdio};
+use crate::ctypes::RLIMIT_NOFILE;
 
 pub const AX_FILE_LIMIT: usize = 1024;
 

@@ -3,12 +3,12 @@ use axerrno::{LinuxError, LinuxResult};
 use axprocess::{Pid, Process};
 use axtask::{TaskExtRef, current};
 use bitflags::bitflags;
-use linux_raw_sys::general::{
-    __WALL, __WCLONE, __WNOTHREAD, WCONTINUED, WEXITED, WNOHANG, WNOWAIT, WUNTRACED,
-};
 use starry_core::task::ProcessData;
 
-use crate::ptr::{UserPtr, nullable};
+use crate::{
+    ctypes::{__WALL, __WCLONE, __WNOTHREAD, WCONTINUED, WEXITED, WNOHANG, WNOWAIT, WUNTRACED},
+    ptr::{UserPtr, nullable},
+};
 
 bitflags! {
     #[derive(Debug)]

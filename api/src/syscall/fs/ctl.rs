@@ -8,16 +8,13 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
 use chrono::{Datelike, Timelike};
-use linux_raw_sys::{
-    general::{
-        __kernel_old_time_t, AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, UTIME_NOW, UTIME_OMIT,
-        linux_dirent64, timespec, timeval,
-    },
-    ioctl::RTC_RD_TIME,
-};
 use starry_core::vfs::RTC0_DEVICE_ID;
 
 use crate::{
+    ctypes::{
+        __kernel_old_time_t, AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, RTC_RD_TIME, UTIME_NOW,
+        UTIME_OMIT, linux_dirent64, timespec, timeval,
+    },
     fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
     ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, timespec_to_timevalue, timeval_to_timevalue, wall_time, wall_time_nanos},

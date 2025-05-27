@@ -1,7 +1,7 @@
 use axerrno::{LinuxError, LinuxResult};
-use linux_raw_sys::general::timespec;
 
 use crate::{
+    ctypes::timespec,
     ptr::{UserConstPtr, UserPtr, nullable},
     time::{timespec_to_timevalue, timevalue_to_timespec},
 };

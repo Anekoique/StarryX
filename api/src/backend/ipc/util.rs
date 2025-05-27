@@ -1,82 +1,133 @@
-use alloc::collections::btree_map::BTreeMap;
+use axns::{ResArc, def_resource};
 use axsync::Mutex;
-use lazy_static::lazy_static;
+use core::sync::atomic::{AtomicI32, Ordering};
 
-#[derive(Debug, Clone)]
-pub struct BiBTreeMap<K, V>
-where
-    K: Ord + Clone,
-    V: Ord + Clone,
-{
-    pub forward: BTreeMap<K, V>,
-    pub reverse: BTreeMap<V, K>,
+use super::shm::{SHMALL, SHMMAX, SHMMNI, ShmManager};
+use crate::utils::ctypes::{
+    __kernel_gid_t, __kernel_key_t, __kernel_mode_t, __kernel_uid_t, c_long, c_ushort,
+};
+
+pub const IPC_PRIVATE: i32 = 0;
+
+pub const IPC_CREAT: u32 = 0o1000;
+pub const IPC_EXCL: u32 = 0o2000;
+pub const IPC_NOWAIT: u32 = 0o4000;
+
+pub const IPC_RMID: u32 = 0;
+pub const IPC_SET: u32 = 1;
+pub const IPC_STAT: u32 = 2;
+pub const IPC_INFO: u32 = 3;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IpcPerm {
+    pub key: __kernel_key_t,
+    pub uid: __kernel_uid_t,
+    pub gid: __kernel_gid_t,
+    pub cuid: __kernel_uid_t,
+    pub cgid: __kernel_gid_t,
+    pub mode: __kernel_mode_t,
+    pub seq: c_ushort,
+    pub pad: c_ushort,   // for memory align
+    pub unused0: c_long, // for memory align
+    pub unused1: c_long, // for memory align
 }
 
-impl<K, V> BiBTreeMap<K, V>
-where
-    K: Ord + Clone,
-    V: Ord + Clone,
-{
-    #[allow(clippy::new_without_default)]
+pub struct IpcidGenerator {
+    next_ipcid: AtomicI32,
+}
+
+impl Clone for IpcidGenerator {
+    fn clone(&self) -> Self {
+        IpcidGenerator {
+            next_ipcid: AtomicI32::new(self.next_ipcid.load(Ordering::SeqCst)),
+        }
+    }
+}
+
+impl IpcidGenerator {
     pub const fn new() -> Self {
-        BiBTreeMap {
-            forward: BTreeMap::new(),
-            reverse: BTreeMap::new(),
+        IpcidGenerator {
+            next_ipcid: AtomicI32::new(0),
         }
     }
 
-    pub fn insert(&mut self, key: K, value: V) {
-        if let Some(old_key) = self.reverse.insert(value.clone(), key.clone()) {
-            self.forward.remove(&old_key);
-        }
-        if let Some(old_value) = self.forward.insert(key, value.clone()) {
-            self.reverse.remove(&old_value);
-        }
+    pub fn alloc(&self) -> i32 {
+        self.next_ipcid.fetch_add(1, Ordering::SeqCst)
     }
+}
 
-    pub fn get_by_key(&self, key: &K) -> Option<&V> {
-        self.forward.get(key)
-    }
+#[derive(Clone, Copy)]
+pub struct IpcLimits {
+    pub shmmax: usize,
+    pub shmmni: usize,
+    pub shmall: usize,
+    // pub msgmax: usize,
+    // pub msgmnb: usize,
+    // pub msgmni: usize,
 
-    pub fn get_by_value(&self, value: &V) -> Option<&K> {
-        self.reverse.get(value)
-    }
+    // pub semmsl: usize,
+    // pub semmns: usize,
+    // pub semopm: usize,
+    // pub semmni: usize,
+    // pub semvmx: usize,
+}
 
-    pub fn remove_by_key(&mut self, key: &K) -> Option<V> {
-        if let Some(value) = self.forward.remove(key) {
-            self.reverse.remove(&value);
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    pub fn remove_by_value(&mut self, value: &V) -> Option<K> {
-        if let Some(key) = self.reverse.remove(value) {
-            self.forward.remove(&key);
-            Some(key)
-        } else {
-            None
+impl Default for IpcLimits {
+    fn default() -> Self {
+        IpcLimits {
+            shmmax: SHMMAX,
+            shmmni: SHMMNI,
+            shmall: SHMALL,
         }
     }
 }
 
-pub struct IpcidAllocator {
-    next_ipcid: i32,
+pub struct IpcManager {
+    shm: Mutex<ShmManager>,
+    // TODO: implement System V sem and msg
+    // sem: Mutex<SemManager>,
+    // msg: Mutex<MsgManager>,
+    limits: IpcLimits,
 }
 
-impl IpcidAllocator {
-    fn new() -> Self {
-        IpcidAllocator { next_ipcid: 0 }
-    }
-
-    pub fn alloc(&mut self) -> i32 {
-        let ipcid = self.next_ipcid;
-        self.next_ipcid += 1;
-        ipcid
+impl Clone for IpcManager {
+    fn clone(&self) -> Self {
+        IpcManager {
+            shm: Mutex::new(self.shm.lock().clone()),
+            limits: self.limits,
+        }
     }
 }
 
-lazy_static! {
-    pub static ref IPCID_ALLOCATOR: Mutex<IpcidAllocator> = Mutex::new(IpcidAllocator::new());
+impl IpcManager {
+    pub fn new() -> Self {
+        IpcManager {
+            shm: Mutex::new(ShmManager::new()),
+            limits: IpcLimits::default(),
+        }
+    }
+
+    pub fn get_shm(&self) -> &Mutex<ShmManager> {
+        &self.shm
+    }
+}
+
+def_resource! {
+    pub static IPC_MANAGER: ResArc<Mutex<IpcManager>> = ResArc::new();
+}
+
+impl IPC_MANAGER {
+    pub fn copy_inner(&self) -> Mutex<IpcManager> {
+        Mutex::new(self.lock().clone())
+    }
+}
+
+pub trait IpcOps {
+    fn get_new() -> i32;
+}
+
+#[ctor_bare::register_ctor]
+fn init_ipc_manager() {
+    IPC_MANAGER.init_new(Mutex::new(IpcManager::new()));
 }

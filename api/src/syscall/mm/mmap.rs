@@ -2,13 +2,15 @@ use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::MappingFlags;
 use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{
-    MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_PRIVATE, MAP_SHARED, MAP_STACK, PROT_EXEC,
-    PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
-};
 use memory_addr::{VirtAddr, VirtAddrRange};
 
-use crate::fs::{File, FileLike};
+use crate::{
+    ctypes::{
+        MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_PRIVATE, MAP_SHARED, MAP_STACK, PROT_EXEC,
+        PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
+    },
+    fs::{File, FileLike},
+};
 
 bitflags::bitflags! {
     /// `PROT_*` flags for use with [`sys_mmap`].

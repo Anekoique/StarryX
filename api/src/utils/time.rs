@@ -1,4 +1,6 @@
-pub use axhal::time::{TimeValue, monotonic_time_nanos, wall_time, wall_time_nanos};
+pub use axhal::time::{
+    TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time, wall_time_nanos,
+};
 
 pub use crate::ctypes::{timespec, timeval};
 

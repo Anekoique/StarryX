@@ -3,10 +3,10 @@ use core::sync::atomic::Ordering;
 use axprocess::Pid;
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{SI_KERNEL, robust_list_head};
 use starry_core::task::ProcessData;
 
 use crate::{
+    ctypes::{SI_KERNEL, robust_list_head},
     exit_robust_list,
     fs::FD_TABLE,
     ptr::{UserPtr, nullable},

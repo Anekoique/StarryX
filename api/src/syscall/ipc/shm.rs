@@ -94,7 +94,7 @@ pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> LinuxResult<isize> {
 pub fn sys_shmat(shmid: i32, addr: usize, shmflg: u32) -> LinuxResult<isize> {
     let shm_inner = {
         let ipc_manager = IPC_MANAGER.lock();
-        let mut shm_manager = ipc_manager.get_shm().lock();
+        let shm_manager = ipc_manager.get_shm().lock();
         shm_manager.get_inner_by_shmid(shmid).unwrap()
     };
     let mut shm_inner = shm_inner.lock();

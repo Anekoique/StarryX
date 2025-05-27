@@ -1,9 +1,9 @@
 use axerrno::LinuxResult;
 use axio::PollState;
 use axsignal::SignalSet;
-use linux_raw_sys::general::{timespec, timeval};
 
 use crate::{
+    ctypes::{timespec, timeval},
     fs::FD_TABLE,
     ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, timespec_to_timevalue, timeval_to_timevalue, wall_time},

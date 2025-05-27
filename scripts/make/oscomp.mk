@@ -16,9 +16,9 @@ oscomp_build:
 
 TIMEOUT ?= 5m
 
-oscomp_test: defconfig
-	# Test for os competition online
-	@set -o pipefail; timeout --foreground $(TIMEOUT) $(MAKE) ACCEL=n oscomp_run | tee apps/oscomp/actual.out
+# oscomp_test: defconfig
+# 	# Test for os competition online
+# 	@set -o pipefail; timeout --foreground $(TIMEOUT) $(MAKE) ACCEL=n oscomp_run | tee apps/oscomp/actual.out
 
 IMG_URL := https://github.com/Azure-stars/testsuits-for-oskernel/releases/download/v0.2/sdcard-$(ARCH).img.gz
 

@@ -5,9 +5,11 @@ use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use axnet::{TcpSocket, UdpSocket};
 use axsync::Mutex;
-use linux_raw_sys::general::S_IFSOCK;
 
-use crate::fs::{FileLike, Kstat};
+use crate::{
+    ctypes::S_IFSOCK,
+    fs::{FileLike, Kstat},
+};
 
 pub enum Socket {
     Udp(Mutex<UdpSocket>),

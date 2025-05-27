@@ -1,5 +1,4 @@
-mod ipc;
 mod shm;
 mod util;
 
-pub use self::{ipc::*, shm::*, util::*};
+pub use self::{shm::*, util::*};

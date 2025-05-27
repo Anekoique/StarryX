@@ -1,7 +1,7 @@
 use axerrno::LinuxResult;
-use linux_raw_sys::general::{POLLERR, POLLIN, POLLNVAL, POLLOUT, pollfd, sigset_t, timespec};
 
 use crate::{
+    ctypes::{POLLERR, POLLIN, POLLNVAL, POLLOUT, pollfd, sigset_t, timespec},
     fs::get_file_like,
     ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, timespec_to_timevalue, wall_time},
