@@ -13,7 +13,7 @@ use starry_core::{
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
 
-use crate::{fs::FD_TABLE, ptr::UserPtr};
+use crate::{fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr};
 
 bitflags! {
     /// Options for use with [`sys_clone`].
@@ -195,6 +195,17 @@ pub fn sys_clone(
                 .deref_from(&process_data.ns)
                 .init_new(FS_CONTEXT.copy_inner());
         }
+
+        if flags.contains(CloneFlags::NEWIPC) {
+            IPC_MANAGER
+                .deref_from(&process_data.ns)
+                .init_new(IPC_MANAGER.copy_inner());
+        } else {
+            IPC_MANAGER
+                .deref_from(&process_data.ns)
+                .init_shared(IPC_MANAGER.share());
+        }
+
         &builder.data(process_data).build()
     };
 

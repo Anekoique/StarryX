@@ -1,5 +1,6 @@
-pub use axhal::time::{TimeValue, wall_time, wall_time_nanos};
-pub use linux_raw_sys::general::{timespec, timeval};
+pub use axhal::time::{TimeValue, monotonic_time_nanos, wall_time, wall_time_nanos};
+
+pub use crate::ctypes::{timespec, timeval};
 
 pub fn timevalue_to_timespec(tv: TimeValue) -> timespec {
     timespec {

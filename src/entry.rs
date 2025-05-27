@@ -5,7 +5,10 @@ use axprocess::{Pid, init_proc};
 use axsignal::Signo;
 use axsync::Mutex;
 use linux_raw_sys::general::AT_FDCWD;
-use starry_api::fs::{FD_TABLE, with_fs};
+use starry_api::{
+    fs::{FD_TABLE, with_fs},
+    ipc::IPC_MANAGER,
+};
 use starry_core::{
     mm::{copy_from_kernel, load_user_app, map_trampoline, new_user_aspace_empty},
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
@@ -51,6 +54,9 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     FS_CONTEXT
         .deref_from(&process_data.ns)
         .init_new(FS_CONTEXT.copy_inner());
+    IPC_MANAGER
+        .deref_from(&process_data.ns)
+        .init_new(IPC_MANAGER.copy_inner());
 
     let tid = task.id().as_u64() as Pid;
     let process = init_proc().fork(tid).data(process_data).build();
