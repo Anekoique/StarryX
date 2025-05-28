@@ -1,5 +1,21 @@
 # Todo
 
+## 5.28
+
+Progress:
+
+- replace axfs with axfs-ng
+- impl system V shm
+- pass musl Basic/libc/busybox/lua/iozone
+
+Todo:
+
+- Impl System V sem and msg
+- add docs
+- Modify the implemented syscall
+- pass glibc Basic/libc/busybox/lua/iozone
+- start lmbench
+
 ## 5.20
 
 - add docs
