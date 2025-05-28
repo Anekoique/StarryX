@@ -1,3 +1,7 @@
+glibc:
+
+/lib/ld-linux-riscv64-lp64d.so.1
+
 # Todo
 
 ## 5.28

@@ -113,10 +113,21 @@ impl<M: RawMutex> DirNode<M> {
             .map_err(|_| VfsError::EINVAL)
     }
 
+    fn forget_entry(children: &mut DirChildren<M>, name: &str) {
+        if let Some(entry) = children.remove(name) {
+            if let Ok(dir) = entry.as_dir() {
+                dir.forget();
+            }
+        }
+    }
+
     fn lookup_locked(&self, name: &str, children: &mut DirChildren<M>) -> VfsResult<DirEntry<M>> {
         use alloc::collections::btree_map::Entry;
+        debug!("cache keys before lookup: {:?}", children.keys().collect::<alloc::vec::Vec<_>>());
         match children.entry(name.to_owned()) {
-            Entry::Occupied(e) => Ok(e.get().clone()),
+            Entry::Occupied(e) => {
+                Ok(e.get().clone())
+            }
             Entry::Vacant(e) => {
                 let node = self.ops.lookup(name)?;
                 e.insert(node.clone());
@@ -165,7 +176,7 @@ impl<M: RawMutex> DirNode<M> {
         }
 
         self.ops.unlink(name).inspect(|_| {
-            children.remove(name);
+            Self::forget_entry(&mut children, name);
         })
     }
 
@@ -212,7 +223,7 @@ impl<M: RawMutex> DirNode<M> {
         verify_entry_name(dst_name)?;
 
         let mut src_children = self.cache.lock();
-        let mut dst_children = if self as *const _ == dst_dir as *const _ {
+        let mut dst_children = if core::ptr::eq(self, dst_dir) {
             None
         } else {
             Some(dst_dir.cache.lock())
@@ -237,11 +248,13 @@ impl<M: RawMutex> DirNode<M> {
         }
 
         self.ops.rename(src_name, dst_dir, dst_name).inspect(|_| {
-            src_children.remove(src_name);
-            dst_children
-                .as_mut()
-                .map_or_else(|| src_children.deref_mut(), MutexGuard::deref_mut)
-                .remove(dst_name);
+            Self::forget_entry(&mut src_children, src_name);
+            Self::forget_entry(
+                dst_children
+                    .as_mut()
+                    .map_or_else(|| src_children.deref_mut(), MutexGuard::deref_mut),
+                dst_name,
+            );
         })
     }
 

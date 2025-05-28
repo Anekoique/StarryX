@@ -1,7 +1,7 @@
 mod dir;
 mod file;
 
-use core::ops::Deref;
+use core::{iter, ops::Deref};
 
 pub use dir::*;
 pub use file::*;
@@ -37,6 +37,11 @@ pub trait NodeOps<M>: Send + Sync {
     /// Gets the size of the node.
     fn len(&self) -> VfsResult<u64> {
         self.metadata().map(|m| m.size)
+    }
+
+    /// Returns whether the node is empty (has zero length).
+    fn is_empty(&self) -> VfsResult<bool> {
+        self.len().map(|len| len == 0)
     }
 
     /// Synchronizes the file to disk.
@@ -133,6 +138,11 @@ impl<M: RawMutex> DirEntry<M> {
     pub fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
     pub fn len(&self) -> VfsResult<u64>;
     pub fn sync(&self, data_only: bool) -> VfsResult<()>;
+    
+    /// Returns whether the entry is empty (has zero length).
+    pub fn is_empty(&self) -> VfsResult<bool> {
+        self.len().map(|len| len == 0)
+    }
 }
 
 impl<M: RawMutex> DirEntry<M> {
@@ -223,7 +233,9 @@ impl<M: RawMutex> DirEntry<M> {
     pub fn absolute_path(&self) -> VfsResult<PathBuf> {
         let mut components = vec![];
         self.collect_absolute_path(&mut components);
-        Ok(components.iter().rev().collect())
+        Ok(iter::once("/")
+            .chain(components.iter().map(String::as_str).rev())
+            .collect())
     }
 
     pub fn is_file(&self) -> bool {

@@ -120,7 +120,7 @@ impl<'a> Iterator for Components<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for Components<'a> {
+impl DoubleEndedIterator for Components<'_> {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             if self.path.is_empty() {
@@ -378,6 +378,12 @@ impl From<&str> for PathBuf {
 impl fmt::Display for PathBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
+    }
+}
+
+impl Default for PathBuf {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

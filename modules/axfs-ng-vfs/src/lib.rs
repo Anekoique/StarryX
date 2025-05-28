@@ -3,6 +3,9 @@
 
 extern crate alloc;
 
+#[macro_use]
+extern crate log;
+
 mod fs;
 mod mount;
 mod node;

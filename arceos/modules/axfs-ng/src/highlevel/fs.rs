@@ -82,6 +82,7 @@ impl<M: RawMutex> FsContext<M> {
         name: &str,
         follow_count: &mut usize,
     ) -> VfsResult<Location<M>> {
+        debug!("lookup: {:?}", name);
         let loc = dir.lookup_no_follow(name)?;
         if loc.node_type() != NodeType::Symlink {
             return Ok(loc);
@@ -189,7 +190,6 @@ impl<M: RawMutex> FsContext<M> {
 
     /// Reads the entire contents of a file into a bytes vector.
     pub fn read(&self, path: impl AsRef<Path>) -> VfsResult<Vec<u8>> {
-        log::debug!("read path: {:?}", path.as_ref());
         let file = self.resolve(path.as_ref())?;
         let mut buf = Vec::new();
         File::new(file, FileFlags::READ).read_to_end(&mut buf)?;

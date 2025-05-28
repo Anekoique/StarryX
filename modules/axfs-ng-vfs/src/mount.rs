@@ -1,4 +1,7 @@
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::{
+    iter,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use alloc::{
     collections::btree_map::BTreeMap,
@@ -101,6 +104,11 @@ impl<M: RawMutex> Location<M> {
     pub fn is_root_of_mount(&self) -> bool;
 
     pub fn read_link(&self) -> VfsResult<String>;
+    
+    /// Returns whether the location is empty (has zero length).
+    pub fn is_empty(&self) -> VfsResult<bool> {
+        self.len().map(|len| len == 0)
+    }
 }
 
 impl<M: RawMutex> Location<M> {
@@ -161,7 +169,9 @@ impl<M: RawMutex> Location<M> {
                 None => break,
             }
         }
-        Ok(components.iter().rev().collect())
+        Ok(iter::once("/")
+            .chain(components.iter().map(String::as_str).rev())
+            .collect())
     }
 
     pub fn ptr_eq(&self, other: &Self) -> bool {
@@ -169,7 +179,7 @@ impl<M: RawMutex> Location<M> {
     }
 
     pub fn is_mountpoint(&self) -> bool {
-        self.entry.as_dir().map_or(false, |it| it.is_mountpoint())
+        self.entry.as_dir().is_ok_and(|it| it.is_mountpoint())
     }
 
     /// See [`Mountpoint::effective_mountpoint`].
@@ -188,6 +198,7 @@ impl<M: RawMutex> Location<M> {
             DOTDOT => self.parent().unwrap_or_else(|| self.clone()),
             _ => {
                 let loc = Self::new(self.mountpoint.clone(), self.entry.as_dir()?.lookup(name)?);
+                debug!("lookup_no_follow");
                 loc.resolve_mountpoint()
             }
         })
@@ -219,7 +230,7 @@ impl<M: RawMutex> Location<M> {
         if !Arc::ptr_eq(&self.mountpoint, &dst_dir.mountpoint) {
             return Err(VfsError::EXDEV);
         }
-        if !self.ptr_eq(&dst_dir) && self.entry.is_ancestor_of(&dst_dir.entry)? {
+        if !self.ptr_eq(dst_dir) && self.entry.is_ancestor_of(&dst_dir.entry)? {
             return Err(VfsError::EINVAL);
         }
         self.entry
@@ -254,7 +265,7 @@ impl<M: RawMutex> Location<M> {
         if mountpoint.is_some() {
             return Err(VfsError::EBUSY);
         }
-        let result = Mountpoint::new(&fs, Some(self.clone()));
+        let result = Mountpoint::new(fs, Some(self.clone()));
         *mountpoint = Some(result.clone());
         self.mountpoint
             .children

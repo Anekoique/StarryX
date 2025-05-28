@@ -109,6 +109,7 @@ pub fn load_user_app(
     args: &[String],
     envs: &[String],
 ) -> LinuxResult<(VirtAddr, VirtAddr)> {
+    debug!("load_user_app: {:?}, {:?}, {:?}", path, args, envs);
     debug!("here0");
     let path = path
         .or_else(|| args.first().map(String::as_str))
