@@ -109,10 +109,13 @@ pub fn load_user_app(
     args: &[String],
     envs: &[String],
 ) -> LinuxResult<(VirtAddr, VirtAddr)> {
+    debug!("here0");
     let path = path
         .or_else(|| args.first().map(String::as_str))
         .ok_or(AxError::InvalidInput)?;
+    debug!("here0.1");
     let file_data = FS_CONTEXT.lock().read(path)?;
+    debug!("here1");
     if file_data.starts_with(b"#!") {
         let head = &file_data[2..file_data.len().min(256)];
         let pos = head.iter().position(|c| *c == b'\n').unwrap_or(head.len());
@@ -126,6 +129,7 @@ pub fn load_user_app(
             .collect();
         return load_user_app(uspace, None, &new_args, envs);
     }
+    debug!("here2");
 
     let elf = ElfFile::new(&file_data).map_err(|_| AxError::InvalidData)?;
 
@@ -160,6 +164,7 @@ pub fn load_user_app(
         return load_user_app(uspace, None, &new_args, envs);
     }
 
+    debug!("here3");
     let (entry, mut auxv) = map_elf(uspace, &elf)?;
     // The user stack is divided into two parts:
     // `ustack_start` -> `ustack_pointer`: It is the stack space that users actually read and write.
