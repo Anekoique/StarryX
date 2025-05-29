@@ -8,7 +8,7 @@ use crate::{UserConstPtr, UserPtr};
 use crate::ctypes::{__kernel_mode_t, c_long};
 use crate::ipc::{
     IPC_CREAT, IPC_EXCL, IPC_INFO, IPC_MANAGER, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, Message,
-    MsgInfo, MsgQueue, MsgRcvFlags, MsgSndFlags, MsgidDs,
+    MsgQueue, MsgRcvFlags, MsgSndFlags, MsgidDs,
 };
 
 // System call: msgget - get message queue identifier
@@ -67,7 +67,7 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
 // System call: msgsnd - send message to queue
 pub fn sys_msgsnd(
     msqid: i32,
-    msgp: UserConstPtr<u8>,
+    msgp: UserPtr<u8>,
     msgsz: usize,
     msgflg: i32,
 ) -> LinuxResult<isize> {
@@ -89,7 +89,7 @@ pub fn sys_msgsnd(
         .ok_or(LinuxError::EINVAL)?;
     // Read message from user space (simplified - in real implementation would use copy_from_user)
     let mtype_ptr = msgp.cast::<c_long>();
-    let mtype = unsafe { *mtype_ptr.get()? };
+    let mtype =  *mtype_ptr.get_as_mut()?;
 
     if mtype <= 0 {
         return Err(LinuxError::EINVAL);
@@ -98,7 +98,7 @@ pub fn sys_msgsnd(
     let mtext_ptr = msgp.offset(core::mem::size_of::<c_long>());
     let mut mtext = vec![0u8; msgsz];
     unsafe {
-        core::ptr::copy_nonoverlapping(mtext_ptr.get()?, mtext.as_mut_ptr(), msgsz);
+        core::ptr::copy_nonoverlapping(mtext_ptr.get_as_mut()?, mtext.as_mut_ptr(), msgsz);
     }
 
     let msg = Message::new(mtype, mtext, current_pid);
@@ -135,7 +135,7 @@ pub fn sys_msgsnd(
 // System call: msgrcv - receive message from queue
 pub fn sys_msgrcv(
     msqid: i32,
-    msgp: UserConstPtr<u8>,
+    msgp: UserPtr<u8>,
     msgsz: usize,
     msgtyp: c_long,
     msgflg: i32,
@@ -175,10 +175,10 @@ pub fn sys_msgrcv(
             // Copy message to user space (simplified)
             unsafe {
                 let mtype_ptr = msgp.cast::<c_long>();
-                *mtype_ptr.get()? = msg.mtype;
+                *mtype_ptr.get_as_mut()? = msg.mtype;
                 let copy_size = core::cmp::min(msg.size(), msgsz);
                 let text_ptr = msgp.offset(core::mem::size_of::<c_long>());
-                core::ptr::copy_nonoverlapping(msg.mtext.as_ptr(), text_ptr.get()?, copy_size);
+                core::ptr::copy_nonoverlapping(msg.mtext.as_ptr(), text_ptr.get_as_mut()?, copy_size);
             }
 
             Ok(msg.mtext.len() as isize)
@@ -286,16 +286,7 @@ pub fn sys_msgctl(msqid: i32, cmd: i32, buf: UserPtr<MsgidDs>) -> LinuxResult<is
         }
 
         IPC_INFO => {
-            // Return system-wide message queue limits
-            if !buf.is_null() {
-                let msg_info = MsgInfo::default();
-                // Cast to appropriate type - this is a bit of a hack but matches Linux behavior
-                let buf_ptr = buf.get()?.cast();
-                unsafe { *buf_ptr = msg_info };
-            }
-
-            // Return the maximum message queue index
-            Ok(msg_manager.get_all_msgids().into_iter().max().unwrap_or(0) as isize)
+            Ok(0)
         }
 
         _ => Err(LinuxError::EINVAL),

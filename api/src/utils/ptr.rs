@@ -108,12 +108,6 @@ impl<T> Default for UserPtr<T> {
 impl<T> UserPtr<T> {
     const ACCESS_FLAGS: MappingFlags = MappingFlags::READ.union(MappingFlags::WRITE);
 
-    #[allow(clippy::unnecessary_cast)]
-    pub fn get(self) -> LinuxResult<*mut T> {
-        check_region(self.address(), Layout::new::<T>(), Self::ACCESS_FLAGS)?;
-        Ok(self.0 as *mut T)
-    }
-
     pub fn address(&self) -> VirtAddr {
         VirtAddr::from_ptr_of(self.0)
     }
@@ -177,12 +171,6 @@ impl<T> Default for UserConstPtr<T> {
 
 impl<T> UserConstPtr<T> {
     const ACCESS_FLAGS: MappingFlags = MappingFlags::READ;
-
-    #[allow(clippy::unnecessary_cast)]
-    pub fn get(self) -> LinuxResult<*mut T> {
-        check_region(self.address(), Layout::new::<T>(), Self::ACCESS_FLAGS)?;
-        Ok(self.0 as *mut T)
-    }
 
     pub fn address(&self) -> VirtAddr {
         VirtAddr::from_ptr_of(self.0)
