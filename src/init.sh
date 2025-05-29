@@ -43,7 +43,7 @@ env
 echo
 
 echo @@@@@@@@@@ musl @@@@@@@@@@
-cd /musl/basic
+cd /glibc/basic
 ./execve
 
 # cd /glibc

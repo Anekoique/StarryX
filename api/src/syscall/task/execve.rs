@@ -1,6 +1,10 @@
 use core::ffi::c_char;
 
-use alloc::{string::ToString, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::TrapFrame;
 use axtask::{TaskExtRef, current};
@@ -14,17 +18,30 @@ pub fn sys_execve(
     argv: UserConstPtr<UserConstPtr<c_char>>,
     envp: UserConstPtr<UserConstPtr<c_char>>,
 ) -> LinuxResult<isize> {
-    let path = path.get_as_str()?.to_string();
+    let mut path = path.get_as_str()?.to_string();
 
-    let args = argv
+    // Add "./" prefix if path doesn't start with "/" or "./"
+    if !path.starts_with('/') && !path.starts_with("./") {
+        path = format!("./{}", path);
+    }
+
+    let mut args: Vec<String> = argv
         .get_as_null_terminated()?
         .iter()
-        .map(|arg| arg.get_as_str().map(Into::into))
+        .map(|arg| arg.get_as_str().map(|s| s.to_string()))
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Add "./" prefix to the first arg if it doesn't start with "/" or "./"
+    if let Some(first_arg) = args.get_mut(0) {
+        if !first_arg.starts_with('/') && !first_arg.starts_with("./") {
+            *first_arg = format!("./{}", first_arg);
+        }
+    }
+
     let envs = envp
         .get_as_null_terminated()?
         .iter()
-        .map(|env| env.get_as_str().map(Into::into))
+        .map(|env| env.get_as_str().map(|s| s.to_string()))
         .collect::<Result<Vec<_>, _>>()?;
 
     info!(

@@ -138,7 +138,7 @@ impl<M: RawMutex> DirEntry<M> {
     pub fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
     pub fn len(&self) -> VfsResult<u64>;
     pub fn sync(&self, data_only: bool) -> VfsResult<()>;
-    
+
     /// Returns whether the entry is empty (has zero length).
     pub fn is_empty(&self) -> VfsResult<bool> {
         self.len().map(|len| len == 0)

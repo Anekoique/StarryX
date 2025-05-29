@@ -104,7 +104,7 @@ impl<M: RawMutex> Location<M> {
     pub fn is_root_of_mount(&self) -> bool;
 
     pub fn read_link(&self) -> VfsResult<String>;
-    
+
     /// Returns whether the location is empty (has zero length).
     pub fn is_empty(&self) -> VfsResult<bool> {
         self.len().map(|len| len == 0)
