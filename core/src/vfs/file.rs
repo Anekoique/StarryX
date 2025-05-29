@@ -41,6 +41,18 @@ impl SimpleFile {
             ops: Arc::new(ops),
         })
     }
+
+    pub fn new_symlink(fs: Arc<DynamicFs>, ops: impl SimpleFileOps + 'static) -> Arc<Self> {
+        let node = DynamicNode::new(
+            fs,
+            NodeType::Symlink,
+            NodePermission::from_bits_truncate(0o777),
+        );
+        Arc::new(Self {
+            node,
+            ops: Arc::new(ops),
+        })
+    }
 }
 
 #[inherit_methods(from = "self.node")]

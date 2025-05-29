@@ -300,6 +300,7 @@ pub fn sys_readlinkat(
     with_fs(dirfd, path, |fs| {
         let entry = fs.resolve_no_follow(path)?;
         let link = entry.read_link()?;
+        debug!("sys_readlinkat => link: {}", link);
         let read = size.min(link.len());
         buf[..read].copy_from_slice(&link.as_bytes()[..read]);
         Ok(read as isize)

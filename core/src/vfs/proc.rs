@@ -1,6 +1,7 @@
 use alloc::sync::Arc;
 use axfs_ng_vfs::Filesystem;
 use axsync::RawMutex;
+use axtask::{TaskExtRef, current};
 
 use super::{
     dynamic::{DirMaker, DynamicDir, DynamicFs},
@@ -80,5 +81,23 @@ fn builder(fs: Arc<DynamicFs>) -> DirMaker {
         ),
     );
     root.add("meminfo", SimpleFile::new(fs.clone(), || DUMMY_MEMINFO));
+
+    let mut self_dir = DynamicDir::builder(fs.clone());
+
+    self_dir.add(
+        "exe",
+        SimpleFile::new_symlink(fs.clone(), || {
+            let current_task = current();
+            current_task
+                .task_ext()
+                .process_data()
+                .exe_path
+                .read()
+                .clone()
+        }),
+    );
+
+    root.add("self", self_dir.build());
+
     root.build()
 }
