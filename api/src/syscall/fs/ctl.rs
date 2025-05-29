@@ -17,7 +17,7 @@ use crate::{
     },
     fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValue, timespec_to_timevalue, timeval_to_timevalue, wall_time, wall_time_nanos},
+    time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
 #[repr(C)]
@@ -397,8 +397,8 @@ pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> Li
 
 pub fn sys_utimes(path: UserConstPtr<c_char>, times: UserConstPtr<timeval>) -> LinuxResult<isize> {
     let times = nullable!(times.get_as_slice(2))?;
-    let atime = times.map_or_else(wall_time, |it| timeval_to_timevalue(it[0]));
-    let mtime = times.map_or_else(wall_time, |it| timeval_to_timevalue(it[1]));
+    let atime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[0]));
+    let mtime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[1]));
     update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
     Ok(0)
 }
@@ -416,7 +416,7 @@ pub fn sys_utimensat(
         match time.tv_nsec {
             val if val == UTIME_OMIT as _ => None,
             val if val == UTIME_NOW as _ => Some(wall_time()),
-            _ => Some(timespec_to_timevalue(*time)),
+            _ => Some(timespec::to_time_value(*time)),
         }
     }
     let times = nullable!(times.get_as_slice(2))?;

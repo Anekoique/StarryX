@@ -10,7 +10,7 @@ use crate::{
         ROBUST_LIST_LIMIT, robust_list, robust_list_head, timespec,
     },
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::timespec_to_timevalue,
+    utils::time::TimeValueLike,
 };
 
 pub fn sys_futex(
@@ -36,7 +36,7 @@ pub fn sys_futex(
             let futex = futex_table.get_or_insert(addr);
 
             if let Some(timeout) = nullable!(timeout.get_as_ref())? {
-                futex.wq.wait_timeout(timespec_to_timevalue(*timeout));
+                futex.wq.wait_timeout(timespec::to_time_value(*timeout));
             } else {
                 futex.wq.wait();
             }

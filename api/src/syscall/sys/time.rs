@@ -6,10 +6,10 @@ use starry_core::task::{
 use crate::{
     ctypes::{
         __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, ITIMER_PROF, ITIMER_REAL,
-        ITIMER_VIRTUAL, itimerval, timeval,
+        ITIMER_VIRTUAL, itimerval, timespec, timeval,
     },
     ptr::{UserPtr, nullable},
-    time::*,
+    time::{TimeValueLike, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
 
 pub fn sys_clock_gettime(
@@ -27,12 +27,12 @@ pub fn sys_clock_gettime(
             return Err(LinuxError::EINVAL);
         }
     };
-    *ts.get_as_mut()? = timevalue_to_timespec(now);
+    *ts.get_as_mut()? = timespec::from_time_value(now);
     Ok(0)
 }
 
 pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
-    *ts.get_as_mut()? = timevalue_to_timeval(wall_time());
+    *ts.get_as_mut()? = timeval::from_time_value(wall_time());
     Ok(0)
 }
 
@@ -69,8 +69,8 @@ pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize
             ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
                 let (_timer_type, interval_ns, remained_ns) = time_stat_get_timer();
                 *value = itimerval {
-                    it_interval: timeval_from_nanos(interval_ns as u64),
-                    it_value: timeval_from_nanos(remained_ns as u64),
+                    it_interval: timeval::from_nanos(interval_ns as u64),
+                    it_value: timeval::from_nanos(remained_ns as u64),
                 };
                 debug!("getitimer: {:?}", value);
                 Ok(0)
@@ -101,8 +101,8 @@ pub fn sys_setitimer(
     if let Some(new_value) = nullable!(new_value.get_as_mut())? {
         match which {
             ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
-                let interval_ns = timeval_to_nanos(&new_value.it_interval);
-                let remained_ns = timeval_to_nanos(&new_value.it_value);
+                let interval_ns = new_value.it_interval.to_nanos();
+                let remained_ns = new_value.it_value.to_nanos();
 
                 if remained_ns == 0 {
                     time_stat_clear_timer();

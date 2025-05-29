@@ -5,12 +5,12 @@ use starry_core::task::{ProcessData, get_process, time_stat_output};
 
 use crate::{
     ctypes::{
-        RLIM_NLIMITS, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_STACK, RUSAGE_CHILDREN, rlimit, rlimit64,
-        rusage,
+        __kernel_old_timeval, RLIM_NLIMITS, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_STACK,
+        RUSAGE_CHILDREN, rlimit, rlimit64, rusage,
     },
     fs::AX_FILE_LIMIT,
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValue, timevalue_to_old_timeval},
+    time::{TimeValue, TimeValueLike},
 };
 
 pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
@@ -99,8 +99,10 @@ pub fn sys_getrusage(who: i32, usage: UserPtr<rusage>) -> LinuxResult<isize> {
         match who {
             RUSAGE_SELF | RUSAGE_CHILDREN => {
                 let (_, utime_us, _, stime_us) = time_stat_output();
-                usage.ru_utime = timevalue_to_old_timeval(TimeValue::from_micros(utime_us as u64));
-                usage.ru_stime = timevalue_to_old_timeval(TimeValue::from_micros(stime_us as u64));
+                usage.ru_utime =
+                    __kernel_old_timeval::from_time_value(TimeValue::from_micros(utime_us as u64));
+                usage.ru_stime =
+                    __kernel_old_timeval::from_time_value(TimeValue::from_micros(stime_us as u64));
                 Ok(0)
             }
             _ => Err(LinuxError::EINVAL),

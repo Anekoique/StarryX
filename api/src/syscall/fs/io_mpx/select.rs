@@ -6,7 +6,7 @@ use crate::{
     ctypes::{timespec, timeval},
     fs::FD_TABLE,
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValue, timespec_to_timevalue, timeval_to_timevalue, wall_time},
+    time::{TimeValue, TimeValueLike, wall_time},
 };
 
 fn do_select(
@@ -87,7 +87,7 @@ pub fn sys_select(
         read_fds,
         write_fds,
         except_fds,
-        nullable!(timeout.get_as_ref())?.map(|it| timeval_to_timevalue(*it)),
+        nullable!(timeout.get_as_ref())?.map(|it| timeval::to_time_value(*it)),
     )
 }
 
@@ -104,6 +104,6 @@ pub fn sys_pselect6(
         read_fds,
         write_fds,
         except_fds,
-        nullable!(timeout.get_as_ref())?.map(|it| timespec_to_timevalue(*it)),
+        nullable!(timeout.get_as_ref())?.map(|it| timespec::to_time_value(*it)),
     )
 }
