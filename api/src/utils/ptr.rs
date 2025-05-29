@@ -85,7 +85,7 @@ fn check_null_terminated<T: PartialEq + Default>(
 
 /// A pointer to user space memory.
 #[repr(transparent)]
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct UserPtr<T>(*mut T);
 
 impl<T> From<usize> for UserPtr<T> {
@@ -114,6 +114,10 @@ impl<T> UserPtr<T> {
 
     pub fn cast<U>(self) -> UserPtr<U> {
         UserPtr(self.0 as *mut U)
+    }
+
+    pub fn offset(self, offset: usize) -> UserPtr<T> {
+        UserPtr(unsafe { self.0.add(offset) })
     }
 
     pub fn is_null(&self) -> bool {
@@ -174,6 +178,10 @@ impl<T> UserConstPtr<T> {
 
     pub fn cast<U>(self) -> UserConstPtr<U> {
         UserConstPtr(self.0 as *const U)
+    }
+
+    pub fn offset(self, offset: usize) -> UserConstPtr<T> {
+        UserConstPtr(unsafe { self.0.add(offset) })
     }
 
     pub fn is_null(&self) -> bool {
