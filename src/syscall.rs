@@ -347,12 +347,15 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::getgid => sys_getgid(),
         Sysno::getegid => sys_getegid(),
         Sysno::getrandom => sys_getrandom(tf.arg0().into(), tf.arg1() as _, tf.arg2() as _),
+        Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
         Sysno::uname => sys_uname(tf.arg0().into()),
         Sysno::sysinfo => sys_sysinfo(tf.arg0().into()),
         Sysno::syslog => sys_syslog(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
 
         // time
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),
+        Sysno::getitimer => sys_getitimer(tf.arg0() as _, tf.arg1().into()),
+        Sysno::setitimer => sys_setitimer(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::times => sys_times(tf.arg0().into()),
         Sysno::clock_gettime => sys_clock_gettime(tf.arg0() as _, tf.arg1().into()),
 

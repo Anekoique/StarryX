@@ -53,8 +53,7 @@ echo
 # echo "#### OS COMP TEST GROUP END iozone-glibc ####"
 
 echo @@@@@@@@@@ glibc @@@@@@@@@@
-cd /glibc
-/glibc/runtest.exe -w entry-static.exe clocale_mbfuncs
+cd /musl
 # echo "#### OS COMP TEST GROUP START basic-glibc ####"
 # ./basic_testcode.sh
 # echo "#### OS COMP TEST GROUP END basic-glibc ####"
@@ -70,7 +69,13 @@ cd /glibc
 # echo "#### OS COMP TEST GROUP START iozone-glibc ####"
 # ./iozone_testcode.sh
 # echo "#### OS COMP TEST GROUP END iozone-glibc ####"
-
+# echo "#### OS COMP TEST GROUP START lmbench-glibc ####"
+# ./lmbench_testcode.sh
+# echo "#### OS COMP TEST GROUP END lmbench-glibc ####"
+echo "#### OS COMP TEST GROUP START lmbench-glibc ####"
+./unixbench_testcode.sh
+echo "#### OS COMP TEST GROUP END lmbench-glibc ####"
+#
 # /musl/runtest.exe -w entry-static.exe argv
 # /musl/runtest.exe -w entry-static.exe basename
 # /musl/runtest.exe -w entry-static.exe clocale_mbfuncs

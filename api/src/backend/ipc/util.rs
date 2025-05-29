@@ -170,9 +170,10 @@ impl IPC_MANAGER {
     }
 }
 
-pub trait IpcOps {
-    fn get_new() -> i32;
-}
+// TODO: implement System V Ipc with IpcOps
+// pub trait IpcOps {
+//     fn get_new() -> i32;
+// }
 
 #[ctor_bare::register_ctor]
 fn init_ipc_manager() {

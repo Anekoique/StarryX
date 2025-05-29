@@ -1,9 +1,14 @@
 use axerrno::{LinuxError, LinuxResult};
-use starry_core::task::time_stat_output;
+use starry_core::task::{
+    time_stat_clear_timer, time_stat_get_timer, time_stat_output, time_stat_set_timer,
+};
 
 use crate::{
-    ctypes::{__kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, timeval},
-    ptr::UserPtr,
+    ctypes::{
+        __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, ITIMER_PROF, ITIMER_REAL,
+        ITIMER_VIRTUAL, itimerval, timeval,
+    },
+    ptr::{UserPtr, nullable},
     time::*,
 };
 
@@ -52,4 +57,69 @@ pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
         tms_cstime: stime_us,
     };
     Ok(nanos_to_ticks(monotonic_time_nanos()) as _)
+}
+
+/// Get interval timer value
+///
+/// POSIX specification: getitimer() gets the current value of the timer specified by `which`
+/// and stores it in the structure pointed to by `value`.
+pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize> {
+    if let Some(value) = nullable!(value.get_as_mut())? {
+        match which {
+            ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
+                let (_timer_type, interval_ns, remained_ns) = time_stat_get_timer();
+                *value = itimerval {
+                    it_interval: timeval_from_nanos(interval_ns as u64),
+                    it_value: timeval_from_nanos(remained_ns as u64),
+                };
+                debug!("getitimer: {:?}", value);
+                Ok(0)
+            }
+            _ => {
+                warn!("Called sys_getitimer for unsupported timer type {}", which);
+                Err(LinuxError::EINVAL)
+            }
+        }
+    } else {
+        Err(LinuxError::EFAULT)
+    }
+}
+
+/// Set interval timer value
+///
+/// POSIX specification: setitimer() sets the timer specified by `which` to the value in `new_value`.
+/// If `old_value` is not NULL, the old value of the timer is stored there.
+pub fn sys_setitimer(
+    which: u32,
+    new_value: UserPtr<itimerval>,
+    old_value: UserPtr<itimerval>,
+) -> LinuxResult<isize> {
+    if !old_value.is_null() {
+        sys_getitimer(which, old_value)?;
+    }
+
+    if let Some(new_value) = nullable!(new_value.get_as_mut())? {
+        match which {
+            ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
+                let interval_ns = timeval_to_nanos(&new_value.it_interval);
+                let remained_ns = timeval_to_nanos(&new_value.it_value);
+
+                if remained_ns == 0 {
+                    time_stat_clear_timer();
+                } else {
+                    let timer_type = which as usize;
+                    time_stat_set_timer(interval_ns as usize, remained_ns as usize, timer_type);
+                }
+                debug!("interval_ns: {}, remained_ns: {}", interval_ns, remained_ns);
+                debug!("setitimer: {:?}", new_value);
+                Ok(0)
+            }
+            _ => {
+                warn!("Called sys_setitimer for unsupported timer type {}", which);
+                Err(LinuxError::EINVAL)
+            }
+        }
+    } else {
+        Err(LinuxError::EFAULT)
+    }
 }
