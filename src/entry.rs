@@ -24,7 +24,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
         .expect("Failed to create user address space");
 
     let exe_path = &args[0];
-    let name = with_fs(AT_FDCWD, |fs| {
+    let name = with_fs(AT_FDCWD, exe_path, |fs| {
         let loc = fs.resolve(exe_path)?;
         let name = loc.name().to_owned();
         fs.set_current_dir(loc.parent().unwrap())?;

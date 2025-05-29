@@ -13,10 +13,11 @@ use crate::ctypes::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx, s
 
 pub fn with_fs<R>(
     dirfd: c_int,
+    path: &str,
     f: impl FnOnce(&mut FsContext<RawMutex>) -> LinuxResult<R>,
 ) -> LinuxResult<R> {
     let mut fs = FS_CONTEXT.lock();
-    if dirfd == AT_FDCWD {
+    if dirfd == AT_FDCWD || path.starts_with('/') {
         f(&mut fs)
     } else {
         let dir = Directory::from_fd(dirfd)?.inner.clone();
@@ -60,7 +61,7 @@ pub fn resolve_at(dirfd: c_int, path: Option<&str>, flags: u32) -> LinuxResult<R
                 ResolveAtResult::Other(file_like)
             })
         }
-        Some(path) => with_fs(dirfd, |fs| {
+        Some(path) => with_fs(dirfd, path, |fs| {
             if flags & AT_SYMLINK_NOFOLLOW != 0 {
                 fs.resolve_no_follow(path)
             } else {

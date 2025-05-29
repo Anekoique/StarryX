@@ -66,7 +66,7 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
     debug!("sys_chdir <= path: {}", path);
 
-    with_fs(AT_FDCWD, |fs| {
+    with_fs(AT_FDCWD, path, |fs| {
         let entry = fs.resolve(path)?;
         fs.set_current_dir(entry)?;
         Ok(0)
@@ -84,7 +84,7 @@ pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxRe
     let path = path.get_as_str()?;
     let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
 
-    with_fs(dirfd, |fs| {
+    with_fs(dirfd, path, |fs| {
         fs.create_dir(path, mode)?;
         Ok(0)
     })
@@ -192,7 +192,9 @@ pub fn sys_linkat(
     if old.is_dir() {
         return Err(LinuxError::EPERM);
     }
-    let (new_dir, new_name) = with_fs(new_dirfd, |fs| fs.resolve_nonexistent(new_path.into()))?;
+    let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
+        fs.resolve_nonexistent(new_path.into())
+    })?;
 
     new_dir.link(new_name, &old)?;
     Ok(0)
@@ -218,7 +220,7 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
         dirfd, path, flags
     );
 
-    with_fs(dirfd, |fs| {
+    with_fs(dirfd, path, |fs| {
         if flags == AT_REMOVEDIR as _ {
             fs.remove_dir(path)?;
         } else {
@@ -272,7 +274,7 @@ pub fn sys_symlinkat(
     let target = target.get_as_str()?;
     let linkpath = linkpath.get_as_str()?;
 
-    with_fs(new_dirfd, |fs| {
+    with_fs(new_dirfd, linkpath, |fs| {
         fs.symlink(target, linkpath)?;
         Ok(0)
     })
@@ -295,7 +297,7 @@ pub fn sys_readlinkat(
     let path = path.get_as_str()?;
     let buf = buf.get_as_mut_slice(size)?;
 
-    with_fs(dirfd, |fs| {
+    with_fs(dirfd, path, |fs| {
         let entry = fs.resolve_no_follow(path)?;
         let link = entry.read_link()?;
         let read = size.min(link.len());
@@ -459,8 +461,12 @@ pub fn sys_renameat2(
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
 
-    let (old_dir, old_name) = with_fs(old_dirfd, |fs| fs.resolve_parent(Path::new(old_path)))?;
-    let (new_dir, new_name) = with_fs(new_dirfd, |fs| fs.resolve_nonexistent(new_path.into()))?;
+    let (old_dir, old_name) = with_fs(old_dirfd, old_path, |fs| {
+        fs.resolve_parent(Path::new(old_path))
+    })?;
+    let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
+        fs.resolve_nonexistent(new_path.into())
+    })?;
 
     old_dir.rename(&old_name, &new_dir, new_name)?;
     Ok(0)

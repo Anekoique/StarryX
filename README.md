@@ -1,6 +1,50 @@
 glibc:
 
-/lib/ld-linux-riscv64-lp64d.so.1
+clocale_mbfuncs
+
+clock_gettime
+
+fnmatch
+
+fscanf
+
+fwscanf
+
+mbc
+
+pthread_cancel_points
+
+pthread_cancel
+
+pthread_cond
+
+pthread_tsd
+
+sscanf
+
+strftime
+
+strtol
+
+swprintf
+
+ungetc
+
+utime
+
+wcstol
+
+daemon_failure
+
+dn_expand_empty
+
+dn_expand_ptr_0
+
+fgetwc_buffering
+
+ftello_unflushed_append
+
+lseek_large
 
 # Todo
 
