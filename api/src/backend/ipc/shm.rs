@@ -270,6 +270,10 @@ impl ShmManager {
     pub fn allocate_shmid(&self) -> i32 {
         self.id_generator.lock().alloc()
     }
+
+    pub fn segment_count(&self) -> usize {
+        self.segments.len()
+    }
 }
 
 impl Clone for ShmManager {

@@ -361,6 +361,23 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::shmctl => sys_shmctl(tf.arg0() as _, tf.arg1() as _, tf.arg2().into()),
         Sysno::shmdt => sys_shmdt(tf.arg0() as _),
 
+        // msg
+        Sysno::msgget => sys_msgget(tf.arg0() as _, tf.arg1() as _),
+        Sysno::msgctl => sys_msgctl(tf.arg0() as _, tf.arg1() as _, tf.arg2().into()),
+        Sysno::msgsnd => sys_msgsnd(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2() as _,
+            tf.arg3() as _,
+        ),
+        Sysno::msgrcv => sys_msgrcv(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2() as _,
+            tf.arg3() as _,
+            tf.arg4() as _,
+        ),
+
         // net
         Sysno::socket => sys_socket(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         Sysno::bind => sys_bind(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
