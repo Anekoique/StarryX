@@ -6,7 +6,7 @@ use axhal::{
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
-use starry_api::{do_exit, send_signal_process};
+use starry_api::send_signal_process;
 use starry_core::mm::is_accessing_user_memory;
 
 #[register_trap_handler(PAGE_FAULT)]

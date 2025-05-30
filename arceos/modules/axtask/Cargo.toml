@@ -23,6 +23,7 @@ multitask = [
     "kernel_guard",
     "dep:crate_interface",
     "dep:cpumask",
+    "dep:crate_interface",
 ]
 irq = []
 tls = ["axhal/tls"]

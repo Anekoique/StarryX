@@ -14,6 +14,7 @@ use axhal::cpu::this_cpu_id;
 
 use crate::task::{CurrentTask, TaskState};
 use crate::wait_queue::WaitQueueGuard;
+use crate::task_ext::__AxTaskExtIf_mod;
 use crate::{AxCpuMask, AxTaskRef, Scheduler, TaskInner, WaitQueue};
 
 macro_rules! percpu_static {
@@ -536,6 +537,11 @@ impl AxRunQueue {
         #[cfg(feature = "preempt")]
         next_task.set_preempt_pending(false);
         next_task.set_state(TaskState::Running);
+
+        if !matches!(prev_task.name(), "main" | "gc" | "idle") {
+            crate_interface::call_interface!(AxTaskExtIf::switch_to_task);
+        }
+
         if prev_task.ptr_eq(&next_task) {
             return;
         }
@@ -568,6 +574,11 @@ impl AxRunQueue {
             // to indicate that it has finished its scheduling process and no longer running on this CPU.
             #[cfg(feature = "smp")]
             clear_prev_task_on_cpu();
+        }
+
+        let current_task = crate::current();
+        if !matches!(current_task.name(), "main" | "gc" | "idle") {
+            crate_interface::call_interface!(AxTaskExtIf::switch_from_task);
         }
     }
 }

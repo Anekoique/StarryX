@@ -199,3 +199,11 @@ macro_rules! def_task_ext {
         }
     };
 }
+
+#[crate_interface::def_interface]
+pub trait AxTaskExtIf {
+    /// Called when switching to a new task
+    fn switch_to_task();
+    /// Called when switching from an old task
+    fn switch_from_task();
+}

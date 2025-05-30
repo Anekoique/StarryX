@@ -111,8 +111,8 @@ pub fn sys_setitimer(
                     let timer_type = which as usize;
                     time_stat_set_timer(interval_ns as usize, remained_ns as usize, timer_type);
                 }
+                debug!("timer_type: {:?}", which);
                 debug!("interval_ns: {}, remained_ns: {}", interval_ns, remained_ns);
-                debug!("setitimer: {:?}", new_value);
                 Ok(0)
             }
             _ => {

@@ -25,7 +25,7 @@ use axsignal::{
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 use axsync::{Mutex, RawMutex};
-use axtask::{TaskExtRef, TaskInner, WaitQueue, current};
+use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
 use memory_addr::VirtAddrRange;
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
@@ -86,6 +86,14 @@ impl TaskExt {
 
     pub(crate) fn time_stat_from_user_to_kernel(&self, current_tick: usize) {
         self.time.borrow_mut().switch_into_kernel_mode(current_tick);
+    }
+
+    pub(crate) fn time_stat_switch_from_old_task(&self, current_tick: usize) {
+        self.time.borrow_mut().switch_from_old_task(current_tick);
+    }
+
+    pub(crate) fn time_stat_switch_to_new_task(&self, current_tick: usize) {
+        self.time.borrow_mut().switch_to_new_task(current_tick);
     }
 
     pub(crate) fn time_stat_output(&self) -> (usize, usize) {
@@ -284,6 +292,24 @@ impl Drop for ProcessData {
                 .lock()
                 .clear_mappings(VirtAddrRange::from_start_size(kernel.base(), kernel.size()));
         }
+    }
+}
+
+struct AxTaskExtImpl;
+#[crate_interface::impl_interface]
+impl AxTaskExtIf for AxTaskExtImpl {
+    fn switch_to_task() {
+        let curr_task = current();
+        curr_task
+            .task_ext()
+            .time_stat_switch_to_new_task(monotonic_time_nanos() as usize);
+    }
+
+    fn switch_from_task() {
+        let curr_task = current();
+        curr_task
+            .task_ext()
+            .time_stat_switch_from_old_task(monotonic_time_nanos() as usize);
     }
 }
 
