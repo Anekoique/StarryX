@@ -28,16 +28,17 @@ ln -v -s /lib /lib64
 
 export LD_LIBRARY_PATH=.
 
-echo @@@@@@@@@@ files @@@@@@@@@@
-ls -lhAR /
-echo @@@@@@@@@@ env @@@@@@@@@@
-env
-echo
+# echo @@@@@@@@@@ files @@@@@@@@@@
+# ls -lhAR /
+# echo @@@@@@@@@@ env @@@@@@@@@@
+# env
+# echo
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
 
 # echo "#### OS COMP TEST GROUP START lmbench-musl ####"
+# ./lmbench_all lat_sig -P 1 prot lat_sig
 # ./lmbench_testcode.sh
 # echo "#### OS COMP TEST GROUP END lmbench-musl ####"
 echo "#### OS COMP TEST GROUP START basic-glibc ####"

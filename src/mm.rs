@@ -43,12 +43,15 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         .handle_page_fault(vaddr, access_flags)
     {
         warn!(
-            "{} ({:?}): segmentation fault at {:#x}, exit!",
+            "{} ({:?}): segmentation fault at {:#x}, sending SIGSEGV",
             curr.id_name(),
             curr.task_ext().thread,
             vaddr
         );
-        do_exit(SIGSEGV as _, true);
+        let _ = send_signal_process(
+            curr.task_ext().thread.process(),
+            SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
+        );
     }
     true
 }
