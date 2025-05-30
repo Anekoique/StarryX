@@ -10,7 +10,7 @@ use crate::{
     },
     fs::AX_FILE_LIMIT,
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValue, TimeValueLike},
+    time::TimeValueLike,
 };
 
 pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
@@ -98,11 +98,10 @@ pub fn sys_getrusage(who: i32, usage: UserPtr<rusage>) -> LinuxResult<isize> {
     if let Some(usage) = nullable!(usage.get_as_mut())? {
         match who {
             RUSAGE_SELF | RUSAGE_CHILDREN => {
-                let (_, utime_us, _, stime_us) = time_stat_output();
-                usage.ru_utime =
-                    __kernel_old_timeval::from_time_value(TimeValue::from_micros(utime_us as u64));
-                usage.ru_stime =
-                    __kernel_old_timeval::from_time_value(TimeValue::from_micros(stime_us as u64));
+                let (utime_ns, _, _, stime_ns, _, _) = time_stat_output();
+                usage.ru_utime = __kernel_old_timeval::from_nanos(utime_ns as u64);
+                usage.ru_stime = __kernel_old_timeval::from_nanos(stime_ns as u64);
+                debug!("usage: {:?}", usage);
                 Ok(0)
             }
             _ => Err(LinuxError::EINVAL),

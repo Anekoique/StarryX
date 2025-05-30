@@ -28,6 +28,7 @@ pub fn sys_clock_gettime(
         }
     };
     *ts.get_as_mut()? = timespec::from_time_value(now);
+    debug!("sys_clock_gettime: {:?}", ts.get_as_mut()?);
     Ok(0)
 }
 
@@ -49,7 +50,7 @@ pub struct Tms {
 }
 
 pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
-    let (_, utime_us, _, stime_us) = time_stat_output();
+    let (_, _, utime_us, _, _, stime_us) = time_stat_output();
     *tms.get_as_mut()? = Tms {
         tms_utime: utime_us,
         tms_stime: stime_us,

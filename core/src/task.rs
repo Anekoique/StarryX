@@ -122,12 +122,14 @@ pub fn time_stat_from_user_to_kernel() {
 }
 
 /// Get the time statistics for the current task.
-pub fn time_stat_output() -> (usize, usize, usize, usize) {
+pub fn time_stat_output() -> (usize, usize, usize, usize, usize, usize) {
     let curr_task = current();
     let (utime_ns, stime_ns) = curr_task.task_ext().time_stat_output();
     (
+        utime_ns,
         utime_ns / NANOS_PER_SEC as usize,
         utime_ns / NANOS_PER_MICROS as usize,
+        stime_ns,
         stime_ns / NANOS_PER_SEC as usize,
         stime_ns / NANOS_PER_MICROS as usize,
     )

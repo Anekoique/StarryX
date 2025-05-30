@@ -34,8 +34,12 @@ echo @@@@@@@@@@ env @@@@@@@@@@
 env
 echo
 
-echo @@@@@@@@@@ musl @@@@@@@@@@
+# echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
+
+# echo "#### OS COMP TEST GROUP START lmbench-musl ####"
+# ./lmbench_testcode.sh
+# echo "#### OS COMP TEST GROUP END lmbench-musl ####"
 echo "#### OS COMP TEST GROUP START basic-glibc ####"
 ./basic_testcode.sh
 echo "#### OS COMP TEST GROUP END basic-glibc ####"
@@ -53,7 +57,7 @@ echo "#### OS COMP TEST GROUP START iozone-glibc ####"
 echo "#### OS COMP TEST GROUP END iozone-glibc ####"
 
 # echo @@@@@@@@@@ glibc @@@@@@@@@@
-# cd /musl
+# cd /glibc
 # echo "#### OS COMP TEST GROUP START basic-glibc ####"
 # ./basic_testcode.sh
 # echo "#### OS COMP TEST GROUP END basic-glibc ####"
@@ -97,7 +101,7 @@ echo "#### OS COMP TEST GROUP END iozone-glibc ####"
 # /musl/runtest.exe -w entry-static.exe qsort
 # /musl/runtest.exe -w entry-static.exe random
 # /musl/runtest.exe -w entry-static.exe search_hsearch
-# /musl/runtest.exe -w entry-static.exe search_insque
+# /musl/runtest.exe -w entry-static.exe search_insquesetvbuf_unget
 # /musl/runtest.exe -w entry-static.exe search_lsearch
 # /musl/runtest.exe -w entry-static.exe search_tsearch
 # /musl/runtest.exe -w entry-static.exe setjmp
