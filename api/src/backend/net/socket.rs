@@ -1,14 +1,15 @@
-use core::net::SocketAddr;
+use core::net::{Ipv4Addr, SocketAddr};
 
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
-use axfs::api::{TimesMask, Timestamp};
 use axio::PollState;
 use axnet::{TcpSocket, UdpSocket};
 use axsync::Mutex;
-use linux_raw_sys::general::S_IFSOCK;
 
-use crate::fs::{FileLike, Kstat};
+use crate::{
+    ctypes::S_IFSOCK,
+    fs::{FileLike, Kstat},
+};
 
 pub enum Socket {
     Udp(Mutex<UdpSocket>),
@@ -37,7 +38,13 @@ impl Socket {
     pub fn sendto(&self, buf: &[u8], addr: SocketAddr) -> LinuxResult<usize> {
         match self {
             // diff: must bind before sendto
-            Socket::Udp(udpsocket) => Ok(udpsocket.lock().send_to(buf, addr)?),
+            Socket::Udp(udpsocket) => {
+                let inner = udpsocket.lock();
+                inner
+                    .bind(SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0))
+                    .ok();
+                Ok(inner.send_to(buf, addr)?)
+            }
             Socket::Tcp(_) => Err(LinuxError::EISCONN),
         }
     }
@@ -60,10 +67,14 @@ impl Socket {
         }
     }
 
-    pub fn accept(&self) -> LinuxResult<TcpSocket> {
+    pub fn accept(&self) -> LinuxResult<Socket> {
         match self {
             Socket::Udp(_) => Err(LinuxError::EOPNOTSUPP),
-            Socket::Tcp(tcpsocket) => Ok(tcpsocket.lock().accept()?),
+            Socket::Tcp(tcpsocket) => tcpsocket
+                .lock()
+                .accept()
+                .map(|socket| Socket::Tcp(Mutex::new(socket)))
+                .map_err(Into::into),
         }
     }
 
@@ -108,9 +119,5 @@ impl FileLike for Socket {
             Socket::Tcp(tcpsocket) => tcpsocket.lock().set_nonblocking(nonblock),
         }
         Ok(())
-    }
-
-    fn set_times(&self, _times: Timestamp, _mask: TimesMask) -> LinuxResult {
-        Err(LinuxError::ENOSYS)
     }
 }

@@ -14,8 +14,6 @@ pub mod fs;
 pub mod io_mpx;
 #[cfg(feature = "net")]
 pub mod net;
-#[cfg(feature = "fs")]
-pub mod path_link;
 #[cfg(feature = "pipe")]
 pub mod pipe;
 #[cfg(feature = "multitask")]

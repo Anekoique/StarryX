@@ -2,13 +2,15 @@ use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::MappingFlags;
 use axtask::{TaskExtRef, current};
-use linux_raw_sys::general::{
-    MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_PRIVATE, MAP_SHARED, MAP_STACK, PROT_EXEC,
-    PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
-};
 use memory_addr::{VirtAddr, VirtAddrRange};
 
-use crate::fs::{File, FileLike};
+use crate::{
+    ctypes::{
+        MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_PRIVATE, MAP_SHARED, MAP_STACK, PROT_EXEC,
+        PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
+    },
+    fs::{File, FileLike},
+};
 
 bitflags::bitflags! {
     /// `PROT_*` flags for use with [`sys_mmap`].
@@ -132,15 +134,15 @@ pub fn sys_mmap(
 
     if populate {
         let file = File::from_fd(fd)?;
-        let file = file.inner();
-        let file_size = file.get_attr()?.size() as usize;
+        let mut file = file.inner();
+        let file_size = file.inner().len()? as usize;
         if offset < 0 || offset as usize >= file_size {
             return Err(LinuxError::EINVAL);
         }
         let offset = offset as usize;
         let length = core::cmp::min(length, file_size - offset);
         let mut buf = vec![0u8; length];
-        file.read_at(offset as u64, &mut buf)?;
+        file.read_at(&mut buf, offset as u64)?;
         aspace.write(start_addr, &buf)?;
     }
     Ok(start_addr.as_usize() as _)

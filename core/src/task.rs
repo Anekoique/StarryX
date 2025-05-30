@@ -30,7 +30,11 @@ use memory_addr::VirtAddrRange;
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
-use crate::{futex::FutexTable, resources::Rlimits, time::TimeStat};
+use crate::{
+    futex::FutexTable,
+    resources::Rlimits,
+    time::{TimeStat, TimerType},
+};
 
 /// Create a new user task.
 pub fn new_user_task(
@@ -159,7 +163,8 @@ pub struct ThreadData {
     ///
     /// When the thread exits, the kernel clears the word at this address if it is not NULL.
     pub clear_child_tid: AtomicUsize,
-
+    /// The head of the robust list
+    pub robust_list_head: AtomicUsize,
     /// The thread-level signal manager
     pub signal: ThreadSignalManager<RawMutex, WaitQueueWrapper>,
 }
@@ -170,7 +175,7 @@ impl ThreadData {
     pub fn new(proc: &ProcessData) -> Self {
         Self {
             clear_child_tid: AtomicUsize::new(0),
-
+            robust_list_head: AtomicUsize::new(0),
             signal: ThreadSignalManager::new(proc.signal.clone()),
         }
     }
@@ -359,4 +364,35 @@ pub fn get_process_group(pgid: Pid) -> LinuxResult<Arc<ProcessGroup>> {
 /// Finds the session with the given SID.
 pub fn get_session(sid: Pid) -> LinuxResult<Arc<Session>> {
     SESSION_TABLE.read().get(&sid).ok_or(LinuxError::ESRCH)
+}
+
+/// Set timer for the current task
+pub fn time_stat_set_timer(
+    timer_interval_ns: usize,
+    timer_remained_ns: usize,
+    timer_type: usize,
+) -> bool {
+    let curr_task = current();
+    curr_task.task_ext().time.borrow_mut().set_timer(
+        timer_interval_ns,
+        timer_remained_ns,
+        timer_type,
+    )
+}
+
+/// Get timer information for the current task
+pub fn time_stat_get_timer() -> (TimerType, usize, usize) {
+    let curr_task = current();
+    let time_stat = curr_task.task_ext().time.borrow();
+    (
+        time_stat.get_timer_type(),
+        time_stat.get_timer_interval_ns(),
+        time_stat.get_timer_remained_ns(),
+    )
+}
+
+/// Clear timer for the current task
+pub fn time_stat_clear_timer() {
+    let curr_task = current();
+    curr_task.task_ext().time.borrow_mut().clear_timer();
 }

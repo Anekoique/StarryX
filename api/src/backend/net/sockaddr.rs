@@ -8,7 +8,8 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use linux_raw_sys::net::{
+
+use crate::ctypes::{
     __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
     sockaddr_in6, socklen_t,
 };
@@ -50,7 +51,7 @@ impl SockAddr {
     ///  - `ptr` must be a pointer to memory containing a valid socket address.
     ///  - `len` bytes must be initialized.
     pub unsafe fn read(ptr: *const sockaddr, len: socklen_t) -> LinuxResult<Self> {
-        if size_of::<__kernel_sa_family_t>() < len as usize || len as usize > size_of::<sockaddr>()
+        if size_of::<__kernel_sa_family_t>() > len as usize || len as usize > size_of::<sockaddr>()
         {
             return Err(LinuxError::EINVAL);
         }

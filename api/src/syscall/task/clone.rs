@@ -1,19 +1,18 @@
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
-use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
+use axfs_ng::FS_CONTEXT;
 use axhal::arch::{TrapFrame, UspaceContext};
 use axprocess::Pid;
 use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
 use bitflags::bitflags;
-use linux_raw_sys::general::*;
 use starry_core::{
     mm::copy_from_kernel,
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
 
-use crate::{fs::FD_TABLE, ptr::UserPtr};
+use crate::{ctypes::*, fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr};
 
 bitflags! {
     /// Options for use with [`sys_clone`].
@@ -187,20 +186,25 @@ pub fn sys_clone(
         }
 
         if flags.contains(CloneFlags::FS) {
-            CURRENT_DIR
+            FS_CONTEXT
                 .deref_from(&process_data.ns)
-                .init_shared(CURRENT_DIR.share());
-            CURRENT_DIR_PATH
-                .deref_from(&process_data.ns)
-                .init_shared(CURRENT_DIR_PATH.share());
+                .init_shared(FS_CONTEXT.share());
         } else {
-            CURRENT_DIR
+            FS_CONTEXT
                 .deref_from(&process_data.ns)
-                .init_new(CURRENT_DIR.copy_inner());
-            CURRENT_DIR_PATH
-                .deref_from(&process_data.ns)
-                .init_new(CURRENT_DIR_PATH.copy_inner());
+                .init_new(FS_CONTEXT.copy_inner());
         }
+
+        if flags.contains(CloneFlags::NEWIPC) {
+            IPC_MANAGER
+                .deref_from(&process_data.ns)
+                .init_new(IPC_MANAGER.copy_inner());
+        } else {
+            IPC_MANAGER
+                .deref_from(&process_data.ns)
+                .init_shared(IPC_MANAGER.share());
+        }
+
         &builder.data(process_data).build()
     };
 

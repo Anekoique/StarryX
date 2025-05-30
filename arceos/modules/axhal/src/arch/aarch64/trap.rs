@@ -108,7 +108,7 @@ fn handle_sync_exception(tf: &mut TrapFrame, source: TrapSource) {
     let esr = ESR_EL1.extract();
     let iss = esr.read(ESR_EL1::ISS);
 
-    unmask_irqs(tf);;
+    unmask_irqs(tf);
 
     match esr.read_as_enum(ESR_EL1::EC) {
         #[cfg(feature = "uspace")]

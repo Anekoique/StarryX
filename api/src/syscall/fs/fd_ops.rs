@@ -3,31 +3,33 @@ use core::{
     panic,
 };
 
-use axerrno::{AxError, LinuxError, LinuxResult};
-use axfs::fops::OpenOptions;
-use linux_raw_sys::general::{
-    __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_SETFL, O_APPEND, O_CREAT, O_DIRECTORY,
-    O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC, O_WRONLY,
-};
+use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::{OpenOptions, OpenResult};
+use axsync::RawMutex;
 
 use crate::{
-    fs::{Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like},
+    ctypes::{
+        __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFL, FD_CLOEXEC,
+        O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC, O_WRONLY,
+    },
+    fs::{
+        Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like, with_fs,
+    },
     ptr::UserConstPtr,
+    sys_getegid, sys_geteuid,
 };
 
 const O_EXEC: u32 = O_PATH;
 
 /// Convert open flags to [`OpenOptions`].
-fn flags_to_options(flags: c_int, _mode: __kernel_mode_t) -> OpenOptions {
+fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32)) -> OpenOptions {
     let flags = flags as u32;
     let mut options = OpenOptions::new();
+    options.mode(mode).user(uid, gid);
     match flags & 0b11 {
         O_RDONLY => options.read(true),
         O_WRONLY => options.write(true),
-        _ => {
-            options.read(true);
-            options.write(true);
-        }
+        _ => options.read(true).write(true),
     };
     if flags & O_APPEND != 0 {
         options.append(true);
@@ -39,13 +41,22 @@ fn flags_to_options(flags: c_int, _mode: __kernel_mode_t) -> OpenOptions {
         options.create(true);
     }
     if flags & O_EXEC != 0 {
-        //options.create_new(true);
         options.execute(true);
+    }
+    if flags & O_EXCL != 0 {
+        options.create_new(true);
     }
     if flags & O_DIRECTORY != 0 {
         options.directory(true);
     }
     options
+}
+
+fn add_to_fd(result: OpenResult<RawMutex>) -> LinuxResult<i32> {
+    match result {
+        OpenResult::File(file) => File::new(file).add_to_fd_table(),
+        OpenResult::Dir(dir) => Directory::new(dir).add_to_fd_table(),
+    }
 }
 
 /// Open or create a file.
@@ -61,37 +72,15 @@ pub fn sys_openat(
     mode: __kernel_mode_t,
 ) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
-    let opts = flags_to_options(flags, mode);
-    debug!("sys_openat <= {} {} {:?}", dirfd, path, opts);
+    debug!(
+        "sys_openat <= {} {:?} {:#o} {:#o}",
+        dirfd, path, flags, mode
+    );
 
-    let dir = if path.starts_with('/') || dirfd == AT_FDCWD {
-        None
-    } else {
-        Some(Directory::from_fd(dirfd)?)
-    };
-
-    if !opts.has_directory() {
-        match dir.as_ref().map_or_else(
-            || axfs::fops::File::open(path, &opts),
-            |dir| dir.inner().open_file_at(path, &opts),
-        ) {
-            Err(AxError::IsADirectory) => {}
-            r => {
-                let fd = File::new(r?, path.into()).add_to_fd_table()?;
-                return Ok(fd as _);
-            }
-        }
-    }
-
-    let fd = Directory::new(
-        dir.map_or_else(
-            || axfs::fops::Directory::open_dir(path, &opts),
-            |dir| dir.inner().open_dir_at(path, &opts),
-        )?,
-        path.into(),
-    )
-    .add_to_fd_table()?;
-    Ok(fd as _)
+    let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
+    with_fs(dirfd, path, |fs| options.open(fs, path))
+        .and_then(add_to_fd)
+        .map(|fd| fd as isize)
 }
 
 /// Open a file by `filename` and insert it into the file descriptor table.
@@ -147,7 +136,7 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
     match cmd as u32 {
         F_DUPFD => dup_fd(fd),
         F_DUPFD_CLOEXEC => {
-            // TODO: Change fd flags
+            warn!("sys_fcntl: treat F_DUPFD_CLOEXEC as F_DUPFD");
             dup_fd(fd)
         }
         F_SETFL => {
@@ -156,6 +145,14 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             }
             get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0)?;
             Ok(0)
+        }
+        F_GETFD => {
+            warn!("unsupported fcntl parameters: F_GETFD, returning FD_CLOEXEC");
+            Ok(FD_CLOEXEC as _)
+        }
+        F_GETFL => {
+            warn!("unsupported fcntl parameters: F_GETFL, returning O_NONBLOCK");
+            Ok(O_NONBLOCK as _)
         }
         _ => {
             warn!("unsupported fcntl parameters: cmd: {}", cmd);

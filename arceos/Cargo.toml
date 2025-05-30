@@ -6,7 +6,7 @@ members = [
     "modules/axconfig",
     "modules/axdisplay",
     "modules/axdriver",
-    "modules/axfs",
+    "modules/axfs-ng",
     "modules/axhal",
     "modules/axlog",
     "modules/axmm",
@@ -54,7 +54,10 @@ axalloc = { path = "modules/axalloc" }
 axconfig = { path = "modules/axconfig" }
 axdisplay = { path = "modules/axdisplay" }
 axdriver = { path = "modules/axdriver" }
-axfs = { path = "modules/axfs" }
+axfs-ng = { path = "modules/axfs-ng", default-features = false, features = [
+    "fat",
+    "thread-local",
+] }
 axhal = { path = "modules/axhal" }
 axlog = { path = "modules/axlog" }
 axmm = { path = "modules/axmm" }
@@ -65,9 +68,11 @@ axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
 axdma = { path = "modules/axdma" }
 
+axfs-ng-vfs = { path = "../modules/axfs-ng-vfs" }
+
 [profile.release]
 lto = true
 
 [patch.crates-io]
-page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
-page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
+page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "2659e3b" }
+page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "2659e3b" }

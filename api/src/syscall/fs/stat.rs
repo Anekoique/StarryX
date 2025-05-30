@@ -1,77 +1,55 @@
 use core::ffi::{c_char, c_int};
 
-use axerrno::{AxError, LinuxError, LinuxResult};
-use axfs::fops::OpenOptions;
-use linux_raw_sys::general::{AT_EMPTY_PATH, stat, statfs, statx};
+use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FS_CONTEXT;
+use axfs_ng_vfs::{Location, NodePermission};
+use axsync::RawMutex;
 
 use crate::{
-    fs::{Directory, File, FileLike, Kstat, get_file_like, handle_file_path},
+    ctypes::{__kernel_fsid_t, AT_EMPTY_PATH, R_OK, W_OK, X_OK, stat, statfs, statx},
+    fs::resolve_at,
     ptr::{UserConstPtr, UserPtr, nullable},
 };
 
-fn stat_at_path(path: &str) -> LinuxResult<Kstat> {
-    let opts = OpenOptions::new().set_read(true);
-    match axfs::fops::File::open(path, &opts) {
-        Ok(file) => File::new(file, path.into()).stat(),
-        Err(AxError::IsADirectory) => {
-            let dir = axfs::fops::Directory::open_dir(path, &opts)?;
-            Directory::new(dir, path.into()).stat()
-        }
-        Err(e) => Err(e.into()),
-    }
-}
+use super::get_as_fs_file;
 
 /// Get the file metadata by `path` and write into `statbuf`.
 ///
 /// Return 0 if success.
+#[cfg(target_arch = "x86_64")]
 pub fn sys_stat(path: UserConstPtr<c_char>, statbuf: UserPtr<stat>) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
-    debug!("sys_stat <= path: {}", path);
+    use linux_raw_sys::general::AT_FDCWD;
 
-    *statbuf.get_as_mut()? = stat_at_path(path)?.into();
-
-    Ok(0)
+    sys_fstatat(AT_FDCWD, path, statbuf, 0)
 }
 
 /// Get file metadata by `fd` and write into `statbuf`.
 ///
 /// Return 0 if success.
 pub fn sys_fstat(fd: i32, statbuf: UserPtr<stat>) -> LinuxResult<isize> {
-    debug!("sys_fstat <= fd: {}", fd);
-    *statbuf.get_as_mut()? = get_file_like(fd)?.stat()?.into();
-    Ok(0)
+    sys_fstatat(fd, 0.into(), statbuf, AT_EMPTY_PATH)
 }
 
 /// Get the metadata of the symbolic link and write into `buf`.
 ///
 /// Return 0 if success.
+#[cfg(target_arch = "x86_64")]
 pub fn sys_lstat(path: UserConstPtr<c_char>, statbuf: UserPtr<stat>) -> LinuxResult<isize> {
-    // TODO: symlink
-    sys_stat(path, statbuf)
+    use linux_raw_sys::general::{AT_FDCWD, AT_SYMLINK_FOLLOW};
+
+    sys_fstatat(AT_FDCWD, path, statbuf, AT_SYMLINK_FOLLOW)
 }
 
 pub fn sys_fstatat(
-    dirfd: c_int,
+    dirfd: i32,
     path: UserConstPtr<c_char>,
     statbuf: UserPtr<stat>,
     flags: u32,
 ) -> LinuxResult<isize> {
     let path = nullable!(path.get_as_str())?;
-    debug!(
-        "sys_fstatat <= dirfd: {}, path: {:?}, flags: {}",
-        dirfd, path, flags
-    );
+    let statbuf = statbuf.get_as_mut()?;
 
-    *statbuf.get_as_mut()? = if path.is_none_or(|s| s.is_empty()) {
-        if (flags & AT_EMPTY_PATH) == 0 {
-            return Err(LinuxError::ENOENT);
-        }
-        let f = get_file_like(dirfd)?;
-        f.stat()?.into()
-    } else {
-        let path = handle_file_path(dirfd, path.unwrap_or_default())?;
-        stat_at_path(path.as_str())?.into()
-    };
+    *statbuf = resolve_at(dirfd, path, flags)?.stat()?.into();
 
     Ok(0)
 }
@@ -116,35 +94,81 @@ pub fn sys_statx(
         dirfd, path, flags
     );
 
-    *statxbuf.get_as_mut()? = if path.is_none_or(|s| s.is_empty()) {
-        if (flags & AT_EMPTY_PATH) == 0 {
-            return Err(LinuxError::ENOENT);
-        }
-        let f = get_file_like(dirfd)?;
-        f.stat()?.into()
-    } else {
-        let path = handle_file_path(dirfd, path.unwrap_or_default())?;
-        stat_at_path(path.as_str())?.into()
-    };
+    let statxbuf = statxbuf.get_as_mut()?;
+    *statxbuf = resolve_at(dirfd, path, flags)?.stat()?.into();
 
     Ok(0)
 }
 
-pub fn sys_statfs(path: UserConstPtr<c_char>, statfsbuf: UserPtr<statfs>) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
-    debug!("sys_statfs <= path: {:?}", path);
+#[cfg(target_arch = "x86_64")]
+pub fn sys_access(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
+    use linux_raw_sys::general::AT_FDCWD;
 
-    let mut statfs: statfs = unsafe { core::mem::zeroed() };
-    // TODO: get real statfs
-    statfs.f_bsize = 4096;
-    statfs.f_blocks = 1024;
-    statfs.f_bfree = 512;
-    statfs.f_bavail = 256;
-    statfs.f_files = 1024;
-    statfs.f_ffree = 512;
-    statfs.f_namelen = 255;
+    sys_faccessat2(AT_FDCWD, path, mode, 0)
+}
 
-    *statfsbuf.get_as_mut()? = statfs;
+pub fn sys_faccessat2(
+    dirfd: c_int,
+    path: UserConstPtr<c_char>,
+    mode: u32,
+    flags: u32,
+) -> LinuxResult<isize> {
+    let path = nullable!(path.get_as_str())?;
+    let file = resolve_at(dirfd, path, flags)?;
+    if mode == 0 {
+        return Ok(0);
+    }
+    let mut required_mode = NodePermission::empty();
+    if mode & R_OK != 0 {
+        required_mode |= NodePermission::OWNER_READ;
+    }
+    if mode & W_OK != 0 {
+        required_mode |= NodePermission::OWNER_WRITE;
+    }
+    if mode & X_OK != 0 {
+        required_mode |= NodePermission::OWNER_EXEC;
+    }
+    let required_mode = required_mode.bits();
+    if (file.stat()?.mode as u16 & required_mode) != required_mode {
+        return Err(LinuxError::EACCES);
+    }
 
+    Ok(0)
+}
+
+fn statfs(loc: &Location<RawMutex>, buf: UserPtr<statfs>) -> LinuxResult<()> {
+    let stat = loc.filesystem().stat()?;
+    let dest = buf.get_as_mut()?;
+    dest.f_type = stat.fs_type as _;
+    dest.f_bsize = stat.block_size as _;
+    dest.f_blocks = stat.blocks as _;
+    dest.f_bfree = stat.blocks_free as _;
+    dest.f_bavail = stat.blocks_available as _;
+    dest.f_files = stat.file_count as _;
+    dest.f_ffree = stat.free_file_count as _;
+    // TODO: fsid
+    dest.f_fsid = __kernel_fsid_t {
+        val: [0, loc.mountpoint().device() as _],
+    };
+    dest.f_namelen = stat.name_length as _;
+    dest.f_frsize = stat.fragment_size as _;
+    dest.f_flags = stat.mount_flags as _;
+    Ok(())
+}
+
+pub fn sys_statfs(path: UserConstPtr<c_char>, buf: UserPtr<statfs>) -> LinuxResult<isize> {
+    statfs(
+        &FS_CONTEXT
+            .lock()
+            .resolve(path.get_as_str()?)?
+            .mountpoint()
+            .root_location(),
+        buf,
+    )?;
+    Ok(0)
+}
+
+pub fn sys_fstatfs(fd: i32, buf: UserPtr<statfs>) -> LinuxResult<isize> {
+    statfs(get_as_fs_file(fd)?.inner().inner(), buf)?;
     Ok(0)
 }

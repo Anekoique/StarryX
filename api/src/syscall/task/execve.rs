@@ -1,8 +1,12 @@
 use core::ffi::c_char;
 
-use alloc::{string::ToString, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 use axerrno::{LinuxError, LinuxResult};
-use axfs::api::canonicalize;
+use axfs_ng::FS_CONTEXT;
 use axhal::arch::TrapFrame;
 use axtask::{TaskExtRef, current};
 use starry_core::mm::{load_user_app, map_trampoline};
@@ -15,17 +19,30 @@ pub fn sys_execve(
     argv: UserConstPtr<UserConstPtr<c_char>>,
     envp: UserConstPtr<UserConstPtr<c_char>>,
 ) -> LinuxResult<isize> {
-    let path = path.get_as_str()?.to_string();
+    let mut path = path.get_as_str()?.to_string();
 
-    let args = argv
+    // Add "./" prefix if path doesn't start with "/" or "./"
+    if !path.starts_with('/') && !path.starts_with("./") {
+        path = format!("./{}", path);
+    }
+
+    let mut args: Vec<String> = argv
         .get_as_null_terminated()?
         .iter()
-        .map(|arg| arg.get_as_str().map(Into::into))
+        .map(|arg| arg.get_as_str().map(|s| s.to_string()))
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Add "./" prefix to the first arg if it doesn't start with "/" or "./"
+    if let Some(first_arg) = args.get_mut(0) {
+        if !first_arg.starts_with('/') && !first_arg.starts_with("./") {
+            *first_arg = format!("./{}", first_arg);
+        }
+    }
+
     let envs = envp
         .get_as_null_terminated()?
         .iter()
-        .map(|env| env.get_as_str().map(Into::into))
+        .map(|env| env.get_as_str().map(|s| s.to_string()))
         .collect::<Result<Vec<_>, _>>()?;
 
     info!(
@@ -47,8 +64,8 @@ pub fn sys_execve(
     map_trampoline(&mut aspace)?;
     axhal::arch::flush_tlb(None);
 
-    let (entry_point, user_stack_base) =
-        load_user_app(&mut aspace, &args, &envs).map_err(|_| {
+    let (entry_point, user_stack_base) = load_user_app(&mut aspace, Some(&path), &args, &envs)
+        .map_err(|_| {
             error!("Failed to load app {}", path);
             LinuxError::ENOENT
         })?;
@@ -58,7 +75,7 @@ pub fn sys_execve(
         .rsplit_once('/')
         .map_or(path.as_str(), |(_, name)| name);
     curr.set_name(name);
-    *curr_ext.process_data().exe_path.write() = canonicalize(path.as_str())?;
+    *curr_ext.process_data().exe_path.write() = FS_CONTEXT.lock().canonicalize(path)?.to_string();
 
     // TODO: fd close-on-exec
 

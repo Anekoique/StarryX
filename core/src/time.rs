@@ -119,7 +119,33 @@ impl TimeStat {
             return;
         }
         if self.timer_remained_ns > delta {
+            debug!(
+                "update_timer: delta: {}, timer_remained_ns: {}",
+                delta, self.timer_remained_ns
+            );
             self.timer_remained_ns -= delta;
         }
+    }
+
+    /// Get current timer type
+    pub fn get_timer_type(&self) -> TimerType {
+        self.timer_type
+    }
+
+    /// Get current timer interval in nanoseconds
+    pub fn get_timer_interval_ns(&self) -> usize {
+        self.timer_interval_ns
+    }
+
+    /// Get remaining timer time in nanoseconds
+    pub fn get_timer_remained_ns(&self) -> usize {
+        self.timer_remained_ns
+    }
+
+    /// Clear/stop the timer
+    pub fn clear_timer(&mut self) {
+        self.timer_type = TimerType::NONE;
+        self.timer_interval_ns = 0;
+        self.timer_remained_ns = 0;
     }
 }
