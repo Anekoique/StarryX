@@ -16,7 +16,7 @@ fn do_select(
     except_fds: UserPtr<u8>,
     timeout: Option<TimeValue>,
 ) -> LinuxResult<isize> {
-    let num_words = nfds.div_ceil(32) as usize;
+    let num_words = nfds.div_ceil(8) as usize;
     let mut read_fds = nullable!(read_fds.get_as_mut_slice(num_words))?;
     let mut write_fds = nullable!(write_fds.get_as_mut_slice(num_words))?;
     let mut except_fds = nullable!(except_fds.get_as_mut_slice(num_words))?;
@@ -43,6 +43,7 @@ fn do_select(
                 break;
             }
             if f(fd_table.get(fd).unwrap().poll()?) {
+                debug!("select: fd: {} is ready, nfds: {}", fd, nfds);
                 fds[fd / 8] |= 1 << (fd % 8);
                 num += 1;
             }
@@ -61,6 +62,7 @@ fn do_select(
     );
 
     loop {
+        axtask::yield_now();
         let num = fill(nfds, &mut read_fds, |state| state.readable)?
             + fill(nfds, &mut write_fds, |state| state.writable)?
             + fill(nfds, &mut except_fds, |_state| false /* TODO */)?;
@@ -68,7 +70,6 @@ fn do_select(
             return Ok(num as isize);
         }
 
-        axtask::yield_now();
         if deadline.is_some_and(|d| wall_time() >= d) {
             return Ok(0);
         }
