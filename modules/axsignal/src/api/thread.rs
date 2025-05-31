@@ -140,6 +140,31 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         }
     }
 
+    pub fn check_fatal_signals(&self) -> Option<(SignalInfo, SignalOSAction)> {
+        use crate::{SignalSet, Signo};
+
+        // Create a signal set containing only SIGKILL and SIGSTOP
+        let mut fatal_signals = SignalSet::default();
+        fatal_signals.add(Signo::SIGKILL);
+        fatal_signals.add(Signo::SIGSTOP);
+
+        // Check if any of these fatal signals are pending
+        // These signals cannot be blocked, so we don't need to check the blocked mask
+        if let Some(sig) = self.dequeue_signal(&fatal_signals) {
+            info!("Fatal signal received: {:?}", sig.signo());
+            // For fatal signals, we should use their default actions
+            // SIGKILL terminates, SIGSTOP stops the process
+            let action = match sig.signo() {
+                Signo::SIGKILL => SignalOSAction::Terminate,
+                Signo::SIGSTOP => SignalOSAction::Stop,
+                _ => unreachable!("Only SIGKILL and SIGSTOP should be in fatal_signals"),
+            };
+            Some((sig, action))
+        } else {
+            None
+        }
+    }
+
     /// Restores the signal frame. Called by `sigreutrn`.
     pub fn restore(&self, tf: &mut TrapFrame) {
         let frame_ptr = tf.sp() as *const SignalFrame;

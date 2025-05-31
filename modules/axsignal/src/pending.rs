@@ -45,6 +45,7 @@ impl PendingSignals {
             }
             self.info_std[signo as usize] = Some(sig);
         }
+        trace!("put_signal: {:?}", signo);
         true
     }
 

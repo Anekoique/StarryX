@@ -6,7 +6,7 @@ use axio::PollState;
 use axsync::Mutex;
 
 use super::{FileLike, Kstat};
-use crate::ctypes::S_IFIFO;
+use crate::{check_fatal_signals, ctypes::S_IFIFO};
 
 #[derive(Copy, Clone, PartialEq)]
 enum RingBufferStatus {
@@ -124,6 +124,7 @@ impl FileLike for Pipe {
                 }
                 drop(ring_buffer);
                 // Data not ready, wait for write end
+                check_fatal_signals();
                 axtask::yield_now(); // TODO: use synconize primitive
                 continue;
             }
@@ -156,6 +157,7 @@ impl FileLike for Pipe {
                 }
                 drop(ring_buffer);
                 // Buffer is full, wait for read end to consume
+                check_fatal_signals();
                 axtask::yield_now(); // TODO: use synconize primitive
                 continue;
             }

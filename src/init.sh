@@ -37,7 +37,8 @@ export LD_LIBRARY_PATH=.
 # echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
 
-# echo "#### OS COMP TEST GROUP START lmbench-musl ####"
+echo "#### OS COMP TEST GROUP START lmbench-musl ####"
+# ./lmbench_all lat_syscall -P 1 null
 # ./lmbench_all lat_pipe -P 1
 # ./lmbench_all lat_sig -P 1 prot lat_sig
 # ./lmbench_testcode.sh

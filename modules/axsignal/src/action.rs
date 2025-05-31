@@ -31,6 +31,8 @@ pub enum DefaultSignalAction {
 }
 
 /// Signal action that should be properly handled by the OS.
+///
+/// See [`SignalManager::check_signals`] for details.
 pub enum SignalOSAction {
     /// Terminate the process.
     Terminate,

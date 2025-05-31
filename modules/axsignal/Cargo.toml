@@ -12,7 +12,6 @@ axhal = { git = "https://github.com/oscomp/arceos.git", features = ["uspace"] }
 axtask = { git = "https://github.com/oscomp/arceos.git", features = [
     "multitask",
 ] }
-axsync.workspace = true
 
 cfg-if = "1.0.0"
 linux-raw-sys = { version = "0.9.3", default-features = false, features = [

@@ -63,11 +63,10 @@ pub fn add_file_like(f: Arc<dyn FileLike>) -> LinuxResult<c_int> {
 
 /// Close a file by `fd`.
 pub fn close_file_like(fd: c_int) -> LinuxResult {
-    let f = FD_TABLE
+    let _f = FD_TABLE
         .write()
         .remove(fd as usize)
         .ok_or(LinuxError::EBADF)?;
-    debug!("close_file_like <= count: {}", Arc::strong_count(&f));
     Ok(())
 }
 

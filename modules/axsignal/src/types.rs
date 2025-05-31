@@ -120,11 +120,9 @@ impl Signo {
 }
 
 /// Signal set. Compatible with `struct sigset_t` in libc.
-#[derive(
-    Default, Debug, Clone, Copy, Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, PartialEq, Eq,
-)]
+#[derive(Default, Debug, Clone, Copy, Not, BitOr, BitOrAssign, BitAnd, BitAndAssign)]
 #[repr(transparent)]
-pub struct SignalSet(pub u64);
+pub struct SignalSet(u64);
 impl SignalSet {
     fn signo_bit(signo: Signo) -> u64 {
         1 << (signo as u8 - 1)
