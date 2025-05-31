@@ -3,7 +3,7 @@ use axerrno::{LinuxError, LinuxResult};
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
 
-use crate::{UserConstPtr, UserPtr};
+use crate::UserPtr;
 
 use crate::ctypes::{__kernel_mode_t, c_long};
 use crate::ipc::{
@@ -65,12 +65,7 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
 }
 
 // System call: msgsnd - send message to queue
-pub fn sys_msgsnd(
-    msqid: i32,
-    msgp: UserPtr<u8>,
-    msgsz: usize,
-    msgflg: i32,
-) -> LinuxResult<isize> {
+pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> LinuxResult<isize> {
     info!(
         "sys_msgsnd: msqid = {}, msgsz = {}, msgflg = {}",
         msqid, msgsz, msgflg
@@ -89,7 +84,7 @@ pub fn sys_msgsnd(
         .ok_or(LinuxError::EINVAL)?;
     // Read message from user space (simplified - in real implementation would use copy_from_user)
     let mtype_ptr = msgp.cast::<c_long>();
-    let mtype =  *mtype_ptr.get_as_mut()?;
+    let mtype = *mtype_ptr.get_as_mut()?;
 
     if mtype <= 0 {
         return Err(LinuxError::EINVAL);
@@ -178,7 +173,11 @@ pub fn sys_msgrcv(
                 *mtype_ptr.get_as_mut()? = msg.mtype;
                 let copy_size = core::cmp::min(msg.size(), msgsz);
                 let text_ptr = msgp.offset(core::mem::size_of::<c_long>());
-                core::ptr::copy_nonoverlapping(msg.mtext.as_ptr(), text_ptr.get_as_mut()?, copy_size);
+                core::ptr::copy_nonoverlapping(
+                    msg.mtext.as_ptr(),
+                    text_ptr.get_as_mut()?,
+                    copy_size,
+                );
             }
 
             Ok(msg.mtext.len() as isize)
@@ -285,9 +284,7 @@ pub fn sys_msgctl(msqid: i32, cmd: i32, buf: UserPtr<MsgidDs>) -> LinuxResult<is
             Ok(0)
         }
 
-        IPC_INFO => {
-            Ok(0)
-        }
+        IPC_INFO => Ok(0),
 
         _ => Err(LinuxError::EINVAL),
     }

@@ -3,6 +3,7 @@ use axsync::Mutex;
 use core::sync::atomic::{AtomicI32, Ordering};
 
 use super::msg::{MSGMAX, MSGMNB, MSGMNI, MsgManager};
+use super::sem::{SEMMNI, SEMMNS, SEMMSL, SEMOPM, SEMVMX, SemManager};
 use super::shm::{SHMALL, SHMMAX, SHMMNI, ShmManager};
 use crate::utils::ctypes::{
     __kernel_gid_t, __kernel_key_t, __kernel_mode_t, __kernel_uid_t, c_long, c_ushort,
@@ -69,12 +70,12 @@ pub struct IpcLimits {
     pub msgmax: usize,
     pub msgmnb: usize,
     pub msgmni: usize,
-    // TODO: Semaphore limits (for future implementation)
-    // pub semmsl: usize,
-    // pub semmns: usize,
-    // pub semopm: usize,
-    // pub semmni: usize,
-    // pub semvmx: usize,
+    // Semaphore limits
+    pub semmsl: usize,
+    pub semmns: usize,
+    pub semopm: usize,
+    pub semmni: usize,
+    pub semvmx: usize,
 }
 
 impl Default for IpcLimits {
@@ -89,6 +90,13 @@ impl Default for IpcLimits {
             msgmax: MSGMAX,
             msgmnb: MSGMNB,
             msgmni: MSGMNI,
+
+            // Semaphore
+            semmsl: SEMMSL,
+            semmns: SEMMNS,
+            semopm: SEMOPM,
+            semmni: SEMMNI,
+            semvmx: SEMVMX,
         }
     }
 }
@@ -96,8 +104,7 @@ impl Default for IpcLimits {
 pub struct IpcManager {
     shm: Mutex<ShmManager>,
     msg: Mutex<MsgManager>,
-    // TODO: implement System V semaphores
-    // sem: Mutex<SemManager>,
+    sem: Mutex<SemManager>,
     limits: IpcLimits,
 }
 
@@ -106,6 +113,7 @@ impl Clone for IpcManager {
         IpcManager {
             shm: Mutex::new(self.shm.lock().clone()),
             msg: Mutex::new(self.msg.lock().clone()),
+            sem: Mutex::new(self.sem.lock().clone()),
             limits: self.limits,
         }
     }
@@ -116,6 +124,7 @@ impl IpcManager {
         IpcManager {
             shm: Mutex::new(ShmManager::new()),
             msg: Mutex::new(MsgManager::new()),
+            sem: Mutex::new(SemManager::new()),
             limits: IpcLimits::default(),
         }
     }
@@ -126,6 +135,10 @@ impl IpcManager {
 
     pub fn get_msg(&self) -> &Mutex<MsgManager> {
         &self.msg
+    }
+
+    pub fn get_sem(&self) -> &Mutex<SemManager> {
+        &self.sem
     }
 
     pub fn get_limits(&self) -> &IpcLimits {
@@ -140,13 +153,16 @@ impl IpcManager {
     pub fn get_ipc_stats(&self) -> IpcStats {
         let shm_manager = self.shm.lock();
         let msg_manager = self.msg.lock();
+        let sem_manager = self.sem.lock();
 
         IpcStats {
             shm_segments: shm_manager.segment_count(),
             msg_queues: msg_manager.queue_count(),
+            sem_arrays: sem_manager.array_count(),
             total_shm_pages: 0, // Would need to calculate from segments
             total_msg_bytes: msg_manager.total_queues_bytes(),
             total_messages: msg_manager.total_messages(),
+            total_semaphores: sem_manager.total_semaphores(),
         }
     }
 }
@@ -155,9 +171,11 @@ impl IpcManager {
 pub struct IpcStats {
     pub shm_segments: usize,
     pub msg_queues: usize,
+    pub sem_arrays: usize,
     pub total_shm_pages: usize,
     pub total_msg_bytes: usize,
     pub total_messages: usize,
+    pub total_semaphores: usize,
 }
 
 def_resource! {

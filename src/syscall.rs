@@ -378,6 +378,16 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             tf.arg4() as _,
         ),
 
+        // sem
+        Sysno::semget => sys_semget(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::semctl => sys_semctl(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+        ),
+        Sysno::semop => sys_semop(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
+
         // net
         Sysno::socket => sys_socket(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         Sysno::bind => sys_bind(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
