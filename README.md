@@ -1,52 +1,21 @@
-glibc:
-
-clocale_mbfuncs
-
-clock_gettime
-
-fnmatch
-
-fscanf
-
-fwscanf
-
-mbc
-
-pthread_cancel_points
-
-pthread_cancel
-
-pthread_cond
-
-pthread_tsd
-
-sscanf
-
-strftime
-
-strtol
-
-swprintf
-
-ungetc
-
-utime
-
-wcstol
-
-daemon_failure
-
-dn_expand_empty
-
-dn_expand_ptr_0
-
-fgetwc_buffering
-
-ftello_unflushed_append
-
-lseek_large
-
 # Todo
+
+## 6.1
+
+Progress：
+
+- Impl System V Ipc
+- run lmbench succressfully
+
+Todo：
+
+- add docs
+- impl Posix Ipc
+- Page Cache （msync）and copy-on-write
+- Modify axfs_ng's management of cache and mount points
+- Iperf and netpert
+- Io mpx：epoll
+- glibc libctest
 
 ## 5.28
 
@@ -462,6 +431,101 @@ graph TD
 ```
 
 starry
+
+## PageCache
+
+文件读取
+
+```mermaid
+sequenceDiagram
+    participant 用户进程
+    participant 内核
+    participant 磁盘
+    
+    用户进程->>内核: read() 系统调用
+    内核->>address_space: 通过 file->f_mapping 定位
+    activate address_space
+    address_space->>i_pages: 用文件偏移查找缓存页
+    alt 缓存命中
+        i_pages-->>address_space: 返回 struct page
+        address_space-->>内核: 直接复制数据到用户空间
+    else 缓存未命中
+        address_space->>内存管理: 分配新 page
+        address_space->>a_ops: 调用 readpage()
+        a_ops->>磁盘: 发起 I/O 读取
+        磁盘-->>a_ops: 返回数据
+        a_ops->>address_space: 填充 page
+        address_space->>i_pages: 插入新缓存页
+        address_space-->>内核: 返回数据
+    end
+    deactivate address_space
+    内核-->>用户进程: 返回数据
+```
+
+文件写入
+
+```mermaid
+
+sequenceDiagram
+    participant 用户进程
+    participant 内核
+    participant 磁盘
+    
+    用户进程->>内核: write() 系统调用
+    内核->>address_space: 获取缓存页（类似读取）
+    activate address_space
+    alt 缓存存在
+        address_space->>page: 写入数据
+        address_space->>a_ops: set_page_dirty()
+    else 缓存不存在
+        address_space->>内存管理: 分配新 page
+        address_space->>page: 写入数据
+        address_space->>i_pages: 插入缓存
+        address_space->>a_ops: set_page_dirty()
+    end
+    deactivate address_space
+    
+    内核-->>用户进程: 返回成功
+    
+    后台->>address_space: 定期唤醒
+    activate address_space
+    address_space->>i_pages: 查找脏页
+    loop 遍历脏页
+        address_space->>a_ops: 调用 writepage()
+        a_ops->>磁盘: 写入数据
+        磁盘-->>a_ops: 确认写入
+        a_ops->>address_space: 清除脏标志
+    end
+    deactivate address_space
+```
+
+###### 内存映射
+
+```mermaid
+sequenceDiagram
+    participant 用户进程
+    participant 内核
+    participant CPU MMU
+    
+    用户进程->>内核: mmap() 系统调用
+    内核->>address_space: 创建 VMA 并插入 i_mmap 树
+    内核-->>用户进程: 返回虚拟地址
+    
+    用户进程->>CPU MMU: 首次访问虚拟地址
+    CPU MMU->>内核: 触发缺页中断
+    内核->>address_space: 通过 VMA 定位
+    activate address_space
+    address_space->>i_pages: 用文件偏移查找缓存页
+    alt 缓存存在
+        i_pages-->>address_space: 返回 struct page
+    else 缓存不存在
+        address_space->>a_ops: 调用 readpage() 加载数据
+    end
+    address_space->>MMU: 设置页表映射
+    deactivate address_space
+    内核-->>CPU MMU: 恢复执行
+    CPU MMU-->>用户进程: 正常访问内存
+```
 
 
 
