@@ -14,6 +14,9 @@ use crate::{
 use super::DirEntry;
 
 /// A trait for a sink that can receive directory entries.
+///
+/// This trait is used during directory listing operations to provide
+/// a flexible way to collect or process directory entries.
 pub trait DirEntrySink {
     /// Accept a directory entry, returns `false` if the sink is full.
     ///
@@ -32,6 +35,10 @@ impl<F: FnMut(&str, u64, NodeType, u64) -> bool> DirEntrySink for F {
 
 type DirChildren<M> = BTreeMap<String, DirEntry<M>>;
 
+/// Operations specific to directory nodes
+///
+/// This trait extends [`NodeOps`] with directory-specific operations like
+/// listing entries, creating files, and managing the directory structure.
 pub trait DirNodeOps<M: RawMutex>: NodeOps<M> {
     /// Reads directory entries.
     ///
@@ -74,6 +81,10 @@ pub trait DirNodeOps<M: RawMutex>: NodeOps<M> {
     fn rename(&self, src_name: &str, dst_dir: &DirNode<M>, dst_name: &str) -> VfsResult<()>;
 }
 
+/// A wrapper for directory node operations
+///
+/// This struct provides a type-safe interface for working with directory nodes
+/// while maintaining a cache of child entries and handling mountpoints.
 pub struct DirNode<M> {
     ops: Arc<dyn DirNodeOps<M>>,
     cache: Mutex<M, BTreeMap<String, DirEntry<M>>>,
@@ -93,6 +104,7 @@ impl<M> From<DirNode<M>> for Arc<dyn NodeOps<M>> {
 }
 
 impl<M: RawMutex> DirNode<M> {
+    /// Creates a new directory node from operations
     pub fn new(ops: Arc<dyn DirNodeOps<M>>) -> Self {
         Self {
             ops,
@@ -101,10 +113,12 @@ impl<M: RawMutex> DirNode<M> {
         }
     }
 
+    /// Returns a reference to the inner operations
     pub fn inner(&self) -> &Arc<dyn DirNodeOps<M>> {
         &self.ops
     }
 
+    /// Attempts to downcast to a specific directory implementation type
     pub fn downcast<T: Send + Sync + 'static>(&self) -> VfsResult<Arc<T>> {
         self.ops
             .clone()
@@ -113,6 +127,7 @@ impl<M: RawMutex> DirNode<M> {
             .map_err(|_| VfsError::EINVAL)
     }
 
+    /// Removes an entry from the cache and recursively forgets subdirectories
     fn forget_entry(children: &mut DirChildren<M>, name: &str) {
         if let Some(entry) = children.remove(name) {
             if let Ok(dir) = entry.as_dir() {
@@ -121,6 +136,7 @@ impl<M: RawMutex> DirNode<M> {
         }
     }
 
+    /// Looks up an entry with the cache lock held
     fn lookup_locked(&self, name: &str, children: &mut DirChildren<M>) -> VfsResult<DirEntry<M>> {
         use alloc::collections::btree_map::Entry;
         debug!(
@@ -146,11 +162,13 @@ impl<M: RawMutex> DirNode<M> {
     pub fn lookup_cache(&self, name: &str) -> Option<DirEntry<M>> {
         self.cache.lock().get(name).cloned()
     }
+
     /// Inserts a directory entry into the cache.
     pub fn insert_cache(&self, name: String, entry: DirEntry<M>) -> Option<DirEntry<M>> {
         self.cache.lock().insert(name, entry)
     }
 
+    /// Reads directory entries using the provided sink
     pub fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
         self.ops.read_dir(offset, sink)
     }
@@ -195,6 +213,7 @@ impl<M: RawMutex> DirNode<M> {
         Ok(has_children)
     }
 
+    /// Creates an entry with the cache lock held
     fn create_locked(
         &self,
         name: &str,
@@ -259,8 +278,7 @@ impl<M: RawMutex> DirNode<M> {
         })
     }
 
-    /// Opens a file in the directory, optionally creating it if it doesn't
-    /// exist.
+    /// Opens a file in the directory, optionally creating it if it doesn't exist.
     pub fn open_file_or_create(
         &self,
         name: &str,
@@ -292,9 +310,12 @@ impl<M: RawMutex> DirNode<M> {
         Ok(entry)
     }
 
+    /// Returns the mountpoint at this directory, if any
     pub fn mountpoint(&self) -> Option<Arc<Mountpoint<M>>> {
         self.mountpoint.lock().clone()
     }
+
+    /// Returns true if this directory has a mountpoint
     pub fn is_mountpoint(&self) -> bool {
         self.mountpoint.lock().is_some()
     }

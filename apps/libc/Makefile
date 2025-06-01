@@ -2,7 +2,7 @@
 
 ARCH ?= x86_64
 # Whether cross-compiling
-TARGET ?= gnu
+TARGET ?= musl
 
 PREFIX := $(ARCH)-linux-$(TARGET)
 

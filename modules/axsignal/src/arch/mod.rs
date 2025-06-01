@@ -1,3 +1,22 @@
+//! Architecture-specific signal handling
+//!
+//! This module provides architecture-specific implementations for signal handling.
+//! Different CPU architectures have different calling conventions, register layouts,
+//! and signal delivery mechanisms, so each supported architecture has its own
+//! implementation.
+//!
+//! Currently supported architectures:
+//! - x86_64: Intel/AMD 64-bit processors
+//! - RISC-V: Both 32-bit and 64-bit RISC-V processors  
+//! - AArch64: ARM 64-bit processors
+//! - LoongArch64: Loongson 64-bit processors
+//!
+//! The main functionality provided by each architecture module includes:
+//! - Signal frame setup and restoration
+//! - Register context manipulation
+//! - Signal trampoline code
+//! - Architecture-specific signal delivery mechanisms
+
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         mod x86_64;
@@ -20,6 +39,12 @@ unsafe extern "C" {
     fn signal_trampoline();
 }
 
+/// Returns the address of the signal trampoline function
+///
+/// This address is used by the kernel when setting up signal frames to
+/// specify where execution should return after the signal handler completes.
+/// The trampoline handles the transition back to kernel mode and any necessary
+/// cleanup.
 pub fn signal_trampoline_address() -> usize {
     signal_trampoline as usize
 }

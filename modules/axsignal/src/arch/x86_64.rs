@@ -16,6 +16,11 @@ signal_trampoline:
 "
 );
 
+/// Machine context for x86_64 architecture
+///
+/// This structure stores the complete processor state (registers) for signal handling.
+/// It's compatible with the x86_64 mcontext_t structure and is used to save and restore
+/// the processor state when delivering signals.
 #[repr(C)]
 #[derive(Clone)]
 pub struct MContext {
@@ -50,6 +55,10 @@ pub struct MContext {
 }
 
 impl MContext {
+    /// Creates a new machine context from a trap frame
+    ///
+    /// This copies the current processor state from the trap frame into
+    /// the machine context structure for signal handling.
     pub fn new(tf: &TrapFrame) -> Self {
         Self {
             r8: tf.r8 as _,
@@ -83,6 +92,10 @@ impl MContext {
         }
     }
 
+    /// Restores the processor state from this machine context
+    ///
+    /// This copies the saved processor state back into the trap frame,
+    /// effectively restoring the context that was active before the signal.
     pub fn restore(&self, tf: &mut TrapFrame) {
         tf.r8 = self.r8 as _;
         tf.r9 = self.r9 as _;
@@ -108,17 +121,32 @@ impl MContext {
     }
 }
 
+/// User context for x86_64 signal handling
+///
+/// This structure represents the complete context that is saved when a signal
+/// is delivered. It includes the machine context, signal mask, and stack information.
+/// It's compatible with the POSIX ucontext_t structure.
 #[repr(C)]
 #[derive(Clone)]
 pub struct UContext {
+    /// Context flags (currently unused)
     pub flags: usize,
+    /// Link to the next context (for context switching, currently unused)
     pub link: usize,
+    /// Signal stack information
     pub stack: SignalStack,
+    /// Machine-specific processor context
     pub mcontext: MContext,
+    /// Signal mask that was active before the signal
     pub sigmask: SignalSet,
 }
 
 impl UContext {
+    /// Creates a new user context from a trap frame and signal mask
+    ///
+    /// # Arguments
+    /// * `tf` - The trap frame containing the current processor state
+    /// * `sigmask` - The signal mask that should be restored after signal handling
     pub fn new(tf: &TrapFrame, sigmask: SignalSet) -> Self {
         Self {
             flags: 0,

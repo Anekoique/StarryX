@@ -31,6 +31,10 @@ pub struct ThreadSignalManager<M, WQ> {
 }
 
 impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
+    /// Creates a new thread signal manager
+    ///
+    /// # Arguments
+    /// * `proc` - The process-level signal manager that this thread belongs to
     pub fn new(proc: Arc<ProcessSignalManager<M, WQ>>) -> Self {
         Self {
             proc,
@@ -140,6 +144,15 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         }
     }
 
+    /// Checks for fatal signals that cannot be blocked or ignored
+    ///
+    /// Fatal signals like SIGKILL and SIGSTOP have special handling - they
+    /// cannot be blocked, caught, or ignored. This method specifically checks
+    /// for these signals and returns the appropriate OS action.
+    ///
+    /// # Returns
+    /// A tuple of (signal_info, os_action) if a fatal signal is pending,
+    /// or `None` if no fatal signals are pending.
     pub fn check_fatal_signals(&self) -> Option<(SignalInfo, SignalOSAction)> {
         use crate::{SignalSet, Signo};
 
@@ -179,7 +192,9 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
 
     /// Sends a signal to the thread.
     ///
-    /// See [`ProcessSignalManager::send_signal`] for the process-level version.
+    /// This sends a signal specifically to this thread's pending signal queue.
+    /// For process-wide signals that any thread can handle, use the process-level
+    /// `send_signal` method instead.
     pub fn send_signal(&self, sig: SignalInfo) {
         self.pending.lock().put_signal(sig);
         self.proc.wq.notify_all();
