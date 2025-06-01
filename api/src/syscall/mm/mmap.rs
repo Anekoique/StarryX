@@ -177,3 +177,11 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
 
     Ok(0)
 }
+
+pub fn sys_msync(_addr: usize, _length: usize, _flags: u32) -> LinuxResult<isize> {
+    // let start = memory_addr::align_down_4k(addr);
+    // let end = memory_addr::align_up_4k(addr + length);
+    // let aligned_length = end - start;
+    warn!("sys_msync: not implemented");
+    Ok(0)
+}

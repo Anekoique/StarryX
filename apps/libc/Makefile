@@ -2,7 +2,7 @@
 
 ARCH ?= x86_64
 # Whether cross-compiling
-TARGET ?= musl
+TARGET ?= gnu
 
 PREFIX := $(ARCH)-linux-$(TARGET)
 
@@ -11,6 +11,9 @@ CC := $(PREFIX)-gcc
 
 CFLAGS := 
 ifeq ($(TARGET), musl)
+  CFLAGS += -static
+endif
+ifeq ($(TARGET), gnu)
   CFLAGS += -static
 endif
 

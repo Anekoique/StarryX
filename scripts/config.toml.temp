@@ -11,3 +11,7 @@ axns = { path = "%AX_ROOT%/modules/axns" }
 axruntime = { path = "%AX_ROOT%/modules/axruntime" }
 axsync = { path = "%AX_ROOT%/modules/axsync" }
 axtask = { path = "%AX_ROOT%/modules/axtask" }
+
+[patch.crates-io]
+memory_addr = { path = "%AX_ROOT/../modules/axmm_crates/memory_addr" }
+memory_set  = { path = "%AX_ROOT/../modules/axmm_crates/memory_set" }

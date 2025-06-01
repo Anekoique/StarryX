@@ -1,6 +1,6 @@
 use core::mem;
 
-use axhal::arch::TrapFrame;
+use axhal::arch::{GeneralRegisters, TrapFrame};
 
 use crate::{SignalSet, SignalStack};
 
@@ -29,7 +29,7 @@ impl MContext {
     pub fn new(tf: &TrapFrame) -> Self {
         Self {
             sc_pc: tf.era as _,
-            sc_regs: unsafe { mem::transmute::<_, [u64; 32]>(tf.regs) },
+            sc_regs: unsafe { mem::transmute::<GeneralRegisters, [u64; 32]>(tf.regs) },
             sc_flags: 0,
         }
     }
@@ -37,7 +37,7 @@ impl MContext {
     pub fn restore(&self, tf: &mut TrapFrame) {
         tf.era = self.sc_pc as _;
         unsafe {
-            tf.regs = mem::transmute::<[u64; 32], _>(self.sc_regs);
+            tf.regs = mem::transmute::<[u64; 32], GeneralRegisters>(self.sc_regs);
         }
     }
 }
