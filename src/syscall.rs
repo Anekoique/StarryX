@@ -252,6 +252,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         ),
         Sysno::munmap => sys_munmap(tf.arg0(), tf.arg1() as _),
         Sysno::mprotect => sys_mprotect(tf.arg0(), tf.arg1() as _, tf.arg2() as _),
+        Sysno::msync => sys_msync(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
 
         // task info
         Sysno::getpid => sys_getpid(),
@@ -287,7 +288,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::fork => sys_fork(tf),
         Sysno::exit => sys_exit(tf.arg0() as _),
         Sysno::exit_group => sys_exit_group(tf.arg0() as _),
-        Sysno::wait4 => sys_waitpid(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
+        Sysno::wait4 => sys_wait4(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
 
         // signal
         Sysno::rt_sigprocmask => sys_rt_sigprocmask(
@@ -381,6 +382,16 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             tf.arg3() as _,
             tf.arg4() as _,
         ),
+
+        // sem
+        Sysno::semget => sys_semget(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::semctl => sys_semctl(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+        ),
+        Sysno::semop => sys_semop(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
 
         // net
         Sysno::socket => sys_socket(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),

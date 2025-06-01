@@ -43,6 +43,29 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
     true
 }
 
+pub fn check_fatal_signals() {
+    let Some((sig, os_action)) = current()
+        .task_ext()
+        .thread_data()
+        .signal
+        .check_fatal_signals()
+    else {
+        return;
+    };
+
+    let signo = sig.signo();
+    match os_action {
+        SignalOSAction::Terminate => {
+            do_exit(128 + signo as i32, true);
+        }
+        SignalOSAction::Stop => {
+            // TODO: implement stop
+            do_exit(1, true);
+        }
+        _ => unreachable!("Only SIGKILL and SIGSTOP should be in fatal_signals"),
+    }
+}
+
 #[register_trap_handler(POST_TRAP)]
 fn post_trap_callback(tf: &mut TrapFrame, from_user: bool) {
     if !from_user {

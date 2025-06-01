@@ -62,6 +62,10 @@ impl<M: RawMutex, WQ: WaitQueue> ProcessSignalManager<M, WQ> {
     }
 
     /// Sends a signal to the process.
+    ///
+    /// This sends a signal to the process-wide pending signal queue. Any thread
+    /// in the process can handle this signal. For thread-specific signals,
+    /// use the thread-level `send_signal` method instead.
     pub fn send_signal(&self, sig: SignalInfo) {
         self.pending.lock().put_signal(sig);
         self.wq.notify_one();

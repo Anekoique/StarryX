@@ -67,7 +67,7 @@ pub fn close_file_like(fd: c_int) -> LinuxResult {
         .write()
         .remove(fd as usize)
         .ok_or(LinuxError::EBADF)?;
-    debug!("close_file_like <= count: {}", Arc::strong_count(&f));
+    drop(f);
     Ok(())
 }
 

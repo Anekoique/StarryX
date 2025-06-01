@@ -13,6 +13,9 @@ CFLAGS :=
 ifeq ($(TARGET), musl)
   CFLAGS += -static
 endif
+ifeq ($(TARGET), gnu)
+  CFLAGS += -static
+endif
 
 all: build
 

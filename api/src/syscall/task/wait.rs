@@ -55,9 +55,9 @@ impl WaitPid {
     }
 }
 
-pub fn sys_waitpid(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxResult<isize> {
+pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxResult<isize> {
     let options = WaitOptions::from_bits_truncate(options);
-    info!("sys_waitpid <= pid: {:?}, options: {:?}", pid, options);
+    info!("sys_wait4 <= pid: {:?}, options: {:?}", pid, options);
 
     let curr = current();
     let proc_data = curr.task_ext().process_data();

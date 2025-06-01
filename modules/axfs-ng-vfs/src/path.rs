@@ -4,11 +4,18 @@ use alloc::{borrow::ToOwned, string::String, sync::Arc};
 
 use crate::{VfsError, VfsResult};
 
+/// Current directory component (".")
 pub const DOT: &str = ".";
+/// Parent directory component ("..")
 pub const DOTDOT: &str = "..";
 
+/// Maximum allowed filename length
 pub const MAX_NAME_LEN: usize = 255;
 
+/// Verifies that an entry name is valid
+///
+/// Returns an error if the name is "." or ".." (reserved names) or
+/// if the name exceeds the maximum length.
 pub(crate) fn verify_entry_name(name: &str) -> VfsResult<()> {
     if name == DOT || name == DOTDOT {
         return Err(VfsError::EINVAL);
@@ -21,16 +28,21 @@ pub(crate) fn verify_entry_name(name: &str) -> VfsResult<()> {
 
 /// A single component of a [`Path`].
 ///
-/// This corresponds to [`std::path::Component`].
+/// This corresponds to the standard library's `Component` type.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Component<'a> {
+    /// The root directory component, normally `/`
     RootDir,
+    /// A reference to the current directory component, `.`
     CurDir,
+    /// A reference to the parent directory component, `..`
     ParentDir,
+    /// A normal component, i.e., not a separator or special directory component
     Normal(&'a str),
 }
 
 impl<'a> Component<'a> {
+    /// Returns the string representation of this component
     pub fn as_str(&self) -> &'a str {
         match self {
             Component::RootDir => "/",
@@ -43,7 +55,7 @@ impl<'a> Component<'a> {
 
 /// An iterator over the [`Component`]s of a [`Path`].
 ///
-/// This corresponds to [`std::path::Components`].
+/// This corresponds to the standard library's `Components` type.
 #[doc(hidden)]
 pub struct Components<'a> {
     path: &'a str,
@@ -51,6 +63,7 @@ pub struct Components<'a> {
 }
 
 impl<'a> Components<'a> {
+    /// Returns the remaining path as a [`Path`]
     pub fn as_path(&self) -> &'a Path {
         Path::new(self.path)
     }
@@ -143,7 +156,7 @@ impl DoubleEndedIterator for Components<'_> {
 
 /// A slice of path (akin to [`str`]).
 ///
-/// Different from [`std::path::Path`], this type is always
+/// Different from the standard library's `Path` type, this type is always
 /// UTF-8 encoded.
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Path {
@@ -151,13 +164,17 @@ pub struct Path {
 }
 
 impl Path {
+    /// Directly wraps a string slice as a `Path` slice.
     pub fn new<S: AsRef<str> + ?Sized>(s: &S) -> &Path {
         unsafe { &*(s.as_ref() as *const str as *const Path) }
     }
 
+    /// Yields the underlying [`str`] slice.
     pub fn as_str(&self) -> &str {
         &self.inner
     }
+
+    /// Yields the underlying byte slice.
     pub fn as_bytes(&self) -> &[u8] {
         self.inner.as_bytes()
     }
@@ -203,7 +220,9 @@ impl Path {
         self.inner.starts_with('/')
     }
 
-    /// Normalizes a path without performing I/O.
+    /// Normalizes the path by resolving `.` and `..` components
+    ///
+    /// Returns `None` if the path would escape the root directory.
     pub fn normalize(&self) -> Option<PathBuf> {
         let mut ret = PathBuf::new();
         for component in self.components() {
@@ -281,22 +300,26 @@ macro_rules! impl_as_ref {
 }
 impl_as_ref!(str, String);
 
-/// An owned, mutable [`Path`] (akin to [`String`]).
+/// An owned, mutable path (akin to [`String`]).
 ///
-/// Different from [`std::path::PathBuf`], this type is always
-/// UTF-8 encoded.
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+/// This type provides methods for inspecting and manipulating paths
+/// in an owned manner.
 pub struct PathBuf {
     inner: String,
 }
 
 impl PathBuf {
+    /// Allocates an empty `PathBuf`.
     pub fn new() -> Self {
         Self {
             inner: String::new(),
         }
     }
 
+    /// Truncates `self` to [`self.parent`].
+    ///
+    /// Returns `false` and does nothing if [`self.file_name`] is [`None`].
+    /// Otherwise, returns `true`.
     pub fn pop(&mut self) -> bool {
         match self.parent().map(|p| p.as_str().len()) {
             Some(len) => {
@@ -307,8 +330,9 @@ impl PathBuf {
         }
     }
 
+    /// Extends `self` with `path`.
     pub fn push(&mut self, path: impl AsRef<Path>) {
-        self._push(path.as_ref());
+        self._push(path.as_ref())
     }
     fn _push(&mut self, path: &Path) {
         if path.as_str().is_empty() {

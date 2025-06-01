@@ -25,7 +25,7 @@ use axsignal::{
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 use axsync::{Mutex, RawMutex};
-use axtask::{TaskExtRef, TaskInner, WaitQueue, current};
+use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
 use memory_addr::VirtAddrRange;
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
@@ -88,6 +88,14 @@ impl TaskExt {
         self.time.borrow_mut().switch_into_kernel_mode(current_tick);
     }
 
+    pub(crate) fn time_stat_switch_from_old_task(&self, current_tick: usize) {
+        self.time.borrow_mut().switch_from_old_task(current_tick);
+    }
+
+    pub(crate) fn time_stat_switch_to_new_task(&self, current_tick: usize) {
+        self.time.borrow_mut().switch_to_new_task(current_tick);
+    }
+
     pub(crate) fn time_stat_output(&self) -> (usize, usize) {
         self.time.borrow().output()
     }
@@ -122,12 +130,14 @@ pub fn time_stat_from_user_to_kernel() {
 }
 
 /// Get the time statistics for the current task.
-pub fn time_stat_output() -> (usize, usize, usize, usize) {
+pub fn time_stat_output() -> (usize, usize, usize, usize, usize, usize) {
     let curr_task = current();
     let (utime_ns, stime_ns) = curr_task.task_ext().time_stat_output();
     (
+        utime_ns,
         utime_ns / NANOS_PER_SEC as usize,
         utime_ns / NANOS_PER_MICROS as usize,
+        stime_ns,
         stime_ns / NANOS_PER_SEC as usize,
         stime_ns / NANOS_PER_MICROS as usize,
     )
@@ -282,6 +292,24 @@ impl Drop for ProcessData {
                 .lock()
                 .clear_mappings(VirtAddrRange::from_start_size(kernel.base(), kernel.size()));
         }
+    }
+}
+
+struct AxTaskExtImpl;
+#[crate_interface::impl_interface]
+impl AxTaskExtIf for AxTaskExtImpl {
+    fn switch_to_task() {
+        let curr_task = current();
+        curr_task
+            .task_ext()
+            .time_stat_switch_to_new_task(monotonic_time_nanos() as usize);
+    }
+
+    fn switch_from_task() {
+        let curr_task = current();
+        curr_task
+            .task_ext()
+            .time_stat_switch_from_old_task(monotonic_time_nanos() as usize);
     }
 }
 

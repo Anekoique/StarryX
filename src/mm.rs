@@ -6,7 +6,7 @@ use axhal::{
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
-use starry_api::{do_exit, send_signal_process};
+use starry_api::send_signal_process;
 use starry_core::mm::is_accessing_user_memory;
 
 #[register_trap_handler(PAGE_FAULT)]
@@ -43,12 +43,15 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         .handle_page_fault(vaddr, access_flags)
     {
         warn!(
-            "{} ({:?}): segmentation fault at {:#x}, exit!",
+            "{} ({:?}): segmentation fault at {:#x}, sending SIGSEGV",
             curr.id_name(),
             curr.task_ext().thread,
             vaddr
         );
-        do_exit(SIGSEGV as _, true);
+        let _ = send_signal_process(
+            curr.task_ext().thread.process(),
+            SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
+        );
     }
     true
 }

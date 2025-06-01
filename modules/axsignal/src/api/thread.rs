@@ -31,6 +31,10 @@ pub struct ThreadSignalManager<M, WQ> {
 }
 
 impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
+    /// Creates a new thread signal manager
+    ///
+    /// # Arguments
+    /// * `proc` - The process-level signal manager that this thread belongs to
     pub fn new(proc: Arc<ProcessSignalManager<M, WQ>>) -> Self {
         Self {
             proc,
@@ -140,6 +144,40 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         }
     }
 
+    /// Checks for fatal signals that cannot be blocked or ignored
+    ///
+    /// Fatal signals like SIGKILL and SIGSTOP have special handling - they
+    /// cannot be blocked, caught, or ignored. This method specifically checks
+    /// for these signals and returns the appropriate OS action.
+    ///
+    /// # Returns
+    /// A tuple of (signal_info, os_action) if a fatal signal is pending,
+    /// or `None` if no fatal signals are pending.
+    pub fn check_fatal_signals(&self) -> Option<(SignalInfo, SignalOSAction)> {
+        use crate::{SignalSet, Signo};
+
+        // Create a signal set containing only SIGKILL and SIGSTOP
+        let mut fatal_signals = SignalSet::default();
+        fatal_signals.add(Signo::SIGKILL);
+        fatal_signals.add(Signo::SIGSTOP);
+
+        // Check if any of these fatal signals are pending
+        // These signals cannot be blocked, so we don't need to check the blocked mask
+        if let Some(sig) = self.dequeue_signal(&fatal_signals) {
+            info!("Fatal signal received: {:?}", sig.signo());
+            // For fatal signals, we should use their default actions
+            // SIGKILL terminates, SIGSTOP stops the process
+            let action = match sig.signo() {
+                Signo::SIGKILL => SignalOSAction::Terminate,
+                Signo::SIGSTOP => SignalOSAction::Stop,
+                _ => unreachable!("Only SIGKILL and SIGSTOP should be in fatal_signals"),
+            };
+            Some((sig, action))
+        } else {
+            None
+        }
+    }
+
     /// Restores the signal frame. Called by `sigreutrn`.
     pub fn restore(&self, tf: &mut TrapFrame) {
         let frame_ptr = tf.sp() as *const SignalFrame;
@@ -154,7 +192,9 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
 
     /// Sends a signal to the thread.
     ///
-    /// See [`ProcessSignalManager::send_signal`] for the process-level version.
+    /// This sends a signal specifically to this thread's pending signal queue.
+    /// For process-wide signals that any thread can handle, use the process-level
+    /// `send_signal` method instead.
     pub fn send_signal(&self, sig: SignalInfo) {
         self.pending.lock().put_signal(sig);
         self.proc.wq.notify_all();
