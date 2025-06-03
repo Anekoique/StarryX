@@ -3,11 +3,12 @@ use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::MappingFlags;
 use axtask::{TaskExtRef, current};
 use memory_addr::{VirtAddr, VirtAddrRange};
+use starry_core::mm::MmapRegion;
 
 use crate::{
     ctypes::{
-        MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_PRIVATE, MAP_SHARED, MAP_STACK, PROT_EXEC,
-        PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
+        MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_POPULATE, MAP_PRIVATE, MAP_SHARED, MAP_STACK,
+        PROT_EXEC, PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
     },
     fs::{File, FileLike},
 };
@@ -65,6 +66,8 @@ bitflags::bitflags! {
         const NORESERVE = MAP_NORESERVE;
         /// Allocation is for a stack.
         const STACK = MAP_STACK;
+        /// Populate the mapping with the file contents.
+        const POPULATE = MAP_POPULATE;
     }
 }
 
@@ -102,6 +105,15 @@ pub fn sys_mmap(
             return Err(LinuxError::EINVAL);
         }
         let dst_addr = VirtAddr::from(start);
+
+        // Remove any existing VMA mappings in the range before unmapping
+        let vaddr_range = VirtAddrRange::from_start_size(dst_addr, aligned_length);
+        let removed_regions = process_data.remove_overlapping_mmap_regions(vaddr_range);
+        debug!(
+            "Removed {} overlapping VMA regions for MAP_FIXED",
+            removed_regions.len()
+        );
+
         aspace.unmap(dst_addr, aligned_length)?;
         dst_addr
     } else {
@@ -146,6 +158,26 @@ pub fn sys_mmap(
         file.read_at(&mut buf, offset as u64)?;
         aspace.write(start_addr, &buf)?;
     }
+
+    // Create and add VMA mapping region
+    let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);
+    let mmap_region = MmapRegion {
+        vaddr_range,
+        vm_file: if fd == -1 {
+            None
+        } else {
+            Some(File::from_fd(fd)?.clone_inner())
+        },
+        file_offset: if offset < 0 { 0 } else { offset as u64 },
+        prot_flags: prot,
+        map_flags: flags,
+    };
+
+    if let Err(e) = process_data.add_mmap_region(mmap_region) {
+        warn!("Failed to add VMA region: {}", e);
+        // Continue execution as this is not critical for basic functionality
+    }
+
     Ok(start_addr.as_usize() as _)
 }
 
@@ -155,6 +187,16 @@ pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
     let mut aspace = process_data.aspace.lock();
     let length = memory_addr::align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
+
+    // Remove VMA mapping regions before unmapping
+    let vaddr_range = VirtAddrRange::from_start_size(start_addr, length);
+    let removed_regions = process_data.remove_overlapping_mmap_regions(vaddr_range);
+    debug!(
+        "Removed {} VMA regions during munmap",
+        removed_regions.len()
+    );
+
+    // Re-acquire aspace lock for actual unmapping
     aspace.unmap(start_addr, length)?;
     axhal::arch::flush_tlb(None);
     Ok(0)

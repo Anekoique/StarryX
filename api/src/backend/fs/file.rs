@@ -101,19 +101,29 @@ pub trait FileLike: Send + Sync {
 
 /// File wrapper for `axfs::fops::File`.
 pub struct File {
-    inner: Mutex<axfs_ng::File<RawMutex>>,
+    inner: Arc<Mutex<axfs_ng::File<RawMutex>>>,
 }
 
 impl File {
     pub fn new(inner: axfs_ng::File<RawMutex>) -> Self {
         Self {
-            inner: Mutex::new(inner),
+            inner: Arc::new(Mutex::new(inner)),
         }
+    }
+
+    /// Create a new File from an existing Arc<Mutex<axfs_ng::File<RawMutex>>>
+    pub fn from_shared(inner: Arc<Mutex<axfs_ng::File<RawMutex>>>) -> Self {
+        Self { inner }
     }
 
     /// Get the inner node of the file.
     pub fn inner(&self) -> MutexGuard<axfs_ng::File<RawMutex>> {
         self.inner.lock()
+    }
+
+    /// Get a clone of the shared inner Arc
+    pub fn clone_inner(&self) -> Arc<Mutex<axfs_ng::File<RawMutex>>> {
+        self.inner.clone()
     }
 }
 
