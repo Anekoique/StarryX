@@ -1,7 +1,9 @@
 //! Memory mapping backends.
+use core::cell::RefCell;
 use core::ops::Deref;
 
 use ::alloc::{sync::Arc, vec::Vec};
+use axalloc::PhysPageSet;
 use axhal::paging::{MappingFlags, PageTable};
 use memory_addr::{PhysAddr, VirtAddr};
 use memory_set::MappingBackend;
@@ -53,6 +55,8 @@ pub enum Backend {
     Alloc {
         /// Whether to populate the physical frames when creating the mapping.
         populate: bool,
+        /// Shared pages.
+        pages: RefCell<Option<PhysPageSet>>,
     },
     Shared {
         pages: Arc<SharedPages>,
@@ -68,7 +72,9 @@ impl MappingBackend for Backend {
             Self::Linear { pa_va_offset } => {
                 Self::map_linear(start, size, flags, pt, *pa_va_offset)
             }
-            Self::Alloc { populate } => Self::map_alloc(start, size, flags, pt, *populate),
+            Self::Alloc { populate, pages } => {
+                Self::map_alloc(start, size, flags, pt, *populate, &mut pages.borrow_mut())
+            }
             Self::Shared { pages } => Self::map_shared(start, &pages, flags, pt),
         }
     }
@@ -76,7 +82,9 @@ impl MappingBackend for Backend {
     fn unmap(&self, start: VirtAddr, size: usize, pt: &mut PageTable) -> bool {
         match self {
             Self::Linear { pa_va_offset } => Self::unmap_linear(start, size, pt, *pa_va_offset),
-            Self::Alloc { populate, .. } => Self::unmap_alloc(start, size, pt, *populate),
+            Self::Alloc { populate, pages } => {
+                Self::unmap_alloc(start, size, pt, *populate, &mut pages.borrow_mut())
+            }
             Self::Shared { pages } => Self::unmap_shared(start, &pages, pt),
         }
     }
@@ -108,6 +116,20 @@ impl Backend {
             Self::Alloc { populate, .. } => {
                 Self::handle_page_fault_alloc(vaddr, orig_flags, page_table, populate)
             }
+        }
+    }
+
+    pub fn get_phys_pages(&self) -> Option<core::cell::Ref<PhysPageSet>> {
+        match self {
+            Self::Alloc { pages, .. } => {
+                let borrowed = pages.borrow();
+                if borrowed.is_some() {
+                    Some(core::cell::Ref::map(borrowed, |opt| opt.as_ref().unwrap()))
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }

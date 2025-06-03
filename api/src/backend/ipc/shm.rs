@@ -173,7 +173,7 @@ impl ShmManager {
     }
 
     // the only way to find shm_inner -- the data structure to maintain shm
-    pub fn get_inner_by_shmid(&self, shmid: i32) -> Option<Arc<Mutex<ShmSegment>>> {
+    pub fn get_segment_by_shmid(&self, shmid: i32) -> Option<Arc<Mutex<ShmSegment>>> {
         self.segments.get(&shmid).cloned()
     }
 

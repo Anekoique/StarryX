@@ -157,10 +157,11 @@ impl AddrSpace {
         size: usize,
         flags: MappingFlags,
         populate: bool,
+        shared: bool,
     ) -> AxResult {
         self.validate_region(start, size)?;
 
-        let area = MemoryArea::new(start, size, flags, Backend::new_alloc(populate));
+        let area = MemoryArea::new(start, size, flags, Backend::new_alloc(populate, shared));
         self.areas
             .map(area, &mut self.pt, false)
             .map_err(mapping_err_to_ax_err)?;

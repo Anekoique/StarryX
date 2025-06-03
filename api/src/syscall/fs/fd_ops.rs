@@ -10,7 +10,8 @@ use axsync::RawMutex;
 use crate::{
     ctypes::{
         __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFL, FD_CLOEXEC,
-        O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC, O_WRONLY,
+        O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC,
+        O_WRONLY,
     },
     fs::{
         Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like, with_fs,
@@ -48,6 +49,9 @@ fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32))
     }
     if flags & O_DIRECTORY != 0 {
         options.directory(true);
+    }
+    if flags & O_DIRECT != 0 {
+        options.direct(true);
     }
     options
 }

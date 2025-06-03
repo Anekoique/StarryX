@@ -78,6 +78,7 @@ fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [AuxvEn
             seg_align_size,
             segement.flags,
             true,
+            false,
         )?;
         let seg_data = elf
             .input
@@ -180,6 +181,7 @@ pub fn load_user_app(
         ustack_size,
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
         true,
+        false,
     )?;
 
     let user_sp = ustack_end - stack_data.len();
@@ -192,6 +194,7 @@ pub fn load_user_app(
         heap_size,
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
         true,
+        false,
     )?;
 
     Ok((entry, user_sp))

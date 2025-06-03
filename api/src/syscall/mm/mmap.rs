@@ -130,6 +130,7 @@ pub fn sys_mmap(
         aligned_length,
         permission_flags.into(),
         populate,
+        map_flags.contains(MmapFlags::SHARED),
     )?;
 
     if populate {

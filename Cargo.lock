@@ -123,6 +123,7 @@ dependencies = [
  "kspin",
  "log",
  "memory_addr",
+ "spin 0.9.8",
 ]
 
 [[package]]
