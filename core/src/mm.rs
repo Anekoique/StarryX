@@ -9,11 +9,12 @@ use alloc::{
     vec::Vec,
 };
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
-use axfs_ng::FS_CONTEXT;
+use axfs_ng::{FS_CONTEXT, File};
 use axhal::{mem::virt_to_phys, paging::MappingFlags};
 use axmm::{AddrSpace, kernel_aspace};
+use axsync::{Mutex, RawMutex};
 use kernel_elf_parser::{AuxvEntry, ELFParser, app_stack_region};
-use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
+use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use xmas_elf::{ElfFile, program::SegmentData};
 
 /// Creates a new empty user address space.
@@ -228,4 +229,155 @@ pub fn access_user_memory<R>(f: impl FnOnce() -> R) -> R {
 /// Check if the current thread is accessing user memory.
 pub fn is_accessing_user_memory() -> bool {
     ACCESSING_USER_MEM.read_current()
+}
+
+/// Memory mapping region information for mmap
+#[derive(Clone)]
+pub struct MmapRegion {
+    /// Virtual address range of the mapping
+    pub vaddr_range: VirtAddrRange,
+    /// Associated file descriptor (None for anonymous mappings)
+    pub vm_file: Option<Arc<Mutex<File<RawMutex>>>>,
+    /// Offset in the file
+    pub file_offset: u64,
+    /// Protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
+    pub prot_flags: u32,
+    /// Mapping flags (MAP_SHARED, MAP_PRIVATE, etc.)
+    pub map_flags: u32,
+}
+
+/// Virtual Memory Area (VMA) mapping manager
+/// Maintains a sorted list of non-overlapping memory regions for efficient lookup
+#[derive(Default)]
+pub struct VmaMapping {
+    /// Sorted list of memory mapping regions (sorted by start address)
+    regions: Vec<MmapRegion>,
+}
+
+impl VmaMapping {
+    /// Create a new empty VMA mapping
+    pub fn new() -> Self {
+        Self {
+            regions: Vec::new(),
+        }
+    }
+
+    /// Add a new memory mapping region
+    /// Returns error if the region overlaps with existing mappings
+    pub fn add_region(&mut self, region: MmapRegion) -> Result<(), &'static str> {
+        let start = region.vaddr_range.start.as_usize();
+        let end = region.vaddr_range.end.as_usize();
+
+        // Check for overlaps with existing regions
+        for existing in &self.regions {
+            let existing_start = existing.vaddr_range.start.as_usize();
+            let existing_end = existing.vaddr_range.end.as_usize();
+
+            if !(end <= existing_start || start >= existing_end) {
+                return Err("Region overlaps with existing mapping");
+            }
+        }
+
+        // Find insertion position to maintain sorted order
+        let insert_pos = self
+            .regions
+            .binary_search_by_key(&start, |r| r.vaddr_range.start.as_usize())
+            .unwrap_or_else(|e| e);
+
+        self.regions.insert(insert_pos, region);
+        Ok(())
+    }
+
+    /// Remove a memory mapping region by virtual address range
+    pub fn remove_region(&mut self, vaddr_range: VirtAddrRange) -> Option<MmapRegion> {
+        let start = vaddr_range.start.as_usize();
+
+        if let Some(pos) = self.regions.iter().position(|r| {
+            r.vaddr_range.start.as_usize() == start && r.vaddr_range.size() == vaddr_range.size()
+        }) {
+            Some(self.regions.remove(pos))
+        } else {
+            None
+        }
+    }
+
+    /// Find the memory mapping region that contains the given virtual address
+    /// Returns None if no mapping found
+    pub fn find_region_by_addr(&self, vaddr: VirtAddr) -> Option<&MmapRegion> {
+        let addr = vaddr.as_usize();
+
+        // Linear search through sorted regions (similar complexity to find_area)
+        for region in &self.regions {
+            let start = region.vaddr_range.start.as_usize();
+            let end = region.vaddr_range.end.as_usize();
+
+            if addr >= start && addr < end {
+                return Some(region);
+            }
+
+            // Since regions are sorted, we can break early if we've passed the target
+            if start > addr {
+                break;
+            }
+        }
+
+        None
+    }
+
+    /// Get all regions that overlap with the given address range
+    pub fn find_overlapping_regions(&self, vaddr_range: VirtAddrRange) -> Vec<&MmapRegion> {
+        let start = vaddr_range.start.as_usize();
+        let end = vaddr_range.end.as_usize();
+        let mut overlapping = Vec::new();
+
+        for region in &self.regions {
+            let region_start = region.vaddr_range.start.as_usize();
+            let region_end = region.vaddr_range.end.as_usize();
+
+            // Check for overlap: !(end <= region_start || start >= region_end)
+            if end > region_start && start < region_end {
+                overlapping.push(region);
+            }
+
+            // Early termination since regions are sorted
+            if region_start >= end {
+                break;
+            }
+        }
+
+        overlapping
+    }
+
+    /// Remove all regions that overlap with the given address range
+    /// Returns the removed regions
+    pub fn remove_overlapping_regions(&mut self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
+        let start = vaddr_range.start.as_usize();
+        let end = vaddr_range.end.as_usize();
+        let mut removed = Vec::new();
+
+        self.regions.retain(|region| {
+            let region_start = region.vaddr_range.start.as_usize();
+            let region_end = region.vaddr_range.end.as_usize();
+
+            // Check for overlap
+            if end > region_start && start < region_end {
+                removed.push(region.clone());
+                false // Remove this region
+            } else {
+                true // Keep this region
+            }
+        });
+
+        removed
+    }
+
+    /// Get all mapping regions (for debugging/inspection)
+    pub fn get_all_regions(&self) -> &[MmapRegion] {
+        &self.regions
+    }
+
+    /// Clear all mappings
+    pub fn clear(&mut self) {
+        self.regions.clear();
+    }
 }

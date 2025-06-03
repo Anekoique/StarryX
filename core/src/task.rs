@@ -27,11 +27,16 @@ use axsignal::{
 };
 use axsync::{Mutex, RawMutex};
 use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
-use memory_addr::VirtAddrRange;
+use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
-use crate::{futex::FutexTable, resources::Rlimits, time::TimeStat};
+use crate::{
+    futex::FutexTable,
+    mm::{MmapRegion, VmaMapping},
+    resources::Rlimits,
+    time::{TimeStat, TimerType},
+};
 
 /// Create a new user task.
 pub fn new_user_task(
@@ -238,6 +243,8 @@ pub struct ProcessData {
     pub rlimits: RwLock<Rlimits>,
     /// The futex table
     pub futex_table: FutexTable,
+    /// The VMA mapping for mmap regions
+    pub vma_mapping: RwLock<VmaMapping>,
 }
 
 impl ProcessData {
@@ -267,6 +274,8 @@ impl ProcessData {
             rlimits: RwLock::new(rlimits.unwrap_or_default()),
 
             futex_table: FutexTable::new(),
+
+            vma_mapping: RwLock::new(VmaMapping::new()),
         }
     }
 
@@ -294,6 +303,48 @@ impl ProcessData {
     /// signal other than SIGCHLD to its parent upon termination.
     pub fn is_clone_child(&self) -> bool {
         self.exit_signal != Some(Signo::SIGCHLD)
+    }
+
+    /// Add a new memory mapping region
+    pub fn add_mmap_region(&self, region: MmapRegion) -> Result<(), &'static str> {
+        self.vma_mapping.write().add_region(region)
+    }
+
+    /// Remove a memory mapping region by virtual address range
+    pub fn remove_mmap_region(&self, vaddr_range: VirtAddrRange) -> Option<MmapRegion> {
+        self.vma_mapping.write().remove_region(vaddr_range)
+    }
+
+    /// Find the memory mapping region that contains the given virtual address
+    pub fn find_mmap_region_by_addr(&self, vaddr: VirtAddr) -> Option<MmapRegion> {
+        self.vma_mapping.read().find_region_by_addr(vaddr).cloned()
+    }
+
+    /// Get all regions that overlap with the given address range
+    pub fn find_overlapping_mmap_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
+        self.vma_mapping
+            .read()
+            .find_overlapping_regions(vaddr_range)
+            .into_iter()
+            .cloned()
+            .collect()
+    }
+
+    /// Remove all regions that overlap with the given address range
+    pub fn remove_overlapping_mmap_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
+        self.vma_mapping
+            .write()
+            .remove_overlapping_regions(vaddr_range)
+    }
+
+    /// Get all mapping regions (for debugging/inspection)
+    pub fn get_all_mmap_regions(&self) -> Vec<MmapRegion> {
+        self.vma_mapping.read().get_all_regions().to_vec()
+    }
+
+    /// Clear all mmap mappings
+    pub fn clear_mmap_regions(&self) {
+        self.vma_mapping.write().clear()
     }
 }
 
