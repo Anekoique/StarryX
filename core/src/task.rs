@@ -13,6 +13,7 @@ use alloc::{
     vec::Vec,
 };
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::File;
 use axhal::{
     arch::UspaceContext,
     time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
@@ -237,6 +238,7 @@ impl ProcessData {
         signal_actions: Arc<Mutex<SignalActions>>,
         exit_signal: Option<Signo>,
         rlimits: Option<Rlimits>,
+        vma_mapping: RwLock<VmaMapping>,
     ) -> Self {
         Self {
             exe_path: RwLock::new(exe_path),
@@ -257,7 +259,7 @@ impl ProcessData {
 
             futex_table: FutexTable::new(),
 
-            vma_mapping: RwLock::new(VmaMapping::new()),
+            vma_mapping,
         }
     }
 
@@ -300,6 +302,11 @@ impl ProcessData {
     /// Find the memory mapping region that contains the given virtual address
     pub fn find_mmap_region_by_addr(&self, vaddr: VirtAddr) -> Option<MmapRegion> {
         self.vma_mapping.read().find_region_by_addr(vaddr).cloned()
+    }
+
+    /// Get the file associated with the given virtual address
+    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<File<RawMutex>>>> {
+        self.vma_mapping.read().get_file_by_addr(vaddr)
     }
 
     /// Get all regions that overlap with the given address range

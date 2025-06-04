@@ -7,6 +7,7 @@ use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
 use bitflags::bitflags;
+use spin::RwLock;
 use starry_core::{
     mm::copy_from_kernel,
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
@@ -156,6 +157,9 @@ pub fn sys_clone(
             copy_from_kernel(&mut aspace)?;
             Arc::new(Mutex::new(aspace))
         };
+
+        let vma_mapping = RwLock::new(curr.task_ext().process_data().vma_mapping.read().clone());
+
         new_task
             .ctx_mut()
             .set_page_table_root(aspace.lock().page_table_root());
@@ -173,6 +177,7 @@ pub fn sys_clone(
             signal_actions,
             exit_signal,
             Some(curr.task_ext().process_data().rlimits.read().clone()),
+            vma_mapping,
         );
 
         if flags.contains(CloneFlags::FILES) {

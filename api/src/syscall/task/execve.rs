@@ -61,6 +61,8 @@ pub fn sys_execve(
 
     let mut aspace = curr_ext.process_data().aspace.lock();
     aspace.unmap_user_areas()?;
+    let mut vma_mapping = curr_ext.process_data().vma_mapping.write();
+    vma_mapping.clear();
     map_trampoline(&mut aspace)?;
     axhal::arch::flush_tlb(None);
 

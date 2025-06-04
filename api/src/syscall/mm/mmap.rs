@@ -1,4 +1,3 @@
-use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::MappingFlags;
 use axtask::{TaskExtRef, current};
@@ -131,52 +130,32 @@ pub fn sys_mmap(
             .ok_or(LinuxError::ENOMEM)?
     };
 
-    let populate = if fd == -1 {
-        false
-    } else {
-        !map_flags.contains(MmapFlags::ANONYMOUS)
-    };
-
     aspace.map_alloc(
         start_addr,
         aligned_length,
         permission_flags.into(),
-        populate,
+        map_flags.contains(MmapFlags::POPULATE),
         map_flags.contains(MmapFlags::SHARED),
     )?;
-
-    if populate {
-        let file = File::from_fd(fd)?;
-        let mut file = file.inner();
-        let file_size = file.inner().len()? as usize;
-        if offset < 0 || offset as usize >= file_size {
-            return Err(LinuxError::EINVAL);
-        }
-        let offset = offset as usize;
-        let length = core::cmp::min(length, file_size - offset);
-        let mut buf = vec![0u8; length];
-        file.read_at(&mut buf, offset as u64)?;
-        aspace.write(start_addr, &buf)?;
-    }
 
     // Create and add VMA mapping region
     let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);
     let mmap_region = MmapRegion {
         vaddr_range,
-        vm_file: if fd == -1 {
+        // FIXME: anonymous || shared should use shm file
+        vm_file: if fd == -1 || map_flags.contains(MmapFlags::ANONYMOUS) {
             None
         } else {
             Some(File::from_fd(fd)?.clone_inner())
         },
-        file_offset: if offset < 0 { 0 } else { offset as u64 },
+        file_offset: if offset < 0 { 0 } else { offset },
         prot_flags: prot,
         map_flags: flags,
     };
 
-    if let Err(e) = process_data.add_mmap_region(mmap_region) {
-        warn!("Failed to add VMA region: {}", e);
-        // Continue execution as this is not critical for basic functionality
-    }
+    let _ = process_data
+        .add_mmap_region(mmap_region)
+        .map_err(|e| warn!("Failed to add VMA region: {}", e));
 
     Ok(start_addr.as_usize() as _)
 }

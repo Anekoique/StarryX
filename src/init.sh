@@ -36,6 +36,8 @@ export LD_LIBRARY_PATH=.
 
 echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
+# /musl/runtest.exe -w entry-dynamic.exe argv
+# /glibc/runtest.exe -w entry-static.exe clock_gettime
 echo "#### OS COMP TEST GROUP START basic-glibc ####"
 ./basic_testcode.sh
 echo "#### OS COMP TEST GROUP END basic-glibc ####"
