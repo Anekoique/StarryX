@@ -1,4 +1,5 @@
+mod epoll;
 mod poll;
 mod select;
 
-pub use self::{poll::*, select::*};
+pub use self::{epoll::*, poll::*, select::*};

@@ -184,3 +184,12 @@ pub fn sys_recvfrom(
     debug!("sys_recvfrom => fd: {}, recv: {}", fd, recv);
     Ok(recv as isize)
 }
+
+pub fn sys_socketpair(
+    _domain: u32,
+    _ty: u32,
+    _proto: u32,
+    _sv: UserPtr<i32>,
+) -> LinuxResult<isize> {
+    Ok(0)
+}
