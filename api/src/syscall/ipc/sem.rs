@@ -114,7 +114,9 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
         // let semset_arc = sem_manager.get_semset_by_id(semid)
         //     .ok_or(LinuxError::EIDRM)?;
         // let semset = semset_arc.lock();
-
+        // if let Some(error) = semset.wait_queue.queue.lock().unwrap().front().and_then(|e| e.error) {
+        //     return Err(error);
+        // }
         // The operation should have been performed by the waking process
         // or we were woken up due to an error condition
     } else {

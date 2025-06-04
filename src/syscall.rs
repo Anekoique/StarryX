@@ -186,6 +186,9 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             tf.arg4().into(),
             tf.arg5().into(),
         ),
+        Sysno::epoll_create1 => sys_epoll_create1(tf.arg0() as _),
+        Sysno::epoll_ctl => sys_epoll_ctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _, tf.arg3().into()),
+        Sysno::epoll_pwait => sys_epoll_wait(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _, tf.arg3() as _),
 
         // fs mount
         Sysno::mount => sys_mount(
@@ -413,6 +416,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             tf.arg4().into(),
             tf.arg5().into(),
         ),
+        Sysno::socketpair => sys_socketpair(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _, tf.arg3().into()),
         _ => {
             warn!("Unimplemented syscall: {}", sysno);
             Err(LinuxError::ENOSYS)

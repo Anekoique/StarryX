@@ -22,13 +22,6 @@ pub const SEMMNI: usize = 128; // max semaphore identifiers
 pub const SEMVMX: usize = 32767; // semaphore maximum value
 
 bitflags! {
-    pub struct SemGetFlags: u32 {
-        const SEM_R = 0o400;
-        const SEM_A = 0o200; // alter permission
-    }
-}
-
-bitflags! {
     pub struct SemOpFlags: u16 {
         const IPC_NOWAIT = 0o4000;
         const SEM_UNDO = 0o10000;
