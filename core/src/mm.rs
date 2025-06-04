@@ -239,16 +239,55 @@ pub struct MmapRegion {
     /// Associated file descriptor (None for anonymous mappings)
     pub vm_file: Option<Arc<Mutex<File<RawMutex>>>>,
     /// Offset in the file
-    pub file_offset: u64,
+    pub file_offset: isize,
     /// Protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
     pub prot_flags: u32,
     /// Mapping flags (MAP_SHARED, MAP_PRIVATE, etc.)
     pub map_flags: u32,
 }
 
+/// Mmap region information
+impl MmapRegion {
+    /// Check if the region has a file
+    pub fn has_file(&self) -> Option<MmapRegion> {
+        if self.vm_file.is_some() {
+            Some(self.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Check if the region is a file and the address is in the file
+    pub fn check_file(&self, vaddr: VirtAddr) -> LinuxResult<&MmapRegion> {
+        let file = self.vm_file.as_ref().unwrap();
+        let file = file.lock();
+        let page_offset = vaddr.align_down_4k() - self.vaddr_range.start;
+        let file_offset = self.file_offset + page_offset as isize;
+        let file_size = file.inner().len()? as isize;
+        if file_offset < 0 || file_offset > file_size {
+            return Err(LinuxError::EINVAL);
+        }
+        Ok(self)
+    }
+
+    /// Get the buffer of the region by address
+    pub fn get_buf_by_addr(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
+        let Some(file) = self.vm_file.as_ref() else {
+            return Err(LinuxError::EINVAL);
+        };
+        let mut file = file.lock();
+        let page_offset = vaddr.align_down_4k() - self.vaddr_range.start;
+        let file_offset = self.file_offset + page_offset as isize;
+        let mut buf = vec![0u8; PAGE_SIZE_4K];
+        debug!("Reading from file: {:#x?}, {:#x?}", file_offset, buf.len());
+        file.read_at(&mut buf, file_offset as u64)?;
+        Ok(buf)
+    }
+}
+
 /// Virtual Memory Area (VMA) mapping manager
 /// Maintains a sorted list of non-overlapping memory regions for efficient lookup
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct VmaMapping {
     /// Sorted list of memory mapping regions (sorted by start address)
     regions: Vec<MmapRegion>,
@@ -324,6 +363,12 @@ impl VmaMapping {
         None
     }
 
+    /// Get the file of the region by address
+    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<File<RawMutex>>>> {
+        let region = self.find_region_by_addr(vaddr)?;
+        region.vm_file.clone()
+    }
+
     /// Get all regions that overlap with the given address range
     pub fn find_overlapping_regions(&self, vaddr_range: VirtAddrRange) -> Vec<&MmapRegion> {
         let start = vaddr_range.start.as_usize();
@@ -354,6 +399,7 @@ impl VmaMapping {
         let start = vaddr_range.start.as_usize();
         let end = vaddr_range.end.as_usize();
         let mut removed = Vec::new();
+        let mut new_regions = Vec::new();
 
         self.regions.retain(|region| {
             let region_start = region.vaddr_range.start.as_usize();
@@ -361,12 +407,56 @@ impl VmaMapping {
 
             // Check for overlap
             if end > region_start && start < region_end {
-                removed.push(region.clone());
-                false // Remove this region
+                // There is overlap, record the overlapping part
+                let overlap_start = start.max(region_start);
+                let overlap_end = end.min(region_end);
+
+                let mut overlapping_region = region.clone();
+                overlapping_region.vaddr_range = VirtAddrRange::from_start_size(
+                    VirtAddr::from(overlap_start),
+                    overlap_end - overlap_start,
+                );
+                // Adjust file offset for the overlapping part
+                if region.vm_file.is_some() {
+                    overlapping_region.file_offset += (overlap_start - region_start) as isize;
+                }
+                removed.push(overlapping_region);
+
+                // Split the region if needed
+                // Keep the part before the overlap
+                if region_start < start {
+                    let mut before_region = region.clone();
+                    before_region.vaddr_range = VirtAddrRange::from_start_size(
+                        VirtAddr::from(region_start),
+                        start - region_start,
+                    );
+                    new_regions.push(before_region);
+                }
+
+                // Keep the part after the overlap
+                if end < region_end {
+                    let mut after_region = region.clone();
+                    // Adjust file offset for the after part
+                    let offset_adjustment = end - region_start;
+                    after_region.vaddr_range =
+                        VirtAddrRange::from_start_size(VirtAddr::from(end), region_end - end);
+                    if after_region.vm_file.is_some() {
+                        after_region.file_offset += offset_adjustment as isize;
+                    }
+                    new_regions.push(after_region);
+                }
+
+                false // Remove the original region
             } else {
-                true // Keep this region
+                true // Keep this region (no overlap)
             }
         });
+
+        // Add the new split regions
+        self.regions.extend(new_regions);
+
+        // Keep regions sorted by start address
+        self.regions.sort_by_key(|r| r.vaddr_range.start.as_usize());
 
         removed
     }

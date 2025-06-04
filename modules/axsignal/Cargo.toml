@@ -9,6 +9,7 @@ bitflags = "2.6"
 
 axconfig = { git = "https://github.com/oscomp/arceos.git" }
 axhal = { git = "https://github.com/oscomp/arceos.git", features = ["uspace"] }
+axprocess.workspace = true
 axtask = { git = "https://github.com/oscomp/arceos.git", features = [
     "multitask",
 ] }
