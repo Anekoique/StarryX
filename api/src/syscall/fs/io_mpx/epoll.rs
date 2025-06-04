@@ -1,49 +1,12 @@
+use alloc::{sync::Arc, vec::Vec};
+use axerrno::{LinuxError, LinuxResult};
+
 use crate::{
     ctypes::{EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT, epoll_event},
-    fs::{FileLike, add_file_like, get_file_like},
+    fs::{EpollInstance, add_file_like, get_file_like},
     ptr::{UserConstPtr, UserPtr},
     time::{TimeValue, wall_time},
 };
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
-use axerrno::{LinuxError, LinuxResult};
-use spin::Mutex;
-
-struct EpollInstance {
-    // fd -> epoll_event
-    events: Mutex<BTreeMap<i32, epoll_event>>,
-}
-
-impl EpollInstance {
-    fn new() -> Self {
-        Self {
-            events: Mutex::new(BTreeMap::new()),
-        }
-    }
-}
-
-impl FileLike for EpollInstance {
-    fn read(&self, _buf: &mut [u8]) -> LinuxResult<usize> {
-        Err(LinuxError::EINVAL)
-    }
-    fn write(&self, _buf: &[u8]) -> LinuxResult<usize> {
-        Err(LinuxError::EINVAL)
-    }
-    fn stat(&self) -> LinuxResult<crate::fs::Kstat> {
-        Err(LinuxError::EINVAL)
-    }
-    fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {
-        self
-    }
-    fn poll(&self) -> LinuxResult<axio::PollState> {
-        Ok(axio::PollState {
-            readable: false,
-            writable: false,
-        })
-    }
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
-    }
-}
 
 pub fn sys_epoll_create1(_flags: u32) -> LinuxResult<isize> {
     let epoll = Arc::new(EpollInstance::new());
