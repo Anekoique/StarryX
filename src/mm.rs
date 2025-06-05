@@ -28,6 +28,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         let rlimit = &curr.task_ext().process_data().rlimits.read()[RLIMIT_STACK];
         let size = axconfig::plat::USER_STACK_TOP - vaddr.as_usize();
         if size as u64 > rlimit.current {
+            warn!("Stack extension, check rlimit");
             let _ = send_signal_process(
                 curr.task_ext().thread.process(),
                 SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
