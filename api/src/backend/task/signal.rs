@@ -1,12 +1,9 @@
-use axerrno::{LinuxError, LinuxResult};
 use axhal::{
     arch::TrapFrame,
     trap::{POST_TRAP, register_trap_handler},
 };
-use axprocess::{Process, ProcessGroup, Thread};
-use axsignal::{SignalInfo, SignalOSAction, SignalSet};
+use axsignal::{SignalOSAction, SignalSet};
 use axtask::{TaskExtRef, current};
-use starry_core::task::{ProcessData, ThreadData};
 
 use crate::do_exit;
 
@@ -73,35 +70,4 @@ fn post_trap_callback(tf: &mut TrapFrame, from_user: bool) {
     }
 
     check_signals(tf, None);
-}
-
-pub fn send_signal_thread(thr: &Thread, sig: SignalInfo) -> LinuxResult<()> {
-    info!("Send signal {:?} to thread {}", sig.signo(), thr.tid());
-    let Some(thr) = thr.data::<ThreadData>() else {
-        return Err(LinuxError::EPERM);
-    };
-    thr.signal.send_signal(sig);
-    Ok(())
-}
-
-pub fn send_signal_process(proc: &Process, sig: SignalInfo) -> LinuxResult<()> {
-    info!("Send signal {:?} to process {}", sig.signo(), proc.pid());
-    let Some(proc) = proc.data::<ProcessData>() else {
-        return Err(LinuxError::EPERM);
-    };
-    proc.signal.send_signal(sig);
-    Ok(())
-}
-
-pub fn send_signal_process_group(pg: &ProcessGroup, sig: SignalInfo) -> usize {
-    info!(
-        "Send signal {:?} to process group {}",
-        sig.signo(),
-        pg.pgid()
-    );
-    let mut count = 0;
-    for proc in pg.processes() {
-        count += send_signal_process(&proc, sig.clone()).is_ok() as usize;
-    }
-    count
 }

@@ -6,7 +6,10 @@ use axhal::arch::TrapFrame;
 use axprocess::{Pid, Thread};
 use axsignal::{SignalInfo, SignalSet, SignalStack, Signo};
 use axtask::{TaskExtRef, current};
-use starry_core::task::{get_process, get_process_group, get_thread, processes};
+use starry_core::task::{
+    get_process, get_process_group, get_thread, processes, send_signal_process,
+    send_signal_process_group, send_signal_thread,
+};
 
 use crate::{
     ctypes::{
@@ -14,7 +17,7 @@ use crate::{
         siginfo, timespec,
     },
     ptr::{UserConstPtr, UserPtr, nullable},
-    task::{check_signals, send_signal_process, send_signal_process_group, send_signal_thread},
+    task::check_signals,
     utils::time::TimeValueLike,
 };
 

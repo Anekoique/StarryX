@@ -21,7 +21,7 @@ use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
 use axsignal::{
-    Signo,
+    SignalInfo, Signo,
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 use axsync::{Mutex, RawMutex};
@@ -94,6 +94,10 @@ impl TaskExt {
 
     pub(crate) fn time_stat_switch_to_new_task(&self, current_tick: usize) {
         self.time.borrow_mut().switch_to_new_task(current_tick);
+    }
+
+    pub(crate) fn time_stat_update_real_timer(&self, current_tick: usize) {
+        self.time.borrow_mut().update_real_timer(current_tick);
     }
 
     pub(crate) fn time_stat_output(&self) -> (usize, usize) {
@@ -311,6 +315,13 @@ impl AxTaskExtIf for AxTaskExtImpl {
             .task_ext()
             .time_stat_switch_from_old_task(monotonic_time_nanos() as usize);
     }
+
+    fn update_real_timer() {
+        let curr_task = current();
+        curr_task
+            .task_ext()
+            .time_stat_update_real_timer(monotonic_time_nanos() as usize);
+    }
 }
 
 struct AxNamespaceImpl;
@@ -423,4 +434,38 @@ pub fn time_stat_get_timer() -> (TimerType, usize, usize) {
 pub fn time_stat_clear_timer() {
     let curr_task = current();
     curr_task.task_ext().time.borrow_mut().clear_timer();
+}
+
+/// Send a signal to a thread.
+pub fn send_signal_thread(thr: &Thread, sig: SignalInfo) -> LinuxResult<()> {
+    info!("Send signal {:?} to thread {}", sig.signo(), thr.tid());
+    let Some(thr) = thr.data::<ThreadData>() else {
+        return Err(LinuxError::EPERM);
+    };
+    thr.signal.send_signal(sig);
+    Ok(())
+}
+
+/// Send a signal to a process.
+pub fn send_signal_process(proc: &Process, sig: SignalInfo) -> LinuxResult<()> {
+    info!("Send signal {:?} to process {}", sig.signo(), proc.pid());
+    let Some(proc) = proc.data::<ProcessData>() else {
+        return Err(LinuxError::EPERM);
+    };
+    proc.signal.send_signal(sig);
+    Ok(())
+}
+
+/// Send a signal to a process group.
+pub fn send_signal_process_group(pg: &ProcessGroup, sig: SignalInfo) -> usize {
+    info!(
+        "Send signal {:?} to process group {}",
+        sig.signo(),
+        pg.pgid()
+    );
+    let mut count = 0;
+    for proc in pg.processes() {
+        count += send_signal_process(&proc, sig.clone()).is_ok() as usize;
+    }
+    count
 }

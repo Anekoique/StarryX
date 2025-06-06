@@ -6,6 +6,7 @@ use timer_list::{TimeValue, TimerEvent, TimerList};
 
 use axhal::time::wall_time;
 
+use crate::task_ext::__AxTaskExtIf_mod;
 use crate::{AxTaskRef, select_run_queue};
 
 static TIMER_TICKET_ID: AtomicU64 = AtomicU64::new(1);
@@ -56,6 +57,11 @@ pub fn check_events() {
         } else {
             break;
         }
+    }
+
+    let current_task = crate::current();
+    if !matches!(current_task.name(), "main" | "gc" | "idle") {
+        crate_interface::call_interface!(AxTaskExtIf::switch_from_task);
     }
 }
 

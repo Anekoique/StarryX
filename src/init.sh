@@ -22,6 +22,7 @@ if [[ $ARCH == loongarch64 ]]; then
     ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
 else
     ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH.so.1
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH-sf.so.1
 fi
 
 ln -v -s /lib /lib64

@@ -1,3 +1,9 @@
+use axsignal::{SignalInfo, Signo};
+use axtask::{TaskExtRef, current};
+use linux_raw_sys::general::{SI_KERNEL, SIGALRM};
+
+use crate::task::send_signal_process;
+
 numeric_enum_macro::numeric_enum! {
     #[repr(i32)]
     #[allow(non_camel_case_types)]
@@ -102,6 +108,15 @@ impl TimeStat {
         }
     }
 
+    pub fn update_real_timer(&mut self, current_timestamp: usize) {
+        let now_time_ns = current_timestamp;
+        let delta = now_time_ns - self.kernel_timestamp;
+        self.kernel_timestamp = now_time_ns;
+        if self.timer_type == TimerType::REAL {
+            self.update_timer(delta);
+        }
+    }
+
     pub fn set_timer(
         &mut self,
         timer_interval_ns: usize,
@@ -124,6 +139,13 @@ impl TimeStat {
                 delta, self.timer_remained_ns
             );
             self.timer_remained_ns -= delta;
+        } else {
+            let current_task = current();
+            let _ = send_signal_process(
+                current_task.task_ext().thread.process(),
+                SignalInfo::new(Signo::from_repr(SIGALRM as u8).unwrap(), SI_KERNEL as _),
+            );
+            self.timer_remained_ns = 0;
         }
     }
 
