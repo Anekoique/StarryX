@@ -14,3 +14,4 @@ apps/*/build/
 /diff
 /log*
 .gdb_history
+**/actual.out
