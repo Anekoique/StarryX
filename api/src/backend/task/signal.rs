@@ -17,6 +17,7 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
         return false;
     };
 
+    debug!("handle signal: {:?}", sig.signo());
     let signo = sig.signo();
     match os_action {
         SignalOSAction::Terminate => {

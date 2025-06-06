@@ -15,7 +15,7 @@ enum RingBufferStatus {
     Normal,
 }
 
-const RING_BUFFER_SIZE: usize = 256;
+const RING_BUFFER_SIZE: usize = 512;
 
 struct PipeRingBuffer {
     arr: [u8; RING_BUFFER_SIZE],
@@ -146,7 +146,7 @@ impl FileLike for Pipe {
             return Ok(0);
         }
 
-        let mut write_size = 0usize;
+        let mut write_size = 1usize;
         let total_len = buf.len();
         loop {
             let mut ring_buffer = self.buffer.lock();
@@ -161,7 +161,7 @@ impl FileLike for Pipe {
                 axtask::yield_now(); // TODO: use synconize primitive
                 continue;
             }
-            for _ in 0..loop_write {
+            for _ in 1..=loop_write {
                 if write_size == total_len {
                     return Ok(write_size);
                 }
