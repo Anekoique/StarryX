@@ -2,6 +2,7 @@
 
 use handler_table::HandlerTable;
 
+use crate::arch::{disable_irqs, enable_irqs, irqs_enabled};
 use crate::platform::irq::{MAX_IRQ_COUNT, dispatch_irq};
 use crate::trap::{IRQ, register_trap_handler};
 
@@ -41,4 +42,20 @@ fn handler_irq(irq_num: usize) -> bool {
     dispatch_irq(irq_num);
     drop(guard); // rescheduling may occur when preemption is re-enabled.
     true
+}
+
+/// Execute a closure with interrupts disabled.
+pub fn with_irqs_disabled<T>(f: impl FnOnce() -> T) -> T {
+    let was_enabled = irqs_enabled();
+    disable_irqs();
+
+    // Execute the closure
+    let result = f();
+
+    // Restore interrupt state
+    if was_enabled {
+        enable_irqs();
+    }
+
+    result
 }

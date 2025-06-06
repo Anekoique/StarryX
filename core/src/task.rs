@@ -15,6 +15,7 @@ use alloc::{
 use axerrno::{LinuxError, LinuxResult};
 use axhal::{
     arch::UspaceContext,
+    irq::with_irqs_disabled,
     time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
 use axmm::{AddrSpace, kernel_aspace};
@@ -81,19 +82,27 @@ impl TaskExt {
     }
 
     pub(crate) fn time_stat_from_kernel_to_user(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_into_user_mode(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_into_user_mode(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_from_user_to_kernel(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_into_kernel_mode(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_into_kernel_mode(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_switch_from_old_task(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_from_old_task(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_from_old_task(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_switch_to_new_task(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_to_new_task(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_to_new_task(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_update_real_timer(&self, current_tick: usize) {
