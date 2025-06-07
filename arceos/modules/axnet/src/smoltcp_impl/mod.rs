@@ -4,6 +4,7 @@ mod dns;
 mod listen_table;
 mod tcp;
 mod udp;
+mod unix_socket;
 
 use alloc::vec;
 use axerrno::{AxError, AxResult};
@@ -26,7 +27,13 @@ use self::listen_table::ListenTable;
 pub use self::dns::dns_query;
 pub use self::tcp::TcpSocket;
 pub use self::udp::UdpSocket;
+pub use self::unix_socket::{UnixSocket, UnixAddr};
 pub use addr::{from_core_sockaddr, into_core_sockaddr};
+pub use addr::{
+    from_path_str, from_abstract_name, unnamed_unix_addr, is_unix_addr_unnamed,
+    unix_addr_to_string, extract_unix_pathname, extract_unix_abstract_name,
+    unix_addr_eq, UNNAMED_UNIX_ADDR
+};
 
 macro_rules! env_or_default {
     ($key:literal) => {

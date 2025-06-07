@@ -6,3 +6,5 @@ pub use linux_raw_sys::net::{
     in_addr, in6_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
 };
 pub use linux_raw_sys::system::{new_utsname, sysinfo};
+
+pub const AF_UNIX: u32 = 1;

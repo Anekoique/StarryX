@@ -1,12 +1,12 @@
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
-use spin::Mutex;
-use axerrno::{LinuxError, LinuxResult};
 use crate::{
-    ctypes::{epoll_event, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT},
+    ctypes::{EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT, epoll_event},
     fs::{FileLike, add_file_like, get_file_like},
     ptr::{UserConstPtr, UserPtr},
     time::{TimeValue, wall_time},
 };
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use axerrno::{LinuxError, LinuxResult};
+use spin::Mutex;
 
 struct EpollInstance {
     // fd -> epoll_event
@@ -35,7 +35,10 @@ impl FileLike for EpollInstance {
         self
     }
     fn poll(&self) -> LinuxResult<axio::PollState> {
-        Ok(axio::PollState { readable: false, writable: false })
+        Ok(axio::PollState {
+            readable: false,
+            writable: false,
+        })
     }
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
@@ -48,9 +51,17 @@ pub fn sys_epoll_create1(_flags: u32) -> LinuxResult<isize> {
     Ok(fd as isize)
 }
 
-pub fn sys_epoll_ctl(epfd: i32, op: i32, fd: i32, event: UserConstPtr<epoll_event>) -> LinuxResult<isize> {
+pub fn sys_epoll_ctl(
+    epfd: i32,
+    op: i32,
+    fd: i32,
+    event: UserConstPtr<epoll_event>,
+) -> LinuxResult<isize> {
     let epoll = get_file_like(epfd)?;
-    let epoll = epoll.into_any().downcast::<EpollInstance>().map_err(|_| LinuxError::EINVAL)?;
+    let epoll = epoll
+        .into_any()
+        .downcast::<EpollInstance>()
+        .map_err(|_| LinuxError::EINVAL)?;
     let mut events = epoll.events.lock();
     match op as u32 {
         EPOLL_CTL_ADD => {
@@ -84,7 +95,10 @@ pub fn sys_epoll_wait(
     timeout: i32,
 ) -> LinuxResult<isize> {
     let epoll = get_file_like(epfd)?;
-    let epoll = epoll.into_any().downcast::<EpollInstance>().map_err(|_| LinuxError::EINVAL)?;
+    let epoll = epoll
+        .into_any()
+        .downcast::<EpollInstance>()
+        .map_err(|_| LinuxError::EINVAL)?;
     let mut ready = Vec::new();
     let deadline = if timeout < 0 {
         None
