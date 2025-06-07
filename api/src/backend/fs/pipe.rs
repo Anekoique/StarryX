@@ -146,7 +146,7 @@ impl FileLike for Pipe {
             return Ok(0);
         }
 
-        let mut write_size = 1usize;
+        let mut write_size = 0usize;
         let total_len = buf.len();
         loop {
             let mut ring_buffer = self.buffer.lock();
@@ -161,12 +161,13 @@ impl FileLike for Pipe {
                 axtask::yield_now(); // TODO: use synconize primitive
                 continue;
             }
-            for _ in 1..=loop_write {
+            for _ in 0..loop_write {
+                ring_buffer.write_byte(buf[write_size]);
+                write_size += 1;
                 if write_size == total_len {
                     return Ok(write_size);
                 }
-                ring_buffer.write_byte(buf[write_size]);
-                write_size += 1;
+
             }
         }
     }
@@ -207,3 +208,4 @@ impl FileLike for Pipe {
         Ok(())
     }
 }
+
