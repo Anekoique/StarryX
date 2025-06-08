@@ -167,7 +167,6 @@ impl FileLike for Pipe {
                 if write_size == total_len {
                     return Ok(write_size);
                 }
-
             }
         }
     }
@@ -208,4 +207,3 @@ impl FileLike for Pipe {
         Ok(())
     }
 }
-

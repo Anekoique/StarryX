@@ -70,6 +70,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
             },
             SignalDisposition::Ignore => None,
             SignalDisposition::Handler(handler) => {
+                info!("handle with handler");
                 let layout = Layout::new::<SignalFrame>();
                 let stack = self.stack.lock();
                 let sp = if stack.disabled() || !action.flags.contains(SignalActionFlags::ONSTACK) {

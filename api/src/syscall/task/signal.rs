@@ -261,16 +261,15 @@ pub fn sys_rt_sigsuspend(
         .signal
         .with_blocked_mut(|blocked| mem::replace(blocked, set));
 
-    tf.set_retval(-LinuxError::EINTR.code() as usize);
-
     loop {
         if check_signals(tf, Some(old_blocked)) {
-            break;
+            thr_data
+                .signal
+                .with_blocked_mut(|blocked| *blocked = old_blocked);
+            return Err(LinuxError::EINTR);
         }
         curr.task_ext().process_data().signal.wait_signal();
     }
-
-    Ok(0)
 }
 
 pub fn sys_sigaltstack(
