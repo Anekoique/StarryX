@@ -166,23 +166,29 @@ pub fn set_priority(prio: isize) -> bool {
 /// Set the affinity for the current task.
 /// [`AxCpuMask`] is used to specify the CPU affinity.
 /// Returns `true` if the affinity is set successfully.
-///
-/// TODO: support set the affinity for other tasks.
-pub fn set_current_affinity(cpumask: AxCpuMask) -> bool {
+pub fn set_affinity(id: TaskId, cpumask: AxCpuMask) -> bool {
     if cpumask.is_empty() {
         false
     } else {
-        let curr = current().clone();
-
-        curr.set_cpumask(cpumask);
-        // After setting the affinity, we need to check if current cpu matches
-        // the affinity. If not, we need to migrate the task to the correct CPU.
+        let task = if id.as_u64() == 0 {
+            current().clone()
+        } else {
+            match get_task_by_id_raw(id.as_u64()) {
+                Some(task) => task,
+                None => {
+                    error!("Task {:?} not found", id);
+                    return false;
+                }
+            }
+        };
+        task.set_cpumask(cpumask);
+        // After setting the affinity, we need to check if the task needs migration
         #[cfg(feature = "smp")]
-        if !cpumask.get(axhal::cpu::this_cpu_id()) {
+        if id.as_u64() == 0 || !cpumask.get(axhal::cpu::this_cpu_id()) {
             const MIGRATION_TASK_STACK_SIZE: usize = 4096;
             // Spawn a new migration task for migrating.
             let migration_task = TaskInner::new(
-                move || crate::run_queue::migrate_entry(curr),
+                move || crate::run_queue::migrate_entry(task),
                 "migration-task".into(),
                 MIGRATION_TASK_STACK_SIZE,
             )

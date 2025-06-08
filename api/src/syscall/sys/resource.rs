@@ -1,6 +1,5 @@
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
-use axtask::{TaskExtRef, current};
 use starry_core::task::{ProcessData, get_process, time_stat_output};
 
 use crate::{
@@ -59,11 +58,7 @@ pub fn sys_prlimit64(
         return Err(LinuxError::EINVAL);
     }
 
-    let proc = if pid == 0 {
-        current().task_ext().thread.process().clone()
-    } else {
-        get_process(pid)?
-    };
+    let proc = get_process(pid)?;
     let proc_data: &ProcessData = proc.data().unwrap();
     if let Some(old_limit) = nullable!(old_limit.get_as_mut())? {
         let limit = &proc_data.rlimits.read()[resource];
