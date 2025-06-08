@@ -447,6 +447,7 @@ dependencies = [
  "percpu",
  "scheduler",
  "timer_list",
+ "weak-map",
 ]
 
 [[package]]

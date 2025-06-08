@@ -1,4 +1,5 @@
 use axerrno::{LinuxError, LinuxResult};
+use axprocess::Pid;
 
 use crate::{
     ctypes::timespec,
@@ -8,6 +9,48 @@ use crate::{
 
 pub fn sys_sched_yield() -> LinuxResult<isize> {
     axtask::yield_now();
+    Ok(0)
+}
+
+pub fn sys_sched_setaffinity(
+    _pid: Pid,
+    _cpuset_size: usize,
+    _mask: UserPtr<usize>,
+) -> LinuxResult<isize> {
+    warn!("sys_sched_setaffinity not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getaffinity(_pid: Pid, _cpuset_size: usize) -> LinuxResult<isize> {
+    warn!("sys_sched_getaffinity not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_setscheduler(_pid: Pid, _sched: usize, _param_size: usize) -> LinuxResult<isize> {
+    warn!("sys_sched_setscheduler not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler(_pid: Pid) -> LinuxResult<isize> {
+    warn!("sys_sched_getscheduler not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler_max(
+    _pid: Pid,
+    _sched: usize,
+    _param_size: usize,
+) -> LinuxResult<isize> {
+    warn!("sys_sched_getscheduler_max not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler_min(
+    _pid: Pid,
+    _sched: usize,
+    _param_size: usize,
+) -> LinuxResult<isize> {
+    warn!("sys_sched_getscheduler_min not implemented");
     Ok(0)
 }
 

@@ -396,11 +396,19 @@ pub fn processes() -> Vec<Arc<Process>> {
 
 /// Finds the thread with the given TID.
 pub fn get_thread(tid: Pid) -> LinuxResult<Arc<Thread>> {
-    THREAD_TABLE.read().get(&tid).ok_or(LinuxError::ESRCH)
+    if tid == 0 {
+        Ok(current().task_ext().thread.clone())
+    } else {
+        THREAD_TABLE.read().get(&tid).ok_or(LinuxError::ESRCH)
+    }
 }
 /// Finds the process with the given PID.
 pub fn get_process(pid: Pid) -> LinuxResult<Arc<Process>> {
-    PROCESS_TABLE.read().get(&pid).ok_or(LinuxError::ESRCH)
+    if pid == 0 {
+        Ok(current().task_ext().thread.process().clone())
+    } else {
+        PROCESS_TABLE.read().get(&pid).ok_or(LinuxError::ESRCH)
+    }
 }
 /// Finds the process group with the given PGID.
 pub fn get_process_group(pgid: Pid) -> LinuxResult<Arc<ProcessGroup>> {

@@ -6,6 +6,10 @@ use alloc::{
 };
 
 use kernel_guard::NoPreemptIrqSave;
+#[cfg(feature = "multitask")]
+use kspin::SpinNoIrq;
+#[cfg(feature = "multitask")]
+use weak_map::WeakMap;
 
 pub(crate) use crate::run_queue::{current_run_queue, select_run_queue};
 
@@ -26,6 +30,10 @@ pub use crate::task::TaskState;
 
 /// The wrapper type for [`cpumask::CpuMask`] with SMP configuration.
 pub type AxCpuMask = cpumask::CpuMask<{ axconfig::SMP }>;
+
+/// Global task table for managing all tasks by their TaskId
+#[cfg(feature = "multitask")]
+static TASK_TABLE: SpinNoIrq<WeakMap<u64, WeakAxTaskRef>> = SpinNoIrq::new(WeakMap::new());
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "sched_rr")] {
@@ -110,6 +118,11 @@ pub fn on_timer_tick() {
 /// Adds the given task to the run queue, returns the task reference.
 pub fn spawn_task(task: TaskInner) -> AxTaskRef {
     let task_ref = task.into_arc();
+
+    // Register the task in the global task table
+    #[cfg(feature = "multitask")]
+    register_task(&task_ref);
+
     select_run_queue::<NoPreemptIrqSave>(&task_ref).add_task(task_ref.clone());
     task_ref
 }
@@ -222,4 +235,66 @@ pub fn run_idle() -> ! {
         #[cfg(feature = "irq")]
         axhal::arch::wait_for_irqs();
     }
+}
+
+/// Register a task in the global task table.
+///
+/// This function should be called when a task is created and needs to be
+/// tracked in the global task table.
+#[cfg(feature = "multitask")]
+pub fn register_task(task_ref: &AxTaskRef) {
+    let mut table = TASK_TABLE.lock();
+    table.insert(task_ref.id().as_u64(), task_ref);
+    debug!("Task registered: {}", task_ref.id_name());
+}
+
+/// Get a task reference by its TaskId.
+///
+/// Returns `Some(AxTaskRef)` if the task exists and is still alive,
+/// `None` if the task doesn't exist or has been dropped.
+///
+/// This is similar to the `current()` function but works for any task ID.
+#[cfg(feature = "multitask")]
+pub fn get_task_by_id(task_id: TaskId) -> Option<AxTaskRef> {
+    let table = TASK_TABLE.lock();
+    table.get(&task_id.as_u64())
+}
+
+/// Get a task reference by its TaskId (raw u64 version).
+///
+/// Returns `Some(AxTaskRef)` if the task exists and is still alive,
+/// `None` if the task doesn't exist or has been dropped.
+#[cfg(feature = "multitask")]
+pub fn get_task_by_id_raw(task_id: u64) -> Option<AxTaskRef> {
+    let table = TASK_TABLE.lock();
+    table.get(&task_id)
+}
+
+/// List all currently alive tasks.
+///
+/// Returns a vector of all task references that are currently tracked
+/// in the global task table and still alive.
+#[cfg(feature = "multitask")]
+pub fn list_all_tasks() -> alloc::vec::Vec<AxTaskRef> {
+    let table = TASK_TABLE.lock();
+    table.values().collect()
+}
+
+/// Get the count of currently alive tasks.
+///
+/// Returns the number of tasks that are currently tracked in the global
+/// task table and still alive.
+#[cfg(feature = "multitask")]
+pub fn task_count() -> usize {
+    let table = TASK_TABLE.lock();
+    table.len()
+}
+
+/// Get the raw count of entries in the task table (including dead references).
+///
+/// This is mainly for debugging purposes to see how many entries need cleanup.
+#[cfg(feature = "multitask")]
+pub fn task_table_raw_count() -> usize {
+    let table = TASK_TABLE.lock();
+    table.raw_len()
 }
