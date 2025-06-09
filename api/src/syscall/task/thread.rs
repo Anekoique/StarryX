@@ -20,6 +20,28 @@ pub fn sys_gettid() -> LinuxResult<isize> {
     Ok(axtask::current().id().as_u64() as _)
 }
 
+/// Creates a new session if the calling process is not a process group leader.
+/// Returns the session ID (which equals the process ID) on success.
+pub fn sys_setsid() -> LinuxResult<isize> {
+    let current_task = current();
+    let process = current_task.task_ext().thread.process();
+    
+    // According to POSIX: setsid() shall fail if the calling process is already a process group leader
+    let current_group = process.group();
+    if current_group.pgid() == process.pid() {
+        return Err(axerrno::LinuxError::EPERM);
+    }
+    
+    // Create new session and process group
+    // The process becomes the session leader and process group leader of the new session
+    if let Some((session, _group)) = process.create_session() {
+        Ok(session.sid() as _)
+    } else {
+        // This should not happen given our check above, but be defensive
+        Err(axerrno::LinuxError::EPERM)
+    }
+}
+
 /// ARCH_PRCTL codes
 ///
 /// It is only avaliable on x86_64, and is not convenient

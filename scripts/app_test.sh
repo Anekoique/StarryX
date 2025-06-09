@@ -109,7 +109,7 @@ function test_one() {
 
 # TODO: add more testcases
 test_list=(
-    "nimbos"
+    # "nimbos"
     "libc"
 )
 

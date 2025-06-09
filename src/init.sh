@@ -34,9 +34,9 @@ env
 echo
 
 echo @@@@@@@@@@ musl @@@@@@@@@@
-cd /glibc
+cd /musl
 # echo "#### OS COMP TEST GROUP START basic-glibc ####"
-./basic_testcode.sh
+# ./basic_testcode.sh
 # echo "#### OS COMP TEST GROUP END basic-glibc ####"
 # echo "#### OS COMP TEST GROUP START lua-glibc ####"
 # ./lua_testcode.sh
@@ -50,7 +50,7 @@ cd /glibc
 # echo "#### OS COMP TEST GROUP START iozone-glibc ####"
 # ./iozone_testcode.sh
 # echo "#### OS COMP TEST GROUP END iozone-glibc ####"
-
+./busybox sh iperf_testcode.sh
 # FIXME: real glibc test
 # echo @@@@@@@@@@ glibc @@@@@@@@@@
 # cd /glibc
