@@ -16,10 +16,10 @@ fn do_select(
     except_fds: UserPtr<u8>,
     timeout: Option<TimeValue>,
 ) -> LinuxResult<isize> {
-    let num_words = nfds.div_ceil(32) as usize;
-    let mut read_fds = nullable!(read_fds.get_as_mut_slice(num_words))?;
-    let mut write_fds = nullable!(write_fds.get_as_mut_slice(num_words))?;
-    let mut except_fds = nullable!(except_fds.get_as_mut_slice(num_words))?;
+    let num_bytes = nfds.div_ceil(8) as usize;
+    let mut read_fds = nullable!(read_fds.get_as_mut_slice(num_bytes))?;
+    let mut write_fds = nullable!(write_fds.get_as_mut_slice(num_bytes))?;
+    let mut except_fds = nullable!(except_fds.get_as_mut_slice(num_bytes))?;
     if let Some(fds) = read_fds.as_mut() {
         fds.fill(0);
     }
@@ -43,8 +43,14 @@ fn do_select(
                 break;
             }
             if f(fd_table.get(fd).unwrap().poll()?) {
-                fds[fd / 8] |= 1 << (fd % 8);
-                num += 1;
+                let byte_index = fd / 8;
+                let bit_index = fd % 8;
+                if byte_index < fds.len() {
+                    fds[byte_index] |= 1 << bit_index;
+                    num += 1;
+                } else {
+                    warn!("select: fd {} out of bounds for fd_set size {}", fd, fds.len());
+                }
             }
         }
         Ok(num)
@@ -61,9 +67,14 @@ fn do_select(
     );
 
     loop {
-        let num = fill(nfds, &mut read_fds, |state| state.readable)?
-            + fill(nfds, &mut write_fds, |state| state.writable)?
-            + fill(nfds, &mut except_fds, |_state| false /* TODO */)?;
+        let readable_num = fill(nfds, &mut read_fds, |state| state.readable)?;
+        let writable_num = fill(nfds, &mut write_fds, |state| state.writable)?;
+        let except_num = fill(nfds, &mut except_fds, |_state| false /* TODO */)?;
+        let num = readable_num + writable_num + except_num;
+        
+        debug!("select poll result: readable={}, writable={}, except={}, total={}",
+               readable_num, writable_num, except_num, num);
+        
         if num > 0 {
             return Ok(num as isize);
         }

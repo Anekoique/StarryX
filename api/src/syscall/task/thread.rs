@@ -22,23 +22,36 @@ pub fn sys_gettid() -> LinuxResult<isize> {
 
 /// Creates a new session if the calling process is not a process group leader.
 /// Returns the session ID (which equals the process ID) on success.
+/// 
+/// Implementation follows Linux kernel's ksys_setsid():
+/// - Fails if the calling process is already a process group leader
+/// - Creates new session and process group with the process's PID
+/// - The calling process becomes both session leader and process group leader
 pub fn sys_setsid() -> LinuxResult<isize> {
     let current_task = current();
     let process = current_task.task_ext().thread.process();
+    let pid = process.pid();
     
-    // According to POSIX: setsid() shall fail if the calling process is already a process group leader
+    // According to POSIX and Linux implementation:
+    // setsid() shall fail if the calling process is already a process group leader
     let current_group = process.group();
-    if current_group.pgid() == process.pid() {
+    if current_group.pgid() == pid {
         return Err(axerrno::LinuxError::EPERM);
     }
     
     // Create new session and process group
     // The process becomes the session leader and process group leader of the new session
-    if let Some((session, _group)) = process.create_session() {
-        Ok(session.sid() as _)
-    } else {
-        // This should not happen given our check above, but be defensive
-        Err(axerrno::LinuxError::EPERM)
+    match process.create_session() {
+        Some((session, _group)) => {
+            // Verify that the session ID matches our PID (should always be true)
+            debug_assert_eq!(session.sid(), pid);
+            Ok(session.sid() as _)
+        }
+        None => {
+            // This should not happen given our check above
+            warn!("create_session failed unexpectedly for process {}", pid);
+            Err(axerrno::LinuxError::EPERM)
+        }
     }
 }
 
