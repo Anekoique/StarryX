@@ -1,11 +1,11 @@
 use core::net::SocketAddr;
 
 use axerrno::{LinuxError, LinuxResult};
-use axnet::{TcpSocket, UdpSocket};
+use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
 use crate::{
-    ctypes::{AF_INET, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM, SOCK_STREAM, socklen_t},
+    ctypes::{AF_INET, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM, SOCK_STREAM, socklen_t},
     fs::FileLike,
     net::{SockAddr, Socket},
     ptr::{UserConstPtr, UserPtr},
@@ -185,11 +185,68 @@ pub fn sys_recvfrom(
     Ok(recv as isize)
 }
 
-pub fn sys_socketpair(
-    _domain: u32,
-    _ty: u32,
-    _proto: u32,
-    _sv: UserPtr<i32>,
-) -> LinuxResult<isize> {
+pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> LinuxResult<isize> {
+    let ty = ty & 0xFF;
+
+    if domain == AF_UNIX {
+        // 只支持 SOCK_STREAM/ SOCK_DGRAM
+        if ty != SOCK_STREAM && ty != SOCK_DGRAM {
+            return Err(LinuxError::ESOCKTNOSUPPORT);
+        }
+        let (sock1, sock2) = UnixSocket::pair();
+        let socket1 = Socket::Unix(Mutex::new(sock1));
+        let socket2 = Socket::Unix(Mutex::new(sock2));
+        let fd1 = socket1.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+        let fd2 = socket2.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+        let sv_slice = sv.get_as_mut_slice(2)?;
+        sv_slice[0] = fd1;
+        sv_slice[1] = fd2;
+        return Ok(0);
+    }
+
+    debug!(
+        "sys_socketpair <= domain: {}, ty: {}, proto: {}",
+        domain, ty, proto
+    );
+
+    // 检查地址族
+    if domain != AF_INET {
+        return Err(LinuxError::EAFNOSUPPORT);
+    }
+
+    // 创建两个相同类型的 socket
+    let socket1 = match ty {
+        SOCK_STREAM => {
+            if proto != 0 && proto != IPPROTO_TCP as _ {
+                return Err(LinuxError::EPROTONOSUPPORT);
+            }
+            Socket::Tcp(Mutex::new(TcpSocket::new()))
+        }
+        SOCK_DGRAM => {
+            if proto != 0 && proto != IPPROTO_UDP as _ {
+                return Err(LinuxError::EPROTONOSUPPORT);
+            }
+            Socket::Udp(Mutex::new(UdpSocket::new()))
+        }
+        _ => return Err(LinuxError::ESOCKTNOSUPPORT),
+    };
+
+    let socket2 = match ty {
+        SOCK_STREAM => Socket::Tcp(Mutex::new(TcpSocket::new())),
+        SOCK_DGRAM => Socket::Udp(Mutex::new(UdpSocket::new())),
+        _ => return Err(LinuxError::ESOCKTNOSUPPORT),
+    };
+
+    // 分配文件描述符
+    let fd1 = socket1.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+
+    let fd2 = socket2.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+
+    // 将文件描述符写入用户空间
+    let sv_slice = sv.get_as_mut_slice(2)?;
+    sv_slice[0] = fd1;
+    sv_slice[1] = fd2;
+
+    debug!("sys_socketpair => fds: [{}, {}]", fd1, fd2);
     Ok(0)
 }

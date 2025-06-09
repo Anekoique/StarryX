@@ -32,10 +32,17 @@ cfg_if::cfg_if! {
 
 pub use self::net_impl::TcpSocket;
 pub use self::net_impl::UdpSocket;
+pub use self::net_impl::UnixAddr;
+pub use self::net_impl::UnixSocket;
 pub use self::net_impl::{
     add_membership, dns_query, from_core_sockaddr, into_core_sockaddr, poll_interfaces,
 };
 pub use self::net_impl::{bench_receive, bench_transmit};
+// Unix socket address conversion functions
+pub use self::net_impl::{
+    UNNAMED_UNIX_ADDR, extract_unix_abstract_name, extract_unix_pathname, from_abstract_name,
+    from_path_str, is_unix_addr_unnamed, unix_addr_eq, unix_addr_to_string, unnamed_unix_addr,
+};
 pub use smoltcp::time::Duration;
 pub use smoltcp::wire::{
     IpAddress as IpAddr, IpEndpoint as SocketAddr, Ipv4Address as Ipv4Addr, Ipv6Address as Ipv6Addr,
