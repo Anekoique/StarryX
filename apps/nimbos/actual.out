@@ -1,0 +1,144 @@
+make[1]: Entering directory '/home/ctoluu/OSCamp-25s/StarryX'
+Set AX_ROOT (ArceOS directory) to /home/ctoluu/OSCamp-25s/StarryX/arceos
+make[2]: Entering directory '/home/ctoluu/OSCamp-25s/StarryX/arceos'
+[93;1mwarning[0m: disk image "disk.img" already exists!
+make[2]: Leaving directory '/home/ctoluu/OSCamp-25s/StarryX/arceos'
+make[2]: Entering directory '/home/ctoluu/OSCamp-25s/StarryX/arceos'
+[37maxconfig-gen[0m [90mconfigs/defconfig.toml configs/platforms/x86_64-qemu-q35.toml ../configs/x86_64.toml -w smp=1 -w arch=x86_64 -w platform=x86_64-qemu-q35 -o "/home/ctoluu/OSCamp-25s/StarryX/.axconfig.toml" -c "/home/ctoluu/OSCamp-25s/StarryX/.axconfig.toml"[0m
+    [92;1mBuilding[0m App: StarryX, Arch: x86_64, Platform: x86_64-qemu-q35, App type: rust
+[37mcargo -C /home/ctoluu/OSCamp-25s/StarryX build[0m [90m-Z unstable-options --target x86_64-unknown-none --target-dir /home/ctoluu/OSCamp-25s/StarryX/target --release  --features "axfeat/log-level-off"[0m
+   Compiling axconfig v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axconfig)
+   Compiling axsignal v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/modules/axsignal)
+   Compiling starry v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX)
+   Compiling axhal v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axhal)
+   Compiling axtask v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axtask)
+   Compiling axdriver v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axdriver)
+   Compiling axmm v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axmm)
+   Compiling axsync v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axsync)
+   Compiling axfs-ng v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axfs-ng)
+   Compiling axnet v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axnet)
+   Compiling starry-core v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/core)
+   Compiling axruntime v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/modules/axruntime)
+   Compiling axfeat v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/arceos/api/axfeat)
+   Compiling starry-api v0.1.0 (/home/ctoluu/OSCamp-25s/StarryX/api)
+error[E0432]: unresolved import `crate::ctypes::cpu_set_t`
+ --> api/src/syscall/task/schedule.rs:5:24
+  |
+5 |     ctypes::{timespec, cpu_set_t},
+  |                        ^^^^^^^^^ no `cpu_set_t` in `utils::ctypes`
+
+error[E0435]: attempt to use a non-constant value in a constant
+  --> api/src/syscall/task/schedule.rs:20:56
+   |
+20 | pub fn sys_sched_getaffinity(pid: Pid, cpuset: UserPtr<cpuset>, cpuset_size: usize) -> LinuxResult<isize> {
+   |                                        ------          ^^^^^^
+   |                                        |
+   |                                        this would need to be a `const`
+
+error[E0412]: cannot find type `Pid` in this scope
+  --> api/src/syscall/task/schedule.rs:15:35
+   |
+15 | pub fn sys_sched_setaffinity(pid: Pid, cpuset_size: isize, mask: UserPtr<cpu_set_t>) -> LinuxResult<isize> {
+   |                                   ^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+1  + use axprocess::Pid;
+   |
+
+error[E0412]: cannot find type `Pid` in this scope
+  --> api/src/syscall/task/schedule.rs:20:35
+   |
+20 | pub fn sys_sched_getaffinity(pid: Pid, cpuset: UserPtr<cpuset>, cpuset_size: usize) -> LinuxResult<isize> {
+   |                                   ^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+1  + use axprocess::Pid;
+   |
+
+error[E0412]: cannot find type `Pid` in this scope
+  --> api/src/syscall/task/schedule.rs:26:36
+   |
+26 | pub fn sys_sched_setscheduler(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                    ^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+1  + use axprocess::Pid;
+   |
+
+error[E0412]: cannot find type `sched_param` in this scope
+  --> api/src/syscall/task/schedule.rs:26:61
+   |
+26 | pub fn sys_sched_setscheduler(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                                             ^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+26 | pub fn sys_sched_setscheduler<sched_param>(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                              +++++++++++++
+
+error[E0412]: cannot find type `Pid` in this scope
+  --> api/src/syscall/task/schedule.rs:31:36
+   |
+31 | pub fn sys_sched_getscheduler(pid: Pid) -> LinuxResult<isize> {
+   |                                    ^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+1  + use axprocess::Pid;
+   |
+
+error[E0412]: cannot find type `Pid` in this scope
+  --> api/src/syscall/task/schedule.rs:36:40
+   |
+36 | pub fn sys_sched_getscheduler_max(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                        ^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+1  + use axprocess::Pid;
+   |
+
+error[E0412]: cannot find type `sched_param` in this scope
+  --> api/src/syscall/task/schedule.rs:36:65
+   |
+36 | pub fn sys_sched_getscheduler_max(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                                                 ^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+36 | pub fn sys_sched_getscheduler_max<sched_param>(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                  +++++++++++++
+
+error[E0412]: cannot find type `Pid` in this scope
+  --> api/src/syscall/task/schedule.rs:41:40
+   |
+41 | pub fn sys_sched_getscheduler_min(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                        ^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+1  + use axprocess::Pid;
+   |
+
+error[E0412]: cannot find type `sched_param` in this scope
+  --> api/src/syscall/task/schedule.rs:41:65
+   |
+41 | pub fn sys_sched_getscheduler_min(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                                                 ^^^^^^^^^^^ not found in this scope
+   |
+help: you might be missing a type parameter
+   |
+41 | pub fn sys_sched_getscheduler_min<sched_param>(pid: Pid, sched: UserConstPtr<sched_param>, param_size: usize) -> LinuxResult<isize> {
+   |                                  +++++++++++++
+
+Some errors have detailed explanations: E0412, E0432, E0435.
+For more information about an error, try `rustc --explain E0412`.
+error: could not compile `starry-api` (lib) due to 11 previous errors
+warning: build failed, waiting for other jobs to finish...
+make[2]: *** [scripts/make/build.mk:42: _cargo_build] Error 101
+make[2]: Leaving directory '/home/ctoluu/OSCamp-25s/StarryX/arceos'
+make[1]: *** [Makefile:76: build] Error 2
+make[1]: Leaving directory '/home/ctoluu/OSCamp-25s/StarryX'
