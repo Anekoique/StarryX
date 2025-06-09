@@ -243,6 +243,7 @@ pub fn sys_rt_sigtimedwait(
     Ok(0)
 }
 
+
 pub fn sys_rt_sigsuspend(
     tf: &mut TrapFrame,
     set: UserConstPtr<SignalSet>,
@@ -263,14 +264,14 @@ pub fn sys_rt_sigsuspend(
 
     loop {
         if check_signals(tf, Some(old_blocked)) {
-            thr_data
-                .signal
-                .with_blocked_mut(|blocked| *blocked = old_blocked);
-            return Err(LinuxError::EINTR);
+            break;
         }
         curr.task_ext().process_data().signal.wait_signal();
     }
+
+    Err(LinuxError::EINTR)
 }
+
 
 pub fn sys_sigaltstack(
     ss: UserConstPtr<SignalStack>,

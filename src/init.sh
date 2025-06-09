@@ -61,6 +61,9 @@ echo "#### OS COMP TEST GROUP END lmbench-musl ####"
 # echo "#### OS COMP TEST GROUP START libcbench-glibc ####"
 # ./libc-bench
 # echo "#### OS COMP TEST GROUP END libcbench-glibc ####"
+# echo "#### OS COMP TEST GROUP START cyclictest-glibc ####"
+# ./cyclictest_testcode.sh
+# echo "#### OS COMP TEST GROUP END cyclictest-glibc ####"
 
 # echo @@@@@@@@@@ glibc @@@@@@@@@@
 # cd /glibc
