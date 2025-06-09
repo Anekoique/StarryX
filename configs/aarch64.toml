@@ -9,7 +9,7 @@ user-space-size = 0x7fff_ffff_f000
 # The highest address of the user stack.
 user-stack-top = 0x7fff_0000_0000
 # The size of the user stack.
-user-stack-size = 0x1_0000
+user-stack-size = 0x5_0000
 
 # The lowest address of the user heap.
 user-heap-base = 0x4000_0000

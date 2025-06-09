@@ -1,11 +1,26 @@
 # Todo
 
+## 6.6
+
+Progress
+
+- Impl epoll
+- run libcbench successfully
+- lazy alloc file mapped page (..)
+
+Todo
+
+- Page Cache (fix bug of lazy alloc) / COW
+- unixbench ltp libtest-glibc
+- iperf netperf
+- docs
+
 ## 6.1
 
 Progress：
 
 - Impl System V Ipc
-- run lmbench succressfully
+- run lmbench successfully
 
 Todo：
 

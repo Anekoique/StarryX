@@ -6,7 +6,10 @@ use axhal::arch::TrapFrame;
 use axprocess::{Pid, Thread};
 use axsignal::{SignalInfo, SignalSet, SignalStack, Signo};
 use axtask::{TaskExtRef, current};
-use starry_core::task::{get_process, get_process_group, get_thread, processes};
+use starry_core::task::{
+    get_process, get_process_group, get_thread, processes, send_signal_process,
+    send_signal_process_group, send_signal_thread,
+};
 
 use crate::{
     ctypes::{
@@ -14,7 +17,7 @@ use crate::{
         siginfo, timespec,
     },
     ptr::{UserConstPtr, UserPtr, nullable},
-    task::{check_signals, send_signal_process, send_signal_process_group, send_signal_thread},
+    task::check_signals,
     utils::time::TimeValueLike,
 };
 
@@ -258,8 +261,6 @@ pub fn sys_rt_sigsuspend(
         .signal
         .with_blocked_mut(|blocked| mem::replace(blocked, set));
 
-    tf.set_retval(-LinuxError::EINTR.code() as usize);
-
     loop {
         if check_signals(tf, Some(old_blocked)) {
             break;
@@ -267,7 +268,7 @@ pub fn sys_rt_sigsuspend(
         curr.task_ext().process_data().signal.wait_signal();
     }
 
-    Ok(0)
+    Err(LinuxError::EINTR)
 }
 
 pub fn sys_sigaltstack(

@@ -206,4 +206,6 @@ pub trait AxTaskExtIf {
     fn switch_to_task();
     /// Called when switching from an old task
     fn switch_from_task();
+    /// Called when updating the real timer
+    fn update_real_timer();
 }

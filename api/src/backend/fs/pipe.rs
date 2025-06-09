@@ -15,7 +15,7 @@ enum RingBufferStatus {
     Normal,
 }
 
-const RING_BUFFER_SIZE: usize = 256;
+const RING_BUFFER_SIZE: usize = 512;
 
 struct PipeRingBuffer {
     arr: [u8; RING_BUFFER_SIZE],
@@ -162,11 +162,11 @@ impl FileLike for Pipe {
                 continue;
             }
             for _ in 0..loop_write {
+                ring_buffer.write_byte(buf[write_size]);
+                write_size += 1;
                 if write_size == total_len {
                     return Ok(write_size);
                 }
-                ring_buffer.write_byte(buf[write_size]);
-                write_size += 1;
             }
         }
     }

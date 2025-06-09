@@ -6,7 +6,7 @@ use lock_api::{Mutex, RawMutex};
 
 use crate::{
     DefaultSignalAction, PendingSignals, SignalAction, SignalActionFlags, SignalDisposition,
-    SignalInfo, SignalOSAction, SignalSet, SignalStack, arch::UContext,
+    SignalInfo, SignalOSAction, SignalSet, SignalStack, Signo, arch::UContext,
 };
 
 use super::{ProcessSignalManager, WaitQueue};
@@ -70,6 +70,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
             },
             SignalDisposition::Ignore => None,
             SignalDisposition::Handler(handler) => {
+                info!("handle with handler");
                 let layout = Layout::new::<SignalFrame>();
                 let stack = self.stack.lock();
                 let sp = if stack.disabled() || !action.flags.contains(SignalActionFlags::ONSTACK) {
@@ -154,8 +155,6 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
     /// A tuple of (signal_info, os_action) if a fatal signal is pending,
     /// or `None` if no fatal signals are pending.
     pub fn check_fatal_signals(&self) -> Option<(SignalInfo, SignalOSAction)> {
-        use crate::{SignalSet, Signo};
-
         // Create a signal set containing only SIGKILL and SIGSTOP
         let mut fatal_signals = SignalSet::default();
         fatal_signals.add(Signo::SIGKILL);

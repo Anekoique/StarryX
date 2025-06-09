@@ -5,7 +5,7 @@ use core::mem::MaybeUninit;
 #[cfg(feature = "smp")]
 use alloc::sync::Weak;
 
-use kernel_guard::BaseGuard;
+use kernel_guard::{BaseGuard, NoPreemptIrqSave};
 use kspin::SpinRaw;
 use lazyinit::LazyInit;
 use scheduler::BaseScheduler;
@@ -519,7 +519,9 @@ impl AxRunQueue {
             next.id_name(),
             next.state()
         );
-        self.switch_to(crate::current(), next);
+        self.switch_to(crate::current(), next.clone());
+        #[cfg(feature = "smp")]
+        migrate_current(next);
     }
 
     fn switch_to(&mut self, prev_task: CurrentTask, next_task: AxTaskRef) {
@@ -619,6 +621,27 @@ pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
         .scheduler
         .lock()
         .put_prev_task(migrated_task, false)
+}
+
+#[cfg(feature = "smp")]
+pub(crate) fn migrate_current(task: AxTaskRef) {
+    if current_run_queue::<NoPreemptIrqSave>().current_task.id() != task.id()
+        || task.cpumask().get(axhal::cpu::this_cpu_id())
+    {
+        return;
+    }
+    const MIGRATION_TASK_STACK_SIZE: usize = 4096;
+
+    // Spawn a new migration task for migrating.
+    let migration_task = TaskInner::new(
+        move || crate::run_queue::migrate_entry(task),
+        "migration-task".into(),
+        MIGRATION_TASK_STACK_SIZE,
+    )
+    .into_arc();
+
+    // Migrate the current task to the correct CPU using the migration task.
+    current_run_queue::<NoPreemptIrqSave>().migrate_current(migration_task);
 }
 
 /// Clear the `on_cpu` field of previous task running on this CPU.

@@ -3,14 +3,13 @@ use core::sync::atomic::Ordering;
 use axprocess::Pid;
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
-use starry_core::task::ProcessData;
+use starry_core::task::{ProcessData, send_signal_process, send_signal_thread};
 
 use crate::{
     ctypes::{SI_KERNEL, robust_list_head},
     exit_robust_list,
     fs::FD_TABLE,
     ptr::{UserPtr, nullable},
-    task::{send_signal_process, send_signal_thread},
 };
 
 pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {

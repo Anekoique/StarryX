@@ -1,4 +1,6 @@
 use axerrno::{LinuxError, LinuxResult};
+use axprocess::Pid;
+use axtask::{AxCpuMask, set_affinity, with_task};
 
 use crate::{
     ctypes::timespec,
@@ -8,6 +10,72 @@ use crate::{
 
 pub fn sys_sched_yield() -> LinuxResult<isize> {
     axtask::yield_now();
+    Ok(0)
+}
+
+pub fn sys_sched_setaffinity(
+    pid: Pid,
+    cpuset_size: usize,
+    mask: UserPtr<u8>,
+) -> LinuxResult<isize> {
+    with_task(pid.into(), |task| {
+        let len = axconfig::SMP.min(cpuset_size);
+        let mask_slice = mask.get_as_mut_slice(len)?;
+        let mut cpu_mask = AxCpuMask::new();
+
+        for i in 0..(len * 8).min(axconfig::SMP) {
+            if mask_slice[i / 8] & (1 << (i % 8)) != 0 {
+                cpu_mask.set(i, true);
+            }
+        }
+        if set_affinity(task, cpu_mask) {
+            Ok(0)
+        } else {
+            Err(LinuxError::EINVAL)
+        }
+    })
+    .ok_or(LinuxError::ESRCH)?
+}
+
+pub fn sys_sched_getaffinity(
+    pid: Pid,
+    cpuset_size: usize,
+    mask: UserPtr<u8>,
+) -> LinuxResult<isize> {
+    with_task(pid.into(), |task| {
+        let len = axconfig::SMP.min(cpuset_size);
+        mask.get_as_mut_slice(len)?
+            .copy_from_slice(task.cpumask().as_bytes());
+        Ok(len as isize)
+    })
+    .ok_or(LinuxError::ESRCH)?
+}
+
+pub fn sys_sched_setscheduler(_pid: Pid, _sched: usize, _param_size: usize) -> LinuxResult<isize> {
+    warn!("sys_sched_setscheduler not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler(_pid: Pid) -> LinuxResult<isize> {
+    warn!("sys_sched_getscheduler not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler_max(
+    _pid: Pid,
+    _sched: usize,
+    _param_size: usize,
+) -> LinuxResult<isize> {
+    warn!("sys_sched_getscheduler_max not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler_min(
+    _pid: Pid,
+    _sched: usize,
+    _param_size: usize,
+) -> LinuxResult<isize> {
+    warn!("sys_sched_getscheduler_min not implemented");
     Ok(0)
 }
 

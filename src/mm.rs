@@ -6,8 +6,7 @@ use axhal::{
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
-use starry_api::send_signal_process;
-use starry_core::mm::is_accessing_user_memory;
+use starry_core::{mm::is_accessing_user_memory, task::send_signal_process};
 
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
@@ -28,6 +27,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         let rlimit = &curr.task_ext().process_data().rlimits.read()[RLIMIT_STACK];
         let size = axconfig::plat::USER_STACK_TOP - vaddr.as_usize();
         if size as u64 > rlimit.current {
+            warn!("Stack extension, check rlimit");
             let _ = send_signal_process(
                 curr.task_ext().thread.process(),
                 SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
@@ -53,5 +53,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
             SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
         );
     }
+
+    trace!("Page fault handled");
     true
 }

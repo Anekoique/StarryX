@@ -30,8 +30,20 @@ define load_img
 	cp $(PWD)/sdcard-$(ARCH).img $(AX_ROOT)/disk.img
 endef
 
+define load_img2
+	@if [ ! -f $(PWD)/sdcard-$(ARCH).img ]; then \
+		wget $(IMG_URL); \
+		gunzip $(PWD)/sdcard-$(ARCH).img.gz; \
+	fi
+	cp $(PWD)/sdcard-rv.img $(AX_ROOT)/disk.img
+endef
+
 oscomp_run: ax_root defconfig
 	$(call load_img)
+	$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=fp_simd,lwext4_rs LOG=$(LOG) run
+
+oscomp_test: ax_root defconfig
+	$(call load_img2)
 	$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=fp_simd,lwext4_rs LOG=$(LOG) run
 
 oscomp_debug: ax_root defconfig

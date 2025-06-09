@@ -15,13 +15,14 @@ use alloc::{
 use axerrno::{LinuxError, LinuxResult};
 use axhal::{
     arch::UspaceContext,
+    irq::with_irqs_disabled,
     time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
 use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
 use axsignal::{
-    Signo,
+    SignalInfo, Signo,
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 use axsync::{Mutex, RawMutex};
@@ -81,19 +82,31 @@ impl TaskExt {
     }
 
     pub(crate) fn time_stat_from_kernel_to_user(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_into_user_mode(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_into_user_mode(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_from_user_to_kernel(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_into_kernel_mode(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_into_kernel_mode(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_switch_from_old_task(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_from_old_task(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_from_old_task(current_tick);
+        });
     }
 
     pub(crate) fn time_stat_switch_to_new_task(&self, current_tick: usize) {
-        self.time.borrow_mut().switch_to_new_task(current_tick);
+        with_irqs_disabled(|| {
+            self.time.borrow_mut().switch_to_new_task(current_tick);
+        });
+    }
+
+    pub(crate) fn time_stat_update_real_timer(&self, current_tick: usize) {
+        self.time.borrow_mut().update_real_timer(current_tick);
     }
 
     pub(crate) fn time_stat_output(&self) -> (usize, usize) {
@@ -311,6 +324,13 @@ impl AxTaskExtIf for AxTaskExtImpl {
             .task_ext()
             .time_stat_switch_from_old_task(monotonic_time_nanos() as usize);
     }
+
+    fn update_real_timer() {
+        let curr_task = current();
+        curr_task
+            .task_ext()
+            .time_stat_update_real_timer(monotonic_time_nanos() as usize);
+    }
 }
 
 struct AxNamespaceImpl;
@@ -376,11 +396,19 @@ pub fn processes() -> Vec<Arc<Process>> {
 
 /// Finds the thread with the given TID.
 pub fn get_thread(tid: Pid) -> LinuxResult<Arc<Thread>> {
-    THREAD_TABLE.read().get(&tid).ok_or(LinuxError::ESRCH)
+    if tid == 0 {
+        Ok(current().task_ext().thread.clone())
+    } else {
+        THREAD_TABLE.read().get(&tid).ok_or(LinuxError::ESRCH)
+    }
 }
 /// Finds the process with the given PID.
 pub fn get_process(pid: Pid) -> LinuxResult<Arc<Process>> {
-    PROCESS_TABLE.read().get(&pid).ok_or(LinuxError::ESRCH)
+    if pid == 0 {
+        Ok(current().task_ext().thread.process().clone())
+    } else {
+        PROCESS_TABLE.read().get(&pid).ok_or(LinuxError::ESRCH)
+    }
 }
 /// Finds the process group with the given PGID.
 pub fn get_process_group(pgid: Pid) -> LinuxResult<Arc<ProcessGroup>> {
@@ -423,4 +451,38 @@ pub fn time_stat_get_timer() -> (TimerType, usize, usize) {
 pub fn time_stat_clear_timer() {
     let curr_task = current();
     curr_task.task_ext().time.borrow_mut().clear_timer();
+}
+
+/// Send a signal to a thread.
+pub fn send_signal_thread(thr: &Thread, sig: SignalInfo) -> LinuxResult<()> {
+    info!("Send signal {:?} to thread {}", sig.signo(), thr.tid());
+    let Some(thr) = thr.data::<ThreadData>() else {
+        return Err(LinuxError::EPERM);
+    };
+    thr.signal.send_signal(sig);
+    Ok(())
+}
+
+/// Send a signal to a process.
+pub fn send_signal_process(proc: &Process, sig: SignalInfo) -> LinuxResult<()> {
+    info!("Send signal {:?} to process {}", sig.signo(), proc.pid());
+    let Some(proc) = proc.data::<ProcessData>() else {
+        return Err(LinuxError::EPERM);
+    };
+    proc.signal.send_signal(sig);
+    Ok(())
+}
+
+/// Send a signal to a process group.
+pub fn send_signal_process_group(pg: &ProcessGroup, sig: SignalInfo) -> usize {
+    info!(
+        "Send signal {:?} to process group {}",
+        sig.signo(),
+        pg.pgid()
+    );
+    let mut count = 0;
+    for proc in pg.processes() {
+        count += send_signal_process(&proc, sig.clone()).is_ok() as usize;
+    }
+    count
 }

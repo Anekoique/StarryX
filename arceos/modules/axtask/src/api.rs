@@ -6,8 +6,12 @@ use alloc::{
 };
 
 use kernel_guard::NoPreemptIrqSave;
+#[cfg(feature = "multitask")]
+use kspin::SpinNoIrq;
+#[cfg(feature = "multitask")]
+use weak_map::WeakMap;
 
-pub(crate) use crate::run_queue::{current_run_queue, select_run_queue};
+pub(crate) use crate::run_queue::{current_run_queue, migrate_current, select_run_queue};
 
 #[doc(cfg(feature = "multitask"))]
 pub use crate::task::{CurrentTask, TaskId, TaskInner};
@@ -26,6 +30,10 @@ pub use crate::task::TaskState;
 
 /// The wrapper type for [`cpumask::CpuMask`] with SMP configuration.
 pub type AxCpuMask = cpumask::CpuMask<{ axconfig::SMP }>;
+
+/// Global task table for managing all tasks by their TaskId
+#[cfg(feature = "multitask")]
+static TASK_TABLE: SpinNoIrq<WeakMap<u64, WeakAxTaskRef>> = SpinNoIrq::new(WeakMap::new());
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "sched_rr")] {
@@ -110,6 +118,11 @@ pub fn on_timer_tick() {
 /// Adds the given task to the run queue, returns the task reference.
 pub fn spawn_task(task: TaskInner) -> AxTaskRef {
     let task_ref = task.into_arc();
+
+    // Register the task in the global task table
+    #[cfg(feature = "multitask")]
+    register_task(&task_ref);
+
     select_run_queue::<NoPreemptIrqSave>(&task_ref).add_task(task_ref.clone());
     task_ref
 }
@@ -153,33 +166,15 @@ pub fn set_priority(prio: isize) -> bool {
 /// Set the affinity for the current task.
 /// [`AxCpuMask`] is used to specify the CPU affinity.
 /// Returns `true` if the affinity is set successfully.
-///
-/// TODO: support set the affinity for other tasks.
-pub fn set_current_affinity(cpumask: AxCpuMask) -> bool {
+pub fn set_affinity(task: &AxTaskRef, cpumask: AxCpuMask) -> bool {
     if cpumask.is_empty() {
         false
     } else {
-        let curr = current().clone();
-
-        curr.set_cpumask(cpumask);
-        // After setting the affinity, we need to check if current cpu matches
-        // the affinity. If not, we need to migrate the task to the correct CPU.
+        task.set_cpumask(cpumask);
+        // After setting the affinity, we need to check if the task needs migration
         #[cfg(feature = "smp")]
-        if !cpumask.get(axhal::cpu::this_cpu_id()) {
-            const MIGRATION_TASK_STACK_SIZE: usize = 4096;
-            // Spawn a new migration task for migrating.
-            let migration_task = TaskInner::new(
-                move || crate::run_queue::migrate_entry(curr),
-                "migration-task".into(),
-                MIGRATION_TASK_STACK_SIZE,
-            )
-            .into_arc();
+        migrate_current(task.clone());
 
-            // Migrate the current task to the correct CPU using the migration task.
-            current_run_queue::<NoPreemptIrqSave>().migrate_current(migration_task);
-
-            assert!(cpumask.get(axhal::cpu::this_cpu_id()), "Migration failed");
-        }
         true
     }
 }
@@ -221,5 +216,40 @@ pub fn run_idle() -> ! {
         debug!("idle task: waiting for IRQs...");
         #[cfg(feature = "irq")]
         axhal::arch::wait_for_irqs();
+    }
+}
+
+/// Register a task in the global task table.
+///
+/// This function should be called when a task is created and needs to be
+/// tracked in the global task table.
+#[cfg(feature = "multitask")]
+pub fn register_task(task_ref: &AxTaskRef) {
+    let mut table = TASK_TABLE.lock();
+    table.insert(task_ref.id().as_u64(), task_ref);
+    debug!("Task registered: {}", task_ref.id_name());
+}
+
+/// Get a task reference by its TaskId.
+///
+/// Returns `Some(AxTaskRef)` if the task exists and is still alive,
+/// `None` if the task doesn't exist or has been dropped.
+///
+/// This is similar to the `current()` function but works for any task ID.
+#[cfg(feature = "multitask")]
+pub fn get_task_by_id(task_id: TaskId) -> Option<AxTaskRef> {
+    let table = TASK_TABLE.lock();
+    table.get(&task_id.as_u64())
+}
+
+/// Execute a function with a task reference.
+///
+/// Returns `Some(R)` if the task exists and is still alive,
+/// `None` if the task doesn't exist or has been dropped.
+pub fn with_task<R>(id: TaskId, f: impl FnOnce(&AxTaskRef) -> R) -> Option<R> {
+    if id.as_u64() == 0 {
+        Some(f(&current().as_task_ref()))
+    } else {
+        get_task_by_id(id).map(|task| f(&task))
     }
 }
