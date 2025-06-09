@@ -11,7 +11,7 @@ use kspin::SpinNoIrq;
 #[cfg(feature = "multitask")]
 use weak_map::WeakMap;
 
-pub(crate) use crate::run_queue::{current_run_queue, select_run_queue};
+pub(crate) use crate::run_queue::{current_run_queue, migrate_current, select_run_queue};
 
 #[doc(cfg(feature = "multitask"))]
 pub use crate::task::{CurrentTask, TaskId, TaskInner};
@@ -166,39 +166,15 @@ pub fn set_priority(prio: isize) -> bool {
 /// Set the affinity for the current task.
 /// [`AxCpuMask`] is used to specify the CPU affinity.
 /// Returns `true` if the affinity is set successfully.
-pub fn set_affinity(id: TaskId, cpumask: AxCpuMask) -> bool {
+pub fn set_affinity(task: &AxTaskRef, cpumask: AxCpuMask) -> bool {
     if cpumask.is_empty() {
         false
     } else {
-        let task = if id.as_u64() == 0 {
-            current().clone()
-        } else {
-            match get_task_by_id_raw(id.as_u64()) {
-                Some(task) => task,
-                None => {
-                    error!("Task {:?} not found", id);
-                    return false;
-                }
-            }
-        };
         task.set_cpumask(cpumask);
         // After setting the affinity, we need to check if the task needs migration
         #[cfg(feature = "smp")]
-        if id.as_u64() == 0 || !cpumask.get(axhal::cpu::this_cpu_id()) {
-            const MIGRATION_TASK_STACK_SIZE: usize = 4096;
-            // Spawn a new migration task for migrating.
-            let migration_task = TaskInner::new(
-                move || crate::run_queue::migrate_entry(task),
-                "migration-task".into(),
-                MIGRATION_TASK_STACK_SIZE,
-            )
-            .into_arc();
+        migrate_current(task.clone());
 
-            // Migrate the current task to the correct CPU using the migration task.
-            current_run_queue::<NoPreemptIrqSave>().migrate_current(migration_task);
-
-            assert!(cpumask.get(axhal::cpu::this_cpu_id()), "Migration failed");
-        }
         true
     }
 }
@@ -266,41 +242,14 @@ pub fn get_task_by_id(task_id: TaskId) -> Option<AxTaskRef> {
     table.get(&task_id.as_u64())
 }
 
-/// Get a task reference by its TaskId (raw u64 version).
+/// Execute a function with a task reference.
 ///
-/// Returns `Some(AxTaskRef)` if the task exists and is still alive,
+/// Returns `Some(R)` if the task exists and is still alive,
 /// `None` if the task doesn't exist or has been dropped.
-#[cfg(feature = "multitask")]
-pub fn get_task_by_id_raw(task_id: u64) -> Option<AxTaskRef> {
-    let table = TASK_TABLE.lock();
-    table.get(&task_id)
-}
-
-/// List all currently alive tasks.
-///
-/// Returns a vector of all task references that are currently tracked
-/// in the global task table and still alive.
-#[cfg(feature = "multitask")]
-pub fn list_all_tasks() -> alloc::vec::Vec<AxTaskRef> {
-    let table = TASK_TABLE.lock();
-    table.values().collect()
-}
-
-/// Get the count of currently alive tasks.
-///
-/// Returns the number of tasks that are currently tracked in the global
-/// task table and still alive.
-#[cfg(feature = "multitask")]
-pub fn task_count() -> usize {
-    let table = TASK_TABLE.lock();
-    table.len()
-}
-
-/// Get the raw count of entries in the task table (including dead references).
-///
-/// This is mainly for debugging purposes to see how many entries need cleanup.
-#[cfg(feature = "multitask")]
-pub fn task_table_raw_count() -> usize {
-    let table = TASK_TABLE.lock();
-    table.raw_len()
+pub fn with_task<R>(id: TaskId, f: impl FnOnce(&AxTaskRef) -> R) -> Option<R> {
+    if id.as_u64() == 0 {
+        Some(f(&current().as_task_ref()))
+    } else {
+        get_task_by_id(id).map(|task| f(&task))
+    }
 }

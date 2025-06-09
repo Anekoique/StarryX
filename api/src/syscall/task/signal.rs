@@ -243,7 +243,6 @@ pub fn sys_rt_sigtimedwait(
     Ok(0)
 }
 
-
 pub fn sys_rt_sigsuspend(
     tf: &mut TrapFrame,
     set: UserConstPtr<SignalSet>,
@@ -271,7 +270,6 @@ pub fn sys_rt_sigsuspend(
 
     Err(LinuxError::EINTR)
 }
-
 
 pub fn sys_sigaltstack(
     ss: UserConstPtr<SignalStack>,

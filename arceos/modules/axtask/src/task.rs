@@ -89,6 +89,27 @@ impl TaskId {
     }
 }
 
+impl From<u64> for TaskId {
+    /// Create a TaskId from a u64 value.
+    fn from(id: u64) -> Self {
+        Self(id)
+    }
+}
+
+impl From<u32> for TaskId {
+    /// Create a TaskId from a u32 value.
+    fn from(id: u32) -> Self {
+        Self(id as u64)
+    }
+}
+
+impl From<TaskId> for u64 {
+    /// Convert TaskId to u64.
+    fn from(task_id: TaskId) -> Self {
+        task_id.0
+    }
+}
+
 impl From<u8> for TaskState {
     #[inline]
     fn from(state: u8) -> Self {

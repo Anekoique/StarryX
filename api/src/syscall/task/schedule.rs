@@ -1,6 +1,6 @@
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
-use axtask::{current, get_task_by_id_raw};
+use axtask::{AxCpuMask, set_affinity, with_task};
 
 use crate::{
     ctypes::timespec,
@@ -16,87 +16,39 @@ pub fn sys_sched_yield() -> LinuxResult<isize> {
 pub fn sys_sched_setaffinity(
     pid: Pid,
     cpuset_size: usize,
-    mask: UserPtr<usize>,
+    mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
-    let len = axconfig::SMP.min(cpuset_size);
-    // Get the user buffer as usize slice
-    let mask_slice = mask.get_as_mut_slice(len)?;
+    with_task(pid.into(), |task| {
+        let len = axconfig::SMP.min(cpuset_size);
+        let mask_slice = mask.get_as_mut_slice(len)?;
+        let mut cpu_mask = AxCpuMask::new();
 
-    // Parse CPU mask from user buffer
-    let mut cpumask = axtask::AxCpuMask::new();
-    let bits_per_usize = core::mem::size_of::<usize>() * 8;
-
-    for cpu_id in 0..len {
-        let usize_index = cpu_id / bits_per_usize;
-        let bit_index = cpu_id % bits_per_usize;
-
-        if usize_index < mask_slice.len() && (mask_slice[usize_index] & (1usize << bit_index)) != 0
-        {
-            cpumask.set(cpu_id, true);
+        for i in 0..(len * 8).min(axconfig::SMP) {
+            if mask_slice[i / 8] & (1 << (i % 8)) != 0 {
+                cpu_mask.set(i, true);
+            }
         }
-    }
-
-    // Check if the mask is empty (not allowed)
-    if cpumask.is_empty() {
-        return Err(LinuxError::EINVAL);
-    }
-
-    // Set the task's affinity using the task ID
-    if pid == 0 {
-        // For current task (pid = 0), use current task's TaskId
-        let current_task_id = current().id();
-        if axtask::set_affinity(current_task_id, cpumask) {
+        if set_affinity(task, cpu_mask) {
             Ok(0)
         } else {
             Err(LinuxError::EINVAL)
         }
-    } else {
-        // For specific task, get the task first to extract its TaskId
-        match get_task_by_id_raw(pid as u64) {
-            Some(task) => {
-                let task_id = task.id();
-                if axtask::set_affinity(task_id, cpumask) {
-                    Ok(0)
-                } else {
-                    Err(LinuxError::EINVAL)
-                }
-            }
-            None => Err(LinuxError::ESRCH),
-        }
-    }
+    })
+    .ok_or(LinuxError::ESRCH)?
 }
 
 pub fn sys_sched_getaffinity(
     pid: Pid,
     cpuset_size: usize,
-    mask: UserPtr<usize>,
+    mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
-    // Get the target task - current task if pid is 0, otherwise find by pid
-    let cpuset = if pid == 0 {
-        current().as_task_ref().cpumask()
-    } else {
-        get_task_by_id_raw(pid as u64)
-            .ok_or(LinuxError::ESRCH)?
-            .cpumask()
-    };
-
-    let len = axconfig::SMP.min(cpuset_size);
-    let mask_slice = mask.get_as_mut_slice(len)?;
-    mask_slice.fill(0);
-
-    let bits_per_usize = core::mem::size_of::<usize>() * 8;
-
-    for cpu_id in 0..len {
-        if cpuset.get(cpu_id) {
-            let usize_index = cpu_id / bits_per_usize;
-            let bit_index = cpu_id % bits_per_usize;
-            if usize_index < mask_slice.len() {
-                mask_slice[usize_index] |= 1usize << bit_index;
-            }
-        }
-    }
-
-    Ok(len as isize)
+    with_task(pid.into(), |task| {
+        let len = axconfig::SMP.min(cpuset_size);
+        mask.get_as_mut_slice(len)?
+            .copy_from_slice(task.cpumask().as_bytes());
+        Ok(len as isize)
+    })
+    .ok_or(LinuxError::ESRCH)?
 }
 
 pub fn sys_sched_setscheduler(_pid: Pid, _sched: usize, _param_size: usize) -> LinuxResult<isize> {
