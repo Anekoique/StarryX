@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NodeType"],"mod":["path"],"struct":["DeviceId","DirEntry","DirNode","FileNode","Filesystem","Location","Metadata","MetadataUpdate","Mountpoint","NodePermission","Reference","StatFs","WeakDirEntry"],"trait":["DirEntrySink","DirNodeOps","FileNodeOps","FilesystemOps","NodeOps"],"type":["ReferenceKey","VfsError","VfsResult"]};

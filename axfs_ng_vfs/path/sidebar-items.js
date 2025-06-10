@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DOT","DOTDOT","MAX_NAME_LEN"],"enum":["Component"],"struct":["Path","PathBuf"]};

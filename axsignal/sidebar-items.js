@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DefaultSignalAction","SignalDisposition","SignalOSAction","Signo"],"mod":["api","arch"],"struct":["PendingSignals","SignalAction","SignalActionFlags","SignalInfo","SignalSet","SignalStack","k_sigaction"]};

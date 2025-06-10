@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NANOS_PER_MICROS","NANOS_PER_MILLIS","NANOS_PER_SEC"],"fn":["monotonic_time","monotonic_time_nanos","nanos_to_ticks","wall_time","wall_time_nanos"],"struct":["__kernel_old_timespec","__kernel_old_timeval","__kernel_sock_timeval","__kernel_timespec","timespec","timeval"],"trait":["TimeValueLike"],"type":["TimeValue"]};

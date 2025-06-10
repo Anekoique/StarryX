@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["axfs_ng_vfs",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/deref/trait.Deref.html\" title=\"trait core::ops::deref::Deref\">Deref</a> for <a class=\"struct\" href=\"axfs_ng_vfs/path/struct.PathBuf.html\" title=\"struct axfs_ng_vfs::path::PathBuf\">PathBuf</a>"],["impl&lt;M&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/deref/trait.Deref.html\" title=\"trait core::ops::deref::Deref\">Deref</a> for <a class=\"struct\" href=\"axfs_ng_vfs/struct.DirNode.html\" title=\"struct axfs_ng_vfs::DirNode\">DirNode</a>&lt;M&gt;"],["impl&lt;M&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/deref/trait.Deref.html\" title=\"trait core::ops::deref::Deref\">Deref</a> for <a class=\"struct\" href=\"axfs_ng_vfs/struct.FileNode.html\" title=\"struct axfs_ng_vfs::FileNode\">FileNode</a>&lt;M&gt;"]]],["starry_api",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/deref/trait.Deref.html\" title=\"trait core::ops::deref::Deref\">Deref</a> for <a class=\"struct\" href=\"starry_api/backend/fs/struct.FD_TABLE.html\" title=\"struct starry_api::backend::fs::FD_TABLE\">FD_TABLE</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/deref/trait.Deref.html\" title=\"trait core::ops::deref::Deref\">Deref</a> for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.IPC_MANAGER.html\" title=\"struct starry_api::backend::ipc::IPC_MANAGER\">IPC_MANAGER</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[871,614]}

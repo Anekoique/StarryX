@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["axfs_ng_vfs",[["impl Flags for <a class=\"struct\" href=\"axfs_ng_vfs/struct.NodePermission.html\" title=\"struct axfs_ng_vfs::NodePermission\">NodePermission</a>"]]],["axsignal",[["impl Flags for <a class=\"struct\" href=\"axsignal/struct.SignalActionFlags.html\" title=\"struct axsignal::SignalActionFlags\">SignalActionFlags</a>"]]],["starry_api",[["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.MsgGetFlags.html\" title=\"struct starry_api::backend::ipc::MsgGetFlags\">MsgGetFlags</a>"],["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.MsgRcvFlags.html\" title=\"struct starry_api::backend::ipc::MsgRcvFlags\">MsgRcvFlags</a>"],["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.MsgSndFlags.html\" title=\"struct starry_api::backend::ipc::MsgSndFlags\">MsgSndFlags</a>"],["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.SemGetFlags.html\" title=\"struct starry_api::backend::ipc::SemGetFlags\">SemGetFlags</a>"],["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.SemOpFlags.html\" title=\"struct starry_api::backend::ipc::SemOpFlags\">SemOpFlags</a>"],["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.ShmAtFlags.html\" title=\"struct starry_api::backend::ipc::ShmAtFlags\">ShmAtFlags</a>"],["impl Flags for <a class=\"struct\" href=\"starry_api/backend/ipc/struct.ShmGetFlags.html\" title=\"struct starry_api::backend::ipc::ShmGetFlags\">ShmGetFlags</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[168,169,1173]}
