@@ -540,7 +540,7 @@ impl AxRunQueue {
         next_task.set_preempt_pending(false);
         next_task.set_state(TaskState::Running);
 
-        if !matches!(prev_task.name(), "main" | "gc" | "idle") {
+        if !matches!(prev_task.name(), "main" | "gc" | "idle" | "migration-task") {
             crate_interface::call_interface!(AxTaskExtIf::switch_to_task);
         }
 
@@ -579,7 +579,10 @@ impl AxRunQueue {
         }
 
         let current_task = crate::current();
-        if !matches!(current_task.name(), "main" | "gc" | "idle") {
+        if !matches!(
+            current_task.name(),
+            "main" | "gc" | "idle" | "migration-task"
+        ) {
             crate_interface::call_interface!(AxTaskExtIf::switch_from_task);
         }
     }

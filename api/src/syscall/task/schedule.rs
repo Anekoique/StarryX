@@ -19,7 +19,7 @@ pub fn sys_sched_setaffinity(
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
     with_task(pid.into(), |task| {
-        let len = axconfig::SMP.min(cpuset_size);
+        let len = cpuset_size.min(axconfig::SMP.div_ceil(8));
         let mask_slice = mask.get_as_mut_slice(len)?;
         let mut cpu_mask = AxCpuMask::new();
 
@@ -43,9 +43,19 @@ pub fn sys_sched_getaffinity(
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
     with_task(pid.into(), |task| {
-        let len = axconfig::SMP.min(cpuset_size);
-        mask.get_as_mut_slice(len)?
-            .copy_from_slice(task.cpumask().as_bytes());
+        let len = cpuset_size.min(axconfig::SMP.div_ceil(8));
+        let mask_slice = mask.get_as_mut_slice(len)?;
+        let cpumask = task.cpumask();
+        let cpumask_bytes = cpumask.as_bytes();
+
+        for i in 0..len {
+            if i < cpumask_bytes.len() {
+                mask_slice[i] = cpumask_bytes[i];
+            } else {
+                mask_slice[i] = 0;
+            }
+        }
+        debug!("sys_sched_getaffinity <= {:?}", mask_slice);
         Ok(len as isize)
     })
     .ok_or(LinuxError::ESRCH)?

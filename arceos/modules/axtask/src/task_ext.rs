@@ -92,7 +92,7 @@ impl AxTaskExt {
         }
         if data_size > 0 {
             let ptr = self.ptr as *mut T;
-            assert!(!ptr.is_null());
+            assert!(!ptr.is_null(), "write task ext failed");
             unsafe {
                 ptr.write(data);
                 Some(&mut *ptr)
@@ -182,7 +182,7 @@ macro_rules! def_task_ext {
             fn task_ext(&self) -> &$task_ext_struct {
                 unsafe {
                     let ptr = self.task_ext_ptr() as *const $task_ext_struct;
-                    assert!(!ptr.is_null());
+                    assert!(!ptr.is_null(), "task ext ptr is null");
                     &*ptr
                 }
             }
@@ -192,7 +192,7 @@ macro_rules! def_task_ext {
             fn task_ext_mut(&mut self) -> &mut $task_ext_struct {
                 unsafe {
                     let ptr = self.task_ext_ptr() as *mut $task_ext_struct;
-                    assert!(!ptr.is_null());
+                    assert!(!ptr.is_null(), "task ext ptr(mut) is null");
                     &mut *ptr
                 }
             }

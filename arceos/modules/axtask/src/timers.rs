@@ -60,7 +60,10 @@ pub fn check_events() {
     }
 
     let current_task = crate::current();
-    if !matches!(current_task.name(), "main" | "gc" | "idle") {
+    if !matches!(
+        current_task.name(),
+        "main" | "gc" | "idle" | "migration-task"
+    ) {
         crate_interface::call_interface!(AxTaskExtIf::switch_from_task);
     }
 }
