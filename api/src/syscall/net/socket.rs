@@ -250,3 +250,84 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
     debug!("sys_socketpair => fds: [{}, {}]", fd1, fd2);
     Ok(0)
 }
+
+pub fn sys_getsockopt(
+    fd: i32,
+    level: i32,
+    optname: i32,
+    optval: UserPtr<u8>,
+    optlen: UserPtr<socklen_t>,
+) -> LinuxResult<isize> {
+    debug!("sys_getsockopt <= fd: {}, level: {}, optname: {}", fd, level, optname);
+    
+    // 验证套接字存在
+    let _socket = Socket::from_fd(fd)?;
+    let optlen_val = *optlen.get_as_mut()?;
+    
+    // 基本实现：对于大多数选项返回默认值
+    match (level, optname) {
+        // SOL_SOCKET level options
+        (1, 4) => {
+            // SO_ERROR - 返回 0 表示没有错误
+            if optlen_val >= 4 {
+                let optval_slice = optval.get_as_mut_slice(4)?;
+                optval_slice[0..4].copy_from_slice(&0i32.to_ne_bytes());
+                *optlen.get_as_mut()? = 4;
+            }
+        }
+        (1, 13) => {
+            // SO_TYPE - 返回套接字类型
+            if optlen_val >= 4 {
+                let optval_slice = optval.get_as_mut_slice(4)?;
+                optval_slice[0..4].copy_from_slice(&1i32.to_ne_bytes()); // SOCK_STREAM
+                *optlen.get_as_mut()? = 4;
+            }
+        }
+        // TCP level options
+        (6, 1) => {
+            // TCP_NODELAY - 返回默认值 1 (启用)
+            if optlen_val >= 4 {
+                let optval_slice = optval.get_as_mut_slice(4)?;
+                optval_slice[0..4].copy_from_slice(&1i32.to_ne_bytes());
+                *optlen.get_as_mut()? = 4;
+            }
+        }
+        (6, 2) => {
+            // TCP_MAXSEG - 返回合理的 MSS 值
+            // 标准以太网 MTU (1500) - IP头部 (20) - TCP头部 (20) = 1460
+            if optlen_val >= 4 {
+                let optval_slice = optval.get_as_mut_slice(4)?;
+                optval_slice[0..4].copy_from_slice(&1460i32.to_ne_bytes());
+                *optlen.get_as_mut()? = 4;
+            }
+        }
+        _ => {
+            // 对于未知选项，返回默认值 0
+            if optlen_val >= 4 {
+                let optval_slice = optval.get_as_mut_slice(4)?;
+                optval_slice[0..4].copy_from_slice(&0i32.to_ne_bytes());
+                *optlen.get_as_mut()? = 4;
+            }
+        }
+    }
+    
+    Ok(0)
+}
+
+pub fn sys_setsockopt(
+    fd: i32,
+    level: i32,
+    optname: i32,
+    _optval: UserConstPtr<u8>,
+    _optlen: socklen_t,
+) -> LinuxResult<isize> {
+    debug!("sys_setsockopt <= fd: {}, level: {}, optname: {}, optlen: {}", fd, level, optname, _optlen);
+    
+    // 验证套接字存在
+    let _socket = Socket::from_fd(fd)?;
+    
+    // 基本实现：接受但忽略大多数设置
+    // 这对于 iperf3 的基本功能来说通常是可以接受的
+    
+    Ok(0)
+}

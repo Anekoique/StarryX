@@ -7,6 +7,8 @@ use crate::{
     time::*,
 };
 
+const CLOCK_PROCESS_CPUTIME_ID: u32 = 2;
+
 pub fn sys_clock_gettime(
     clock_id: __kernel_clockid_t,
     ts: UserPtr<timespec>,
@@ -14,6 +16,11 @@ pub fn sys_clock_gettime(
     let now = match clock_id as u32 {
         CLOCK_REALTIME => wall_time(),
         CLOCK_MONOTONIC => monotonic_time(),
+        CLOCK_PROCESS_CPUTIME_ID => {
+            // 进程 CPU 时间 - 对于基本实现，我们使用单调时间
+            // 在完整实现中，这应该是进程的累计 CPU 使用时间
+            monotonic_time()
+        }
         _ => {
             warn!(
                 "Called sys_clock_gettime for unsupported clock {}",
