@@ -88,3 +88,6 @@ echo "#### OS COMP TEST GROUP END lmbench-musl ####"
 # echo "#### OS COMP TEST GROUP START lmbench-glibc ####"
 # ./unixbench_testcode.sh
 # echo "#### OS COMP TEST GROUP END lmbench-glibc ####"
+# echo "#### OS COMP TEST GROUP START cyclictest-glibc ####"
+# ./cyclictest_testcode.sh
+# echo "#### OS COMP TEST GROUP END cyclictest-glibc ####"

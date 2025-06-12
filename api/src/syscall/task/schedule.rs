@@ -3,7 +3,7 @@ use axprocess::Pid;
 use axtask::{AxCpuMask, set_affinity, with_task};
 
 use crate::{
-    ctypes::timespec,
+    ctypes::{SCHED_FIFO, timespec},
     ptr::{UserConstPtr, UserPtr, nullable},
     utils::time::TimeValueLike,
 };
@@ -55,20 +55,35 @@ pub fn sys_sched_getaffinity(
                 mask_slice[i] = 0;
             }
         }
-        debug!("sys_sched_getaffinity <= {:?}", mask_slice);
         Ok(len as isize)
     })
     .ok_or(LinuxError::ESRCH)?
 }
 
-pub fn sys_sched_setscheduler(_pid: Pid, _sched: usize, _param_size: usize) -> LinuxResult<isize> {
-    warn!("sys_sched_setscheduler not implemented");
+pub fn sys_sched_getparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> {
+    warn!("sys_sched_getparam not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_setparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> {
+    warn!("sys_sched_setparam not implemented");
+    Ok(0)
+}
+
+pub fn sys_sched_setscheduler(
+    _pid: Pid,
+    policy: usize,
+    _param: UserPtr<u8>,
+) -> LinuxResult<isize> {
+    if policy as u32 != SCHED_FIFO {
+        error!("Not supported policy: {}", policy);
+        return Err(LinuxError::EINVAL);
+    }
     Ok(0)
 }
 
 pub fn sys_sched_getscheduler(_pid: Pid) -> LinuxResult<isize> {
-    warn!("sys_sched_getscheduler not implemented");
-    Ok(0)
+    Ok(SCHED_FIFO as isize)
 }
 
 pub fn sys_sched_getscheduler_max(

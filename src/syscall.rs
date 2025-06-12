@@ -280,8 +280,12 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::sched_getaffinity => {
             sys_sched_getaffinity(tf.arg0() as _, tf.arg1() as _, tf.arg2().into())
         }
-        // Sysno::sched_setscheduler => sys_sched_setscheduler(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
-        // Sysno::sched_getscheduler => sys_sched_getscheduler(tf.arg0() as _, tf.arg1() as _),
+        Sysno::sched_getparam => sys_sched_getparam(tf.arg0() as _, tf.arg1().into()),
+        Sysno::sched_setparam => sys_sched_setparam(tf.arg0() as _, tf.arg1().into()),
+        Sysno::sched_setscheduler => {
+            sys_sched_setscheduler(tf.arg0() as _, tf.arg1() as _, tf.arg2().into())
+        }
+        Sysno::sched_getscheduler => sys_sched_getscheduler(tf.arg0() as _),
         // #[cfg(target_arch = "x86_64")]
         // Sysno::sched_get_priority_max => sys_sched_getscheduler_max(tf.arg0() as _, tf.arg1() as _),
         // #[cfg(target_arch = "x86_64")]
