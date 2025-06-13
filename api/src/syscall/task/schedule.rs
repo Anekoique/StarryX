@@ -133,3 +133,13 @@ pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> Lin
         Ok(0)
     }
 }
+
+pub fn sys_clock_nanosleep(
+    clock_id: usize,
+    flags: usize,
+    req: UserConstPtr<timespec>,
+    rem: UserPtr<timespec>,
+) -> LinuxResult<isize> {
+    warn!("sys_clock_nanosleep not implemented");
+    Ok(0)
+}
