@@ -6,15 +6,15 @@ use starry_core::task::{
 use crate::{
     ctypes::{
         __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, ITIMER_PROF, ITIMER_REAL,
-        ITIMER_VIRTUAL, itimerval, timespec, timeval,
+        ITIMER_VIRTUAL, itimerval, sigevent, timespec, timeval,
     },
-    ptr::{UserPtr, nullable},
+    ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValueLike, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
 
 pub fn sys_clock_gettime(
     clock_id: __kernel_clockid_t,
-    ts: UserPtr<timespec>,
+    tp: UserPtr<timespec>,
 ) -> LinuxResult<isize> {
     let now = match clock_id as u32 {
         CLOCK_REALTIME => wall_time(),
@@ -27,8 +27,31 @@ pub fn sys_clock_gettime(
             return Err(LinuxError::EINVAL);
         }
     };
-    *ts.get_as_mut()? = timespec::from_time_value(now);
-    debug!("sys_clock_gettime: {:?}", ts.get_as_mut()?);
+    *tp.get_as_mut()? = timespec::from_time_value(now);
+    debug!("sys_clock_gettime: {:?}", tp.get_as_mut()?);
+    Ok(0)
+}
+
+pub fn sys_clock_settime(
+    clock_id: __kernel_clockid_t,
+    tp: UserConstPtr<timespec>,
+) -> LinuxResult<isize> {
+    warn!("sys_clock_settime not implemented");
+    Ok(0)
+}
+
+pub fn sys_clock_getres(
+    clock_id: __kernel_clockid_t,
+    res: UserPtr<timespec>,
+) -> LinuxResult<isize> {
+    if clock_id as u32 != CLOCK_MONOTONIC && clock_id as u32 != CLOCK_REALTIME {
+        warn!(
+            "Called sys_clock_gettime for unsupported clock {}",
+            clock_id
+        );
+        return Err(LinuxError::EINVAL);
+    };
+    *res.get_as_mut()? = timespec::from_nanos(1);
     Ok(0)
 }
 
@@ -123,4 +146,13 @@ pub fn sys_setitimer(
     } else {
         Err(LinuxError::EFAULT)
     }
+}
+
+pub fn sys_timer_create(
+    clock_id: __kernel_clockid_t,
+    sigev: UserPtr<sigevent>,
+    timer_id: UserPtr<u8>,
+) -> LinuxResult<isize> {
+    warn!("sys_timer_create not implemented");
+    Ok(0)
 }

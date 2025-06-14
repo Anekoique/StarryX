@@ -291,7 +291,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         // #[cfg(target_arch = "x86_64")]
         // Sysno::sched_get_priority_min => sys_sched_getscheduler_min(tf.arg0() as _, tf.arg1() as _),
         Sysno::nanosleep => sys_nanosleep(tf.arg0().into(), tf.arg1().into()),
-        // Sysno::clock_nanosleep => sys_clock_nanosleep(tf.arg0().into(), tf.arg1() as _, tf.arg2().into()),
+        Sysno::clock_nanosleep => sys_clock_nanosleep(tf.arg0() as _, tf.arg1() as _, tf.arg2().into(), tf.arg3().into()),
 
         // task ops
         Sysno::execve => sys_execve(tf, tf.arg0().into(), tf.arg1().into(), tf.arg2().into()),
@@ -388,7 +388,14 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::getitimer => sys_getitimer(tf.arg0() as _, tf.arg1().into()),
         Sysno::setitimer => sys_setitimer(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::times => sys_times(tf.arg0().into()),
+        Sysno::timer_create => sys_timer_create(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
+        // Sysno::timer_gettime => sys_timer_gettime(tf.arg0() as _, tf.arg1().into()),
+        // Sysno::timer_settime => sys_timer_settime(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
+        // Sysno::timer_getoverrun => sys_timer_getoverrun(tf.arg0() as _),
+        // Sysno::timer_delete => sys_timer_delete(tf.arg0() as _),
         Sysno::clock_gettime => sys_clock_gettime(tf.arg0() as _, tf.arg1().into()),
+        Sysno::clock_settime => sys_clock_settime(tf.arg0() as _, tf.arg1().into()),
+        Sysno::clock_getres => sys_clock_getres(tf.arg0() as _, tf.arg1().into()),
 
         // shm
         Sysno::shmget => sys_shmget(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),

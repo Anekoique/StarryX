@@ -3,7 +3,7 @@ use axprocess::Pid;
 use axtask::{AxCpuMask, set_affinity, with_task};
 
 use crate::{
-    ctypes::{SCHED_FIFO, timespec},
+    ctypes::{SCHED_FIFO, CLOCK_MONOTONIC, CLOCK_REALTIME, timespec},
     ptr::{UserConstPtr, UserPtr, nullable},
     utils::time::TimeValueLike,
 };
@@ -140,6 +140,14 @@ pub fn sys_clock_nanosleep(
     req: UserConstPtr<timespec>,
     rem: UserPtr<timespec>,
 ) -> LinuxResult<isize> {
-    warn!("sys_clock_nanosleep not implemented");
-    Ok(0)
+    if clock_id as u32 != CLOCK_MONOTONIC && clock_id as u32 != CLOCK_REALTIME {
+        warn!("sys_clock_nanosleep: invalid clock_id {}", clock_id);
+        return Err(LinuxError::EINVAL);
+    }
+
+    if flags != 0 {
+        warn!("sys_clock_nanosleep: invalid flags {}", flags);
+    }
+
+    sys_nanosleep(req, rem)
 }
