@@ -519,9 +519,14 @@ impl AxRunQueue {
             next.id_name(),
             next.state()
         );
-        self.switch_to(crate::current(), next.clone());
-        #[cfg(feature = "smp")]
-        migrate_current(next);
+
+        if next.cpumask().get(axhal::cpu::this_cpu_id()) {
+            self.switch_to(crate::current(), next);
+        } else {
+            self.switch_to(crate::current(), next.clone());
+            #[cfg(feature = "smp")]
+            migrate_current(next);
+        }
     }
 
     fn switch_to(&mut self, prev_task: CurrentTask, next_task: AxTaskRef) {
