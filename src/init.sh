@@ -31,7 +31,7 @@ ln -v -s /lib /lib64
 ln -v -s /lib /usr/lib
 ln -v -s /lib /usr/lib64
 
-export LD_LIBRARY_PATH=.
+export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 # echo @@@@@@@@@@ files @@@@@@@@@@
 # ls -lhAR /
