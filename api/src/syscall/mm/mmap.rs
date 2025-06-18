@@ -1,3 +1,4 @@
+use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::MappingFlags;
 use axtask::{TaskExtRef, current};
@@ -130,13 +131,37 @@ pub fn sys_mmap(
             .ok_or(LinuxError::ENOMEM)?
     };
 
+    let mut populate = map_flags.contains(MmapFlags::POPULATE);
+    // FIXME: Force populate for the application's TEXT segment to prove
+    // that lazy allocation is not the source of the error.
+    if fd != -1
+        && (permission_flags.contains(MmapProt::EXEC) || length == 0xa000 || length == 0xb000)
+    {
+        warn!("Forcing POPULATE=true for application TEXT segment");
+        populate = true;
+    }
+
     aspace.map_alloc(
         start_addr,
         aligned_length,
         permission_flags.into(),
-        map_flags.contains(MmapFlags::POPULATE),
+        populate,
         map_flags.contains(MmapFlags::SHARED),
     )?;
+
+    if populate {
+        let file = File::from_fd(fd)?;
+        let mut file = file.inner();
+        let file_size = file.inner().len()? as usize;
+        if offset < 0 || offset as usize >= file_size {
+            return Err(LinuxError::EINVAL);
+        }
+        let offset = offset as usize;
+        let len = core::cmp::min(length, file_size - offset);
+        let mut buf = vec![0u8; len];
+        file.read_at(&mut buf, offset as u64)?;
+        aspace.write(start_addr, &buf)?;
+    }
 
     // Create and add VMA mapping region
     let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);

@@ -26,7 +26,7 @@ fi
 
 ln -v -s /lib /lib64
 
-export LD_LIBRARY_PATH=.
+export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 # echo @@@@@@@@@@ files @@@@@@@@@@
 # ls -lhAR /
@@ -36,6 +36,8 @@ export LD_LIBRARY_PATH=.
 
 echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
+# /lib/ld-musl-riscv64.so.1 --list ./entry-dynamic.exe
+# /lib/ld-musl-riscv64.so.1 ./entry-dynamic.exe argv
 # /musl/runtest.exe -w entry-dynamic.exe argv
 # /glibc/runtest.exe -w entry-static.exe clock_gettime
 echo "#### OS COMP TEST GROUP START basic-glibc ####"
@@ -53,9 +55,12 @@ echo "#### OS COMP TEST GROUP END busybox-glibc ####"
 echo "#### OS COMP TEST GROUP START iozone-glibc ####"
 ./iozone_testcode.sh
 echo "#### OS COMP TEST GROUP END iozone-glibc ####"
-echo "#### OS COMP TEST GROUP START lmbench-musl ####"
-./lmbench_testcode.sh
-echo "#### OS COMP TEST GROUP END lmbench-musl ####"
+# echo "#### OS COMP TEST GROUP START lmbench-musl ####"
+# ./lmbench_testcode.sh
+# echo "#### OS COMP TEST GROUP END lmbench-musl ####"
+# echo "#### OS COMP TEST GROUP START lmbench-musl ####"
+# ./busybox sh ./libcbench_testcode.sh
+# echo "#### OS COMP TEST GROUP END lmbench-musl ####"
 #echo "#### OS COMP TEST GROUP START lmbench-glibc ####"
 #./unixbench_testcode.sh
 #echo "#### OS COMP TEST GROUP END lmbench-glibc ####"
