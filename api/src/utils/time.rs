@@ -8,6 +8,18 @@ pub use crate::ctypes::{
     timespec, timeval,
 };
 
+#[repr(C)]
+pub struct Tms {
+    /// Process user mode execution time in microseconds
+    pub tms_utime: usize,
+    /// Process kernel mode execution time in microseconds
+    pub tms_stime: usize,
+    /// Sum of child processes' user mode execution time in microseconds
+    pub tms_cutime: usize,
+    /// Sum of child processes' kernel mode execution time in microseconds
+    pub tms_cstime: usize,
+}
+
 pub trait TimeValueLike {
     fn from_time_value(tv: TimeValue) -> Self;
 
@@ -18,6 +30,69 @@ pub trait TimeValueLike {
     fn to_nanos(self) -> u64;
 }
 
+/// Macro to implement TimeValueLike for types with tv_sec and tv_nsec fields (nanosecond precision)
+macro_rules! impl_timevaluelike_for_timespec {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl TimeValueLike for $type {
+                fn from_time_value(tv: TimeValue) -> Self {
+                    Self {
+                        tv_sec: tv.as_secs() as _,
+                        tv_nsec: tv.subsec_nanos() as _,
+                    }
+                }
+
+                fn to_time_value(self) -> TimeValue {
+                    TimeValue::new(self.tv_sec as u64, self.tv_nsec as u32)
+                }
+
+                fn from_nanos(nanos: u64) -> Self {
+                    Self {
+                        tv_sec: (nanos / NANOS_PER_SEC) as _,
+                        tv_nsec: (nanos % NANOS_PER_SEC) as _,
+                    }
+                }
+
+                fn to_nanos(self) -> u64 {
+                    (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_nsec as u64)
+                }
+            }
+        )+
+    };
+}
+
+/// Macro to implement TimeValueLike for types with tv_sec and tv_usec fields (microsecond precision)
+macro_rules! impl_timevaluelike_for_timeval {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl TimeValueLike for $type {
+                fn from_time_value(tv: TimeValue) -> Self {
+                    Self {
+                        tv_sec: tv.as_secs() as _,
+                        tv_usec: tv.subsec_micros() as _,
+                    }
+                }
+
+                fn to_time_value(self) -> TimeValue {
+                    TimeValue::new(self.tv_sec as u64, self.tv_usec as u32 * 1000)
+                }
+
+                fn from_nanos(nanos: u64) -> Self {
+                    Self {
+                        tv_sec: (nanos / NANOS_PER_SEC) as _,
+                        tv_usec: ((nanos % NANOS_PER_SEC) / NANOS_PER_MICROS) as _,
+                    }
+                }
+
+                fn to_nanos(self) -> u64 {
+                    (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_usec as u64) * NANOS_PER_MICROS
+                }
+            }
+        )+
+    };
+}
+
+// Special implementation for TimeValue (no conversion needed)
 impl TimeValueLike for TimeValue {
     fn from_time_value(tv: TimeValue) -> Self {
         tv
@@ -36,146 +111,16 @@ impl TimeValueLike for TimeValue {
     }
 }
 
-impl TimeValueLike for timespec {
-    fn from_time_value(tv: TimeValue) -> Self {
-        Self {
-            tv_sec: tv.as_secs() as _,
-            tv_nsec: tv.subsec_nanos() as _,
-        }
-    }
-
-    fn to_time_value(self) -> TimeValue {
-        TimeValue::new(self.tv_sec as u64, self.tv_nsec as u32)
-    }
-
-    fn from_nanos(nanos: u64) -> Self {
-        Self {
-            tv_sec: (nanos / NANOS_PER_SEC) as _,
-            tv_nsec: (nanos % NANOS_PER_SEC) as _,
-        }
-    }
-
-    fn to_nanos(self) -> u64 {
-        (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_nsec as u64)
-    }
+// Use macros to implement TimeValueLike for all timespec-like types
+impl_timevaluelike_for_timespec! {
+    timespec,
+    __kernel_timespec,
+    __kernel_old_timespec,
 }
 
-impl TimeValueLike for __kernel_timespec {
-    fn from_time_value(tv: TimeValue) -> Self {
-        Self {
-            tv_sec: tv.as_secs() as _,
-            tv_nsec: tv.subsec_nanos() as _,
-        }
-    }
-
-    fn to_time_value(self) -> TimeValue {
-        TimeValue::new(self.tv_sec as u64, self.tv_nsec as u32)
-    }
-
-    fn from_nanos(nanos: u64) -> Self {
-        Self {
-            tv_sec: (nanos / NANOS_PER_SEC) as _,
-            tv_nsec: (nanos % NANOS_PER_SEC) as _,
-        }
-    }
-
-    fn to_nanos(self) -> u64 {
-        (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_nsec as u64)
-    }
-}
-
-impl TimeValueLike for __kernel_old_timespec {
-    fn from_time_value(tv: TimeValue) -> Self {
-        Self {
-            tv_sec: tv.as_secs() as _,
-            tv_nsec: tv.subsec_nanos() as _,
-        }
-    }
-
-    fn to_time_value(self) -> TimeValue {
-        TimeValue::new(self.tv_sec as u64, self.tv_nsec as u32)
-    }
-
-    fn from_nanos(nanos: u64) -> Self {
-        Self {
-            tv_sec: (nanos / NANOS_PER_SEC) as _,
-            tv_nsec: (nanos % NANOS_PER_SEC) as _,
-        }
-    }
-
-    fn to_nanos(self) -> u64 {
-        (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_nsec as u64)
-    }
-}
-
-impl TimeValueLike for timeval {
-    fn from_time_value(tv: TimeValue) -> Self {
-        Self {
-            tv_sec: tv.as_secs() as _,
-            tv_usec: tv.subsec_micros() as _,
-        }
-    }
-
-    fn to_time_value(self) -> TimeValue {
-        TimeValue::new(self.tv_sec as u64, self.tv_usec as u32 * 1000)
-    }
-
-    fn from_nanos(nanos: u64) -> Self {
-        Self {
-            tv_sec: (nanos / NANOS_PER_SEC) as _,
-            tv_usec: ((nanos % NANOS_PER_SEC) / NANOS_PER_MICROS) as _,
-        }
-    }
-
-    fn to_nanos(self) -> u64 {
-        (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_usec as u64) * NANOS_PER_MICROS
-    }
-}
-
-impl TimeValueLike for __kernel_old_timeval {
-    fn from_time_value(tv: TimeValue) -> Self {
-        Self {
-            tv_sec: tv.as_secs() as _,
-            tv_usec: tv.subsec_micros() as _,
-        }
-    }
-
-    fn to_time_value(self) -> TimeValue {
-        TimeValue::new(self.tv_sec as u64, self.tv_usec as u32 * 1000)
-    }
-
-    fn from_nanos(nanos: u64) -> Self {
-        Self {
-            tv_sec: (nanos / NANOS_PER_SEC) as _,
-            tv_usec: ((nanos % NANOS_PER_SEC) / NANOS_PER_MICROS) as _,
-        }
-    }
-
-    fn to_nanos(self) -> u64 {
-        (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_usec as u64) * NANOS_PER_MICROS
-    }
-}
-
-impl TimeValueLike for __kernel_sock_timeval {
-    fn from_time_value(tv: TimeValue) -> Self {
-        Self {
-            tv_sec: tv.as_secs() as _,
-            tv_usec: tv.subsec_micros() as _,
-        }
-    }
-
-    fn to_time_value(self) -> TimeValue {
-        TimeValue::new(self.tv_sec as u64, self.tv_usec as u32 * 1000)
-    }
-
-    fn from_nanos(nanos: u64) -> Self {
-        Self {
-            tv_sec: (nanos / NANOS_PER_SEC) as _,
-            tv_usec: ((nanos % NANOS_PER_SEC) / NANOS_PER_MICROS) as _,
-        }
-    }
-
-    fn to_nanos(self) -> u64 {
-        (self.tv_sec as u64) * NANOS_PER_SEC + (self.tv_usec as u64) * NANOS_PER_MICROS
-    }
+// Use macros to implement TimeValueLike for all timeval-like types
+impl_timevaluelike_for_timeval! {
+    timeval,
+    __kernel_old_timeval,
+    __kernel_sock_timeval,
 }

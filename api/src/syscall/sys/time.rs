@@ -9,7 +9,7 @@ use crate::{
         ITIMER_VIRTUAL, itimerval, sigevent, timespec, timeval,
     },
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValueLike, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
+    time::{TimeValueLike, Tms, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
 
 pub fn sys_clock_gettime(
@@ -33,8 +33,8 @@ pub fn sys_clock_gettime(
 }
 
 pub fn sys_clock_settime(
-    clock_id: __kernel_clockid_t,
-    tp: UserConstPtr<timespec>,
+    _clock_id: __kernel_clockid_t,
+    _tp: UserConstPtr<timespec>,
 ) -> LinuxResult<isize> {
     warn!("sys_clock_settime not implemented");
     Ok(0)
@@ -58,18 +58,6 @@ pub fn sys_clock_getres(
 pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
     *ts.get_as_mut()? = timeval::from_time_value(wall_time());
     Ok(0)
-}
-
-#[repr(C)]
-pub struct Tms {
-    /// Process user mode execution time in microseconds
-    tms_utime: usize,
-    /// Process kernel mode execution time in microseconds
-    tms_stime: usize,
-    /// Sum of child processes' user mode execution time in microseconds
-    tms_cutime: usize,
-    /// Sum of child processes' kernel mode execution time in microseconds
-    tms_cstime: usize,
 }
 
 pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
@@ -149,9 +137,9 @@ pub fn sys_setitimer(
 }
 
 pub fn sys_timer_create(
-    clock_id: __kernel_clockid_t,
-    sigev: UserPtr<sigevent>,
-    timer_id: UserPtr<u8>,
+    _clock_id: __kernel_clockid_t,
+    _sigev: UserPtr<sigevent>,
+    _timer_id: UserPtr<u8>,
 ) -> LinuxResult<isize> {
     warn!("sys_timer_create not implemented");
     Ok(0)

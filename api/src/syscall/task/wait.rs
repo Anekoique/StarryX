@@ -2,38 +2,12 @@ use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::{Pid, Process};
 use axtask::{TaskExtRef, current};
-use bitflags::bitflags;
 use starry_core::task::ProcessData;
 
 use crate::{
-    ctypes::{__WALL, __WCLONE, __WNOTHREAD, WCONTINUED, WEXITED, WNOHANG, WNOWAIT, WUNTRACED},
     ptr::{UserPtr, nullable},
+    task::WaitOptions,
 };
-
-bitflags! {
-    #[derive(Debug)]
-    struct WaitOptions: u32 {
-        /// Do not block when there are no processes wishing to report status.
-        const WNOHANG = WNOHANG;
-        /// Report the status of selected processes which are stopped due to a
-        /// `SIGTTIN`, `SIGTTOU`, `SIGTSTP`, or `SIGSTOP` signal.
-        const WUNTRACED = WUNTRACED;
-        /// Report the status of selected processes which have terminated.
-        const WEXITED = WEXITED;
-        /// Report the status of selected processes that have continued from a
-        /// job control stop by receiving a `SIGCONT` signal.
-        const WCONTINUED = WCONTINUED;
-        /// Don't reap, just poll status.
-        const WNOWAIT = WNOWAIT;
-
-        /// Don't wait on children of other threads in this group
-        const WNOTHREAD = __WNOTHREAD;
-        /// Wait on all children, regardless of type
-        const WALL = __WALL;
-        /// Wait for "clone" children only.
-        const WCLONE = __WCLONE;
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 enum WaitPid {

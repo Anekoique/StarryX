@@ -291,7 +291,12 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         // #[cfg(target_arch = "x86_64")]
         // Sysno::sched_get_priority_min => sys_sched_getscheduler_min(tf.arg0() as _, tf.arg1() as _),
         Sysno::nanosleep => sys_nanosleep(tf.arg0().into(), tf.arg1().into()),
-        Sysno::clock_nanosleep => sys_clock_nanosleep(tf.arg0() as _, tf.arg1() as _, tf.arg2().into(), tf.arg3().into()),
+        Sysno::clock_nanosleep => sys_clock_nanosleep(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2().into(),
+            tf.arg3().into(),
+        ),
 
         // task ops
         Sysno::execve => sys_execve(tf, tf.arg0().into(), tf.arg1().into(), tf.arg2().into()),

@@ -3,7 +3,7 @@ use axprocess::Pid;
 use axtask::{AxCpuMask, set_affinity, with_task};
 
 use crate::{
-    ctypes::{SCHED_FIFO, CLOCK_MONOTONIC, CLOCK_REALTIME, timespec},
+    ctypes::{CLOCK_MONOTONIC, CLOCK_REALTIME, SCHED_FIFO, timespec},
     ptr::{UserConstPtr, UserPtr, nullable},
     utils::time::TimeValueLike,
 };
@@ -70,11 +70,7 @@ pub fn sys_sched_setparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> 
     Ok(0)
 }
 
-pub fn sys_sched_setscheduler(
-    _pid: Pid,
-    policy: usize,
-    _param: UserPtr<u8>,
-) -> LinuxResult<isize> {
+pub fn sys_sched_setscheduler(_pid: Pid, policy: usize, _param: UserPtr<u8>) -> LinuxResult<isize> {
     if policy as u32 != SCHED_FIFO {
         error!("Not supported policy: {}", policy);
         return Err(LinuxError::EINVAL);

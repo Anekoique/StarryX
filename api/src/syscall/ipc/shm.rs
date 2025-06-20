@@ -16,19 +16,6 @@ use crate::{
     time::monotonic_time_nanos,
 };
 
-// pub fn sys_shmget(key: i32, size: usize, shmflg: i32) -> LinuxResult<isize> {
-//     match key {
-//         IPC_PRIVATE => {
-//             let shm_id = shm_get_new();
-//             shm_id
-//         }
-//         _ => {
-//             let shm_id = shm_get_new();
-//         }
-//     }
-//     Ok(0)
-// }
-
 // called when a process exit, detach all the shmem related
 pub fn clear_proc_shm(pid: Pid) {
     let ipc_manager = IPC_MANAGER.lock();

@@ -6,76 +6,12 @@ use axprocess::Pid;
 use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
-use bitflags::bitflags;
 use starry_core::{
     mm::copy_from_kernel,
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
 
-use crate::{ctypes::*, fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr};
-
-bitflags! {
-    /// Options for use with [`sys_clone`].
-    #[derive(Debug, Clone, Copy, Default)]
-    struct CloneFlags: u32 {
-        /// The calling process and the child process run in the same
-        /// memory space.
-        const VM = CLONE_VM;
-        /// The caller and the child process share the same  filesystem
-        /// information.
-        const FS = CLONE_FS;
-        /// The calling process and the child process share the same file
-        /// descriptor table.
-        const FILES = CLONE_FILES;
-        /// The calling process and the child process share the same table
-        /// of signal handlers.
-        const SIGHAND = CLONE_SIGHAND;
-        /// If the calling process is being traced, then trace the child
-        /// also.
-        const PTRACE = CLONE_PTRACE;
-        /// The execution of the calling process is suspended until the
-        /// child releases its virtual memory resources via a call to
-        /// execve(2) or _exit(2) (as with vfork(2)).
-        const VFORK = CLONE_VFORK;
-        /// The parent of the new child  (as returned by getppid(2))
-        /// will be the same as that of the calling process.
-        const PARENT = CLONE_PARENT;
-        /// The child is placed in the same thread group as the calling
-        /// process.
-        const THREAD = CLONE_THREAD;
-        /// The cloned child is started in a new mount namespace.
-        const NEWNS = CLONE_NEWNS;
-        /// The child and the calling process share a single list of System
-        /// V semaphore adjustment values
-        const SYSVSEM = CLONE_SYSVSEM;
-        /// The TLS (Thread Local Storage) descriptor is set to tls.
-        const SETTLS = CLONE_SETTLS;
-        /// Store the child thread ID in the parent's memory.
-        const PARENT_SETTID = CLONE_PARENT_SETTID;
-        /// Clear (zero) the child thread ID in child memory when the child
-        /// exits, and do a wakeup on the futex at that address.
-        const CHILD_CLEARTID = CLONE_CHILD_CLEARTID;
-        /// A tracing process cannot force `CLONE_PTRACE` on this child
-        /// process.
-        const UNTRACED = CLONE_UNTRACED;
-        /// Store the child thread ID in the child's memory.
-        const CHILD_SETTID = CLONE_CHILD_SETTID;
-        /// Create the process in a new cgroup namespace.
-        const NEWCGROUP = CLONE_NEWCGROUP;
-        /// Create the process in a new UTS namespace.
-        const NEWUTS = CLONE_NEWUTS;
-        /// Create the process in a new IPC namespace.
-        const NEWIPC = CLONE_NEWIPC;
-        /// Create the process in a new user namespace.
-        const NEWUSER = CLONE_NEWUSER;
-        /// Create the process in a new PID namespace.
-        const NEWPID = CLONE_NEWPID;
-        /// Create the process in a new network namespace.
-        const NEWNET = CLONE_NEWNET;
-        /// The new process shares an I/O context with the calling process.
-        const IO = CLONE_IO;
-    }
-}
+use crate::{ctypes::SIGCHLD, fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr, task::CloneFlags};
 
 pub fn sys_clone(
     tf: &TrapFrame,
