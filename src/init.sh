@@ -14,6 +14,7 @@ ln -v -s busybox sh
 ln -v -s busybox ls
 ln -v -s busybox env
 ln -v -s busybox mkdir
+ln -v -s busybox sleep
 
 mkdir -v /lib
 mkdir -v /etc
@@ -36,7 +37,7 @@ export LD_LIBRARY_PATH=.
 # echo
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
-cd /musl
+cd /glibc
 ./busybox sh ./basic_testcode.sh
 ./busybox sh ./lua_testcode.sh
 ./busybox sh ./libctest_testcode.sh

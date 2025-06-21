@@ -112,7 +112,7 @@ pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
         1.. => {
             let proc = get_process(pid as Pid)?;
             send_signal_process(&proc, sig)?;
-            Ok(1)
+            Ok(0)
         }
         0 => {
             let pg = curr.task_ext().thread.process().group();
