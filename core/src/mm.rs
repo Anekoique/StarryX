@@ -2,7 +2,7 @@
 
 use core::ffi::CStr;
 
-use alloc::{borrow::ToOwned, string::String, vec, vec::Vec};
+use alloc::{borrow::ToOwned, string::{String, ToString}, vec, vec::Vec};
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axhal::{mem::virt_to_phys, paging::MappingFlags};
@@ -113,6 +113,18 @@ pub fn load_user_app(
     let path = path
         .or_else(|| args.first().map(String::as_str))
         .ok_or(AxError::InvalidInput)?;
+    
+    // Handle .sh files with busybox sh
+    if path.ends_with(".sh") {
+        debug!("Loading shell script: {}", path);
+        let mut new_args = vec![
+            "/musl/busybox".to_string(),
+            "sh".to_string(),
+        ];
+        new_args.extend_from_slice(args);
+        return load_user_app(uspace, None, &new_args, envs);
+    }
+    
     let file_data = FS_CONTEXT.lock().read(path)?;
     if file_data.starts_with(b"#!") {
         let head = &file_data[2..file_data.len().min(256)];
