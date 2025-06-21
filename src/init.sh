@@ -15,25 +15,9 @@ ln -v -s busybox ls
 ln -v -s busybox env
 ln -v -s busybox mkdir
 
-mkdir -v /lib
 mkdir -v /etc
-cp -v /glibc/lib/* /lib
-if [[ $ARCH == loongarch64 ]]; then
-    ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-else
-    ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH.so.1
-    ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH-sf.so.1
-fi
-
-ln -v -s /lib /lib64
 
 export LD_LIBRARY_PATH=.
-
-# echo @@@@@@@@@@ files @@@@@@@@@@
-# ls -lhAR /
-# echo @@@@@@@@@@ env @@@@@@@@@@
-# env
-# echo
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
