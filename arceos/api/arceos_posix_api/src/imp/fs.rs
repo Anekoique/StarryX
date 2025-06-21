@@ -1,5 +1,5 @@
 use alloc::sync::Arc;
-use axfs_ng::{FS_CONTEXT, FsContext, OpenOptions, OpenResult};
+use axfs_ng::{FS_CONTEXT, FsContext, FsFile, OpenOptions, OpenResult};
 use axfs_ng_vfs::{DirEntry, Location, Metadata};
 use core::ffi::{c_char, c_int};
 
@@ -27,11 +27,11 @@ pub fn with_fs<R>(
 
 /// File wrapper for `axfs::fops::File`.
 pub struct File {
-    inner: Mutex<axfs_ng::File<RawMutex>>,
+    inner: Mutex<FsFile<RawMutex>>,
 }
 
 impl File {
-    fn new(inner: axfs_ng::File<RawMutex>) -> Self {
+    fn new(inner: FsFile<RawMutex>) -> Self {
         Self {
             inner: Mutex::new(inner),
         }
@@ -49,7 +49,7 @@ impl File {
     }
 
     /// Get the inner node of the file.
-    pub fn inner(&self) -> &Mutex<axfs_ng::File<RawMutex>> {
+    pub fn inner(&self) -> &Mutex<FsFile<RawMutex>> {
         &self.inner
     }
 }

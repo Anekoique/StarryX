@@ -5,7 +5,6 @@ use core::{
 
 use alloc::ffi::CString;
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
 use chrono::{Datelike, Timelike};
 use starry_core::vfs::RTC0_DEVICE_ID;
@@ -15,7 +14,7 @@ use crate::{
         __kernel_old_time_t, AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, RTC_RD_TIME, UTIME_NOW,
         UTIME_OMIT, linux_dirent64, timespec, timeval,
     },
-    fs::{Directory, FileLike, get_file_like, resolve_at, with_fs},
+    fs::{Directory, FileLike, get_file_like, with_fs, with_location},
     ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
@@ -68,9 +67,9 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
 
     with_fs(AT_FDCWD, path, |fs| {
         let entry = fs.resolve(path)?;
-        fs.set_current_dir(entry)?;
-        Ok(0)
+        fs.set_current_dir(entry)
     })
+    .map(|_| 0)
     .inspect_err(|err| {
         warn!("Failed to change directory: {err:?}");
     })
@@ -84,13 +83,11 @@ pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxRe
     let path = path.get_as_str()?;
     let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
 
-    with_fs(dirfd, path, |fs| {
-        fs.create_dir(path, mode)?;
-        Ok(0)
-    })
-    .inspect_err(|err| {
-        warn!("Failed to create directory {path}: {err:?}");
-    })
+    with_fs(dirfd, path, |fs| fs.create_dir(path, mode))
+        .map(|_| 0)
+        .inspect_err(|err| {
+            warn!("Failed to create directory {path}: {err:?}");
+        })
 }
 
 // Directory buffer for getdents64 syscall
@@ -186,18 +183,16 @@ pub fn sys_linkat(
         warn!("Unsupported flags: {flags}");
     }
 
-    let old = resolve_at(old_dirfd, old_path, flags)?
-        .into_file()
-        .ok_or(LinuxError::EBADF)?;
-    if old.is_dir() {
-        return Err(LinuxError::EPERM);
-    }
-    let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
-        fs.resolve_nonexistent(new_path.into())
-    })?;
-
-    new_dir.link(new_name, &old)?;
-    Ok(0)
+    with_location(old_dirfd, old_path, flags, |location| {
+        if location.is_dir() {
+            return Err(LinuxError::EPERM);
+        }
+        let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
+            fs.resolve_nonexistent(new_path.into())
+        })?;
+        new_dir.link(new_name, location)
+    })
+    .map(|_| 0)
 }
 
 pub fn sys_link(
@@ -222,12 +217,12 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
 
     with_fs(dirfd, path, |fs| {
         if flags == AT_REMOVEDIR as _ {
-            fs.remove_dir(path)?;
+            fs.remove_dir(path)
         } else {
-            fs.remove_file(path)?;
+            fs.remove_file(path)
         }
-        Ok(0)
     })
+    .map(|_| 0)
 }
 
 pub fn sys_rmdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
@@ -245,18 +240,20 @@ pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
         return Ok(0);
     };
 
-    let cwd = FS_CONTEXT.lock().current_dir().absolute_path()?;
-    debug!("sys_getcwd => cwd: {}", cwd);
+    with_fs(AT_FDCWD, ".", |fs| {
+        let cwd = fs.current_dir().absolute_path()?;
+        debug!("sys_getcwd => cwd: {}", cwd);
 
-    let cwd = CString::new(cwd.as_str()).map_err(|_| LinuxError::EINVAL)?;
-    let cwd = cwd.as_bytes_with_nul();
+        let cwd = CString::new(cwd.as_str()).map_err(|_| LinuxError::EINVAL)?;
+        let cwd = cwd.as_bytes_with_nul();
 
-    if cwd.len() <= buf.len() {
-        buf[..cwd.len()].copy_from_slice(cwd);
-        Ok(buf.as_ptr() as _)
-    } else {
-        Err(LinuxError::ERANGE)
-    }
+        if cwd.len() <= buf.len() {
+            buf[..cwd.len()].copy_from_slice(cwd);
+            Ok(buf.as_ptr() as isize)
+        } else {
+            Err(LinuxError::ERANGE)
+        }
+    })
 }
 
 pub fn sys_symlink(
@@ -274,10 +271,7 @@ pub fn sys_symlinkat(
     let target = target.get_as_str()?;
     let linkpath = linkpath.get_as_str()?;
 
-    with_fs(new_dirfd, linkpath, |fs| {
-        fs.symlink(target, linkpath)?;
-        Ok(0)
-    })
+    with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath)).map(|_| 0)
 }
 
 pub fn sys_readlink(
@@ -327,14 +321,14 @@ pub fn sys_fchownat(
     flags: u32,
 ) -> LinuxResult<isize> {
     let path = nullable!(path.get_as_str())?;
-    resolve_at(dirfd, path, flags)?
-        .into_file()
-        .ok_or(LinuxError::EBADF)?
-        .update_metadata(MetadataUpdate {
+
+    with_location(dirfd, path, flags, |location| {
+        location.update_metadata(MetadataUpdate {
             owner: Some((uid, gid)),
             ..Default::default()
-        })?;
-    Ok(0)
+        })
+    })
+    .map(|_| 0)
 }
 
 pub fn sys_chmod(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
@@ -352,14 +346,13 @@ pub fn sys_fchmodat(
     flags: u32,
 ) -> LinuxResult<isize> {
     let path = nullable!(path.get_as_str())?;
-    resolve_at(dirfd, path, flags)?
-        .into_file()
-        .ok_or(LinuxError::EBADF)?
-        .update_metadata(MetadataUpdate {
+    with_location(dirfd, path, flags, |location| {
+        location.update_metadata(MetadataUpdate {
             mode: Some(NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?),
             ..Default::default()
-        })?;
-    Ok(0)
+        })
+    })
+    .map(|_| 0)
 }
 
 #[allow(non_camel_case_types)]
@@ -376,15 +369,14 @@ fn update_times(
     flags: u32,
 ) -> LinuxResult<()> {
     let path = nullable!(path.get_as_str())?;
-    resolve_at(dirfd, path, flags)?
-        .into_file()
-        .ok_or(LinuxError::EBADF)?
-        .update_metadata(MetadataUpdate {
+    with_location(dirfd, path, flags, |location| {
+        location.update_metadata(MetadataUpdate {
             atime,
             mtime,
             ..Default::default()
-        })?;
-    Ok(())
+        })
+    })
+    .map(|_| ())
 }
 
 pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> LinuxResult<isize> {

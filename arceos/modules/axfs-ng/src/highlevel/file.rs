@@ -18,11 +18,11 @@ bitflags::bitflags! {
 
 /// Results returned by [`OpenOptions::open`].
 pub enum OpenResult<M> {
-    File(File<M>),
+    File(FsFile<M>),
     Dir(Location<M>),
 }
 impl<M> OpenResult<M> {
-    pub fn into_file(self) -> VfsResult<File<M>> {
+    pub fn into_file(self) -> VfsResult<FsFile<M>> {
         match self {
             Self::File(file) => Ok(file),
             Self::Dir(_) => Err(VfsError::EISDIR),
@@ -189,7 +189,7 @@ impl OpenOptions {
         Ok(if loc.is_dir() {
             OpenResult::Dir(loc)
         } else {
-            OpenResult::File(File::new(loc, flags))
+            OpenResult::File(FsFile::new(loc, flags))
         })
     }
 
@@ -256,13 +256,13 @@ impl fmt::Debug for OpenOptions {
 }
 
 /// Provides `std::fs::File`-like interface.
-pub struct File<M> {
+pub struct FsFile<M> {
     inner: Location<M>,
     pub(crate) flags: FileFlags,
 
     position: u64,
 }
-impl<M: RawMutex> File<M> {
+impl<M: RawMutex> FsFile<M> {
     pub(crate) fn new(inner: Location<M>, flags: FileFlags) -> Self {
         Self {
             inner,
@@ -327,7 +327,7 @@ impl<M: RawMutex> File<M> {
     }
 }
 
-impl<M: RawMutex> File<M> {
+impl<M: RawMutex> FsFile<M> {
     /// Writes a number of bytes starting from the current position.
     pub fn write(&mut self, buf: &[u8]) -> VfsResult<usize> {
         if self.flags.contains(FileFlags::APPEND) {
@@ -358,7 +358,7 @@ fn vfs_error_to_axio(err: VfsError) -> axio::Error {
     }
 }
 
-impl<M: RawMutex> axio::Read for File<M> {
+impl<M: RawMutex> axio::Read for FsFile<M> {
     fn read(&mut self, buf: &mut [u8]) -> axio::Result<usize> {
         self.read_at(buf, self.position)
             .inspect(|n| {
@@ -367,7 +367,7 @@ impl<M: RawMutex> axio::Read for File<M> {
             .map_err(vfs_error_to_axio)
     }
 }
-impl<M: RawMutex> axio::Write for File<M> {
+impl<M: RawMutex> axio::Write for FsFile<M> {
     fn write(&mut self, buf: &[u8]) -> axio::Result<usize> {
         if self.flags.contains(FileFlags::APPEND) {
             self.access(FileFlags::WRITE)
@@ -389,7 +389,7 @@ impl<M: RawMutex> axio::Write for File<M> {
         Ok(())
     }
 }
-impl<M: RawMutex> axio::Seek for File<M> {
+impl<M: RawMutex> axio::Seek for FsFile<M> {
     fn seek(&mut self, pos: SeekFrom) -> axio::Result<u64> {
         let new_pos = (|| {
             Ok(match pos {

@@ -12,7 +12,7 @@ use axfs_ng_vfs::{
     path::{Component, Components, Path, PathBuf},
 };
 
-use super::{File, FileFlags};
+use super::{FileFlags, FsFile};
 
 pub const SYMLINKS_MAX: usize = 40;
 
@@ -192,7 +192,7 @@ impl<M: RawMutex> FsContext<M> {
     pub fn read(&self, path: impl AsRef<Path>) -> VfsResult<Vec<u8>> {
         let file = self.resolve(path.as_ref())?;
         let mut buf = Vec::new();
-        File::new(file, FileFlags::READ).read_to_end(&mut buf)?;
+        FsFile::new(file, FileFlags::READ).read_to_end(&mut buf)?;
         Ok(buf)
     }
 
@@ -203,7 +203,7 @@ impl<M: RawMutex> FsContext<M> {
 
     /// Writes the entire contents of a bytes vector into a file.
     pub fn write(&self, path: impl AsRef<Path>, data: impl AsRef<[u8]>) -> VfsResult<()> {
-        File::create(self, path.as_ref())?.write_all(data.as_ref())?;
+        FsFile::create(self, path.as_ref())?.write_all(data.as_ref())?;
         Ok(())
     }
 

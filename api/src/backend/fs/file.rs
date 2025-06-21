@@ -2,75 +2,13 @@ use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, FsContext};
 use axfs_ng_vfs::{DeviceId, Location, Metadata};
 use axhal::time::TimeValue;
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
 
 use super::{add_file_like, get_file_like};
-use crate::ctypes::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, stat, statx, statx_timestamp};
-
-pub fn with_fs<R>(
-    dirfd: c_int,
-    path: &str,
-    f: impl FnOnce(&mut FsContext<RawMutex>) -> LinuxResult<R>,
-) -> LinuxResult<R> {
-    let mut fs = FS_CONTEXT.lock();
-    if dirfd == AT_FDCWD || path.starts_with('/') {
-        f(&mut fs)
-    } else {
-        let dir = Directory::from_fd(dirfd)?.inner.clone();
-        f(&mut fs.with_current_dir(dir)?)
-    }
-}
-
-pub enum ResolveAtResult {
-    File(Location<RawMutex>),
-    Other(Arc<dyn FileLike>),
-}
-impl ResolveAtResult {
-    pub fn into_file(self) -> Option<Location<RawMutex>> {
-        match self {
-            Self::File(file) => Some(file),
-            Self::Other(_) => None,
-        }
-    }
-
-    pub fn stat(&self) -> LinuxResult<Kstat> {
-        match self {
-            Self::File(file) => file.metadata().map(|it| metadata_to_kstat(&it)),
-            Self::Other(file_like) => file_like.stat(),
-        }
-    }
-}
-
-pub fn resolve_at(dirfd: c_int, path: Option<&str>, flags: u32) -> LinuxResult<ResolveAtResult> {
-    match path {
-        Some("") | None => {
-            if flags & AT_EMPTY_PATH == 0 {
-                return Err(LinuxError::ENOENT);
-            }
-            let file_like = get_file_like(dirfd)?;
-            let f = file_like.clone().into_any();
-            Ok(if let Some(file) = f.downcast_ref::<File>() {
-                ResolveAtResult::File(file.inner().inner().clone())
-            } else if let Some(dir) = f.downcast_ref::<Directory>() {
-                ResolveAtResult::File(dir.inner().clone())
-            } else {
-                ResolveAtResult::Other(file_like)
-            })
-        }
-        Some(path) => with_fs(dirfd, path, |fs| {
-            if flags & AT_SYMLINK_NOFOLLOW != 0 {
-                fs.resolve_no_follow(path)
-            } else {
-                fs.resolve(path)
-            }
-            .map(ResolveAtResult::File)
-        }),
-    }
-}
+use crate::ctypes::{stat, statx, statx_timestamp};
 
 #[allow(dead_code)]
 pub trait FileLike: Send + Sync {
@@ -97,22 +35,26 @@ pub trait FileLike: Send + Sync {
     {
         add_file_like(Arc::new(self))
     }
+
+    fn get_location(&self) -> Option<Location<RawMutex>> {
+        None
+    }
 }
 
 /// File wrapper for `axfs::fops::File`.
 pub struct File {
-    inner: Mutex<axfs_ng::File<RawMutex>>,
+    inner: Mutex<axfs_ng::FsFile<RawMutex>>,
 }
 
 impl File {
-    pub fn new(inner: axfs_ng::File<RawMutex>) -> Self {
+    pub fn new(inner: axfs_ng::FsFile<RawMutex>) -> Self {
         Self {
             inner: Mutex::new(inner),
         }
     }
 
     /// Get the inner node of the file.
-    pub fn inner(&self) -> MutexGuard<axfs_ng::File<RawMutex>> {
+    pub fn inner(&self) -> MutexGuard<axfs_ng::FsFile<RawMutex>> {
         self.inner.lock()
     }
 }
@@ -143,6 +85,17 @@ impl FileLike for File {
 
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
+    }
+
+    fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {
+        get_file_like(fd)?
+            .into_any()
+            .downcast::<Self>()
+            .map_err(|_| LinuxError::EBADF)
+    }
+
+    fn get_location(&self) -> Option<Location<RawMutex>> {
+        Some(self.inner().inner().clone())
     }
 }
 
@@ -199,6 +152,10 @@ impl FileLike for Directory {
             .into_any()
             .downcast::<Self>()
             .map_err(|_| LinuxError::ENOTDIR)
+    }
+
+    fn get_location(&self) -> Option<Location<RawMutex>> {
+        Some(self.inner.clone())
     }
 }
 

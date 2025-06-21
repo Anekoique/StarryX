@@ -6,20 +6,18 @@ use axfs_ng_vfs::{Location, NodePermission};
 use axsync::RawMutex;
 
 use crate::{
-    ctypes::{__kernel_fsid_t, AT_EMPTY_PATH, R_OK, W_OK, X_OK, stat, statfs, statx},
-    fs::resolve_at,
+    ctypes::{
+        __kernel_fsid_t, AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_FOLLOW, R_OK, W_OK, X_OK, stat,
+        statfs, statx,
+    },
+    fs::{get_file_like, metadata_to_kstat, with_file, with_location},
     ptr::{UserConstPtr, UserPtr, nullable},
 };
-
-use super::get_as_fs_file;
 
 /// Get the file metadata by `path` and write into `statbuf`.
 ///
 /// Return 0 if success.
-#[cfg(target_arch = "x86_64")]
 pub fn sys_stat(path: UserConstPtr<c_char>, statbuf: UserPtr<stat>) -> LinuxResult<isize> {
-    use linux_raw_sys::general::AT_FDCWD;
-
     sys_fstatat(AT_FDCWD, path, statbuf, 0)
 }
 
@@ -33,10 +31,7 @@ pub fn sys_fstat(fd: i32, statbuf: UserPtr<stat>) -> LinuxResult<isize> {
 /// Get the metadata of the symbolic link and write into `buf`.
 ///
 /// Return 0 if success.
-#[cfg(target_arch = "x86_64")]
 pub fn sys_lstat(path: UserConstPtr<c_char>, statbuf: UserPtr<stat>) -> LinuxResult<isize> {
-    use linux_raw_sys::general::{AT_FDCWD, AT_SYMLINK_FOLLOW};
-
     sys_fstatat(AT_FDCWD, path, statbuf, AT_SYMLINK_FOLLOW)
 }
 
@@ -53,7 +48,20 @@ pub fn sys_fstatat(
         "sys_fstatat <= dirfd: {}, path: {:?}, flags: {}",
         dirfd, path, flags
     );
-    *statbuf = resolve_at(dirfd, path, flags)?.stat()?.into();
+
+    *statbuf = with_location(dirfd, path, flags, |location| {
+        location
+            .metadata()
+            .map(|metadata| metadata_to_kstat(&metadata))
+    })
+    .or_else(|err| {
+        if err == LinuxError::EBADF {
+            get_file_like(dirfd)?.stat().map_err(|_| err)
+        } else {
+            Err(err)
+        }
+    })?
+    .into();
 
     Ok(0)
 }
@@ -99,15 +107,24 @@ pub fn sys_statx(
     );
 
     let statxbuf = statxbuf.get_as_mut()?;
-    *statxbuf = resolve_at(dirfd, path, flags)?.stat()?.into();
+    *statxbuf = with_location(dirfd, path, flags, |location| {
+        location
+            .metadata()
+            .map(|metadata| metadata_to_kstat(&metadata))
+    })
+    .or_else(|err| {
+        if err == LinuxError::EBADF {
+            get_file_like(dirfd)?.stat().map_err(|_| err)
+        } else {
+            Err(err)
+        }
+    })?
+    .into();
 
     Ok(0)
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn sys_access(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
-    use linux_raw_sys::general::AT_FDCWD;
-
     sys_faccessat2(AT_FDCWD, path, mode, 0)
 }
 
@@ -118,10 +135,11 @@ pub fn sys_faccessat2(
     flags: u32,
 ) -> LinuxResult<isize> {
     let path = nullable!(path.get_as_str())?;
-    let file = resolve_at(dirfd, path, flags)?;
+
     if mode == 0 {
         return Ok(0);
     }
+
     let mut required_mode = NodePermission::empty();
     if mode & R_OK != 0 {
         required_mode |= NodePermission::OWNER_READ;
@@ -133,7 +151,22 @@ pub fn sys_faccessat2(
         required_mode |= NodePermission::OWNER_EXEC;
     }
     let required_mode = required_mode.bits();
-    if (file.stat()?.mode as u16 & required_mode) != required_mode {
+
+    let file_mode = with_location(dirfd, path, flags, |location| {
+        location
+            .metadata()
+            .map(|metadata| metadata_to_kstat(&metadata))
+    })
+    .or_else(|err| {
+        if err == LinuxError::EBADF {
+            get_file_like(dirfd)?.stat().map_err(|_| err)
+        } else {
+            Err(err)
+        }
+    })?
+    .mode;
+
+    if (file_mode as u16 & required_mode) != required_mode {
         return Err(LinuxError::EACCES);
     }
 
@@ -173,6 +206,5 @@ pub fn sys_statfs(path: UserConstPtr<c_char>, buf: UserPtr<statfs>) -> LinuxResu
 }
 
 pub fn sys_fstatfs(fd: i32, buf: UserPtr<statfs>) -> LinuxResult<isize> {
-    statfs(get_as_fs_file(fd)?.inner().inner(), buf)?;
-    Ok(0)
+    with_file(fd, |file| statfs(file.inner(), buf)).map(|_| 0)
 }
