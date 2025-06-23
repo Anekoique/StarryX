@@ -35,7 +35,7 @@ define load_img2
 		wget $(IMG_URL); \
 		gunzip $(PWD)/sdcard-$(ARCH).img.gz; \
 	fi
-	cp $(PWD)/sdcard-la.img $(AX_ROOT)/disk.img
+	cp $(PWD)/sdcard-rv.img $(AX_ROOT)/disk.img
 endef
 
 oscomp_run: ax_root defconfig

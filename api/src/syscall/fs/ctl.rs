@@ -12,26 +12,12 @@ use starry_core::vfs::RTC0_DEVICE_ID;
 use crate::{
     ctypes::{
         __kernel_old_time_t, AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, RTC_RD_TIME, UTIME_NOW,
-        UTIME_OMIT, linux_dirent64, timespec, timeval,
+        UTIME_OMIT, linux_dirent64, rtc_time, timespec, timeval,
     },
     fs::{Directory, FileLike, get_file_like, with_fs, with_location},
     ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
-
-#[repr(C)]
-#[allow(non_camel_case_types, dead_code)]
-struct rtc_time {
-    tm_sec: c_int,
-    tm_min: c_int,
-    tm_hour: c_int,
-    tm_mday: c_int,
-    tm_mon: c_int,
-    tm_year: c_int,
-    tm_wday: c_int,
-    tm_yday: c_int,
-    tm_isdst: c_int,
-}
 
 /// The ioctl() system call manipulates the underlying device parameters
 /// of special files.
@@ -109,7 +95,6 @@ impl<'a> DirBuffer<'a> {
         const NAME_OFFSET: usize = offset_of!(linux_dirent64, d_name);
 
         let len = NAME_OFFSET + name.len() + 1;
-        // alignment
         let len = len.next_multiple_of(align_of::<linux_dirent64>());
         if self.remaining_space() < len {
             return false;
@@ -179,11 +164,10 @@ pub fn sys_linkat(
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
 
-    if flags != 0 {
-        warn!("Unsupported flags: {flags}");
-    }
-
     with_location(old_dirfd, old_path, flags, |location| {
+        if flags != 0 {
+            warn!("Unsupported flags: {flags}");
+        }
         if location.is_dir() {
             return Err(LinuxError::EPERM);
         }

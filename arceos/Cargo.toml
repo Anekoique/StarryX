@@ -68,7 +68,7 @@ axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
 axdma = { path = "modules/axdma" }
 
-axfs-ng-vfs = { path = "../modules/axfs-ng-vfs" }
+axfs-ng-vfs = { path = "crates/axfs-ng-vfs" }
 
 [profile.release]
 lto = true

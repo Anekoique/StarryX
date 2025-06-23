@@ -38,7 +38,7 @@ axprocess = { git = "https://github.com/Starry-OS/axprocess.git" }
 axsignal = { path = "./modules/axsignal" }
 
 axfs-ng = { path = "./arceos/modules/axfs-ng" }
-axfs-ng-vfs = { path = "./modules/axfs-ng-vfs" }
+axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
 
 axerrno = "0.1"
 bitflags = "2.6"

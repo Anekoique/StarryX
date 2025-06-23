@@ -37,7 +37,7 @@ export LD_LIBRARY_PATH=.
 # echo
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
-cd /glibc
+cd /musl
 ./busybox sh ./basic_testcode.sh
 ./busybox sh ./lua_testcode.sh
 ./busybox sh ./libctest_testcode.sh
