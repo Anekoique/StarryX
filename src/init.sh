@@ -18,6 +18,7 @@ ln -v -s busybox sleep
 
 mkdir -v /lib
 mkdir -v /etc
+mkdir -v /usr
 cp -v /glibc/lib/* /lib
 if [[ $ARCH == loongarch64 ]]; then
     ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
@@ -27,6 +28,8 @@ else
 fi
 
 ln -v -s /lib /lib64
+ln -v -s /lib /usr/lib
+ln -v -s /lib /usr/lib64
 
 export LD_LIBRARY_PATH=.
 
@@ -38,24 +41,22 @@ export LD_LIBRARY_PATH=.
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
-./busybox sh ./basic_testcode.sh
-./busybox sh ./lua_testcode.sh
-./busybox sh ./libctest_testcode.sh
-./busybox sh ./busybox_testcode.sh
-./busybox sh ./iozone_testcode.sh
-./busybox sh ./lmbench_testcode.sh
-./busybox sh ./libcbench_testcode.sh
+./basic_testcode.sh
+./lua_testcode.sh
+./busybox_testcode.sh
+./iozone_testcode.sh
+./lmbench_testcode.sh
+./libcbench_testcode.sh
 # ./unixbench_testcode.sh
 # ./cyclictest_testcode.sh
-# ./busybox sh ./iperf_testcode.sh
 
 # echo @@@@@@@@@@ glibc @@@@@@@@@@
-# cd /glibc
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./libctest_testcode.sh
-# ./busybox_testcode.sh
-# ./iozone_testcode.sh
-# ./lmbench_testcode.sh
+cd /glibc
+./basic_testcode.sh
+./lua_testcode.sh
+./busybox_testcode.sh
+./iozone_testcode.sh
+./lmbench_testcode.sh
+./libcbench_testcode.sh
 # ./unixbench_testcode.sh
 # ./cyclictest_testcode.sh
