@@ -139,10 +139,6 @@ impl<M: RawMutex> DirNode<M> {
     /// Looks up an entry with the cache lock held
     fn lookup_locked(&self, name: &str, children: &mut DirChildren<M>) -> VfsResult<DirEntry<M>> {
         use alloc::collections::btree_map::Entry;
-        debug!(
-            "cache keys before lookup: {:?}",
-            children.keys().collect::<alloc::vec::Vec<_>>()
-        );
         match children.entry(name.to_owned()) {
             Entry::Occupied(e) => Ok(e.get().clone()),
             Entry::Vacant(e) => {
