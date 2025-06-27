@@ -113,7 +113,8 @@ impl GlobalAllocator {
                 let expand_size = old_size
                     .max(layout.size())
                     .next_power_of_two()
-                    .max(PAGE_SIZE);
+                    .max(PAGE_SIZE)
+                    .min(self.available_pages() * PAGE_SIZE);
                 let heap_ptr = self.alloc_pages(expand_size / PAGE_SIZE, PAGE_SIZE)?;
                 debug!(
                     "expand heap memory: [{:#x}, {:#x})",

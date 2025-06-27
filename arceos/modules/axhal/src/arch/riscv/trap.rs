@@ -68,6 +68,7 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
                 handle_trap!(IRQ, scause.bits());
             }
             _ => {
+                warn!("Page fault at {:#x}, from_user: {}", vaddr, from_user);
                 panic!("Unhandled trap {:?} @ {:#x}:\n{:#x?}", cause, tf.sepc, tf);
             }
         }
