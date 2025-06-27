@@ -3,9 +3,10 @@ use core::ffi::c_int;
 use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axns::{ResArc, def_resource};
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use flatten_objects::FlattenObjects;
 use spin::RwLock;
+use starry_core::task::TaskExt;
 
 use super::{FileLike, stdio};
 use crate::ctypes::RLIMIT_NOFILE;
@@ -47,9 +48,8 @@ pub fn get_file_like(fd: c_int) -> LinuxResult<Arc<dyn FileLike>> {
 
 /// Add a file to the file descriptor table.
 pub fn add_file_like(f: Arc<dyn FileLike>) -> LinuxResult<c_int> {
-    let curr = current();
     // Check RLIMIT_NOFILE resource limit
-    let rlimits = curr.task_ext().process_data().rlimits.read();
+    let rlimits = TaskExt::from_task(&current()).process_data().rlimits.read();
     let fd_limit = rlimits[RLIMIT_NOFILE].current as usize;
 
     // Check if we already have too many open files

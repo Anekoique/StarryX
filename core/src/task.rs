@@ -81,6 +81,18 @@ impl TaskExt {
         }
     }
 
+    /// Get the [`TaskExt`] from a [`TaskInner`] reference.
+    /// This works with `&current()` due to `CurrentTask`'s `Deref` implementation.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the TaskInner and its TaskExt remain valid
+    /// for the static lifetime. This is typically safe for tasks that are
+    /// managed by the task scheduler.
+    pub fn from_task(task: &TaskInner) -> &'static Self {
+        unsafe { &*(task.task_ext() as *const Self) }
+    }
+
     pub(crate) fn time_stat_from_kernel_to_user(&self, current_tick: usize) {
         with_irqs_disabled(|| {
             self.time.borrow_mut().switch_into_user_mode(current_tick);

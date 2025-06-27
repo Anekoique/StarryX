@@ -1,7 +1,8 @@
 use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use memory_addr::{VirtAddr, VirtAddrRange};
+use starry_core::task::TaskExt;
 
 use crate::{
     fs::{File, FileLike},
@@ -16,8 +17,7 @@ pub fn sys_mmap(
     fd: i32,
     offset: isize,
 ) -> LinuxResult<isize> {
-    let curr = current();
-    let process_data = curr.task_ext().process_data();
+    let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
     let permission_flags = MmapProt::from_bits_truncate(prot);
     // TODO: check illegal flags for mmap
@@ -89,8 +89,7 @@ pub fn sys_mmap(
 }
 
 pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
-    let curr = current();
-    let process_data = curr.task_ext().process_data();
+    let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
     let length = memory_addr::align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
@@ -108,8 +107,7 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
         return Err(LinuxError::EINVAL);
     }
 
-    let curr = current();
-    let process_data = curr.task_ext().process_data();
+    let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
     let length = memory_addr::align_up_4k(length);
     let start_addr = VirtAddr::from(addr);

@@ -1,14 +1,14 @@
 use axerrno::LinuxResult;
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use num_enum::TryFromPrimitive;
+use starry_core::task::TaskExt;
 
 pub fn sys_getpid() -> LinuxResult<isize> {
-    Ok(axtask::current().task_ext().thread.process().pid() as _)
+    Ok(TaskExt::from_task(&current()).thread.process().pid() as _)
 }
 
 pub fn sys_getppid() -> LinuxResult<isize> {
-    Ok(axtask::current()
-        .task_ext()
+    Ok(TaskExt::from_task(&current())
         .thread
         .process()
         .parent()
@@ -45,11 +45,10 @@ enum ArchPrctlCode {
 ///
 /// The set_tid_address() always succeeds
 pub fn sys_set_tid_address(clear_child_tid: usize) -> LinuxResult<isize> {
-    let curr = current();
-    curr.task_ext()
+    TaskExt::from_task(&current())
         .thread_data()
         .set_clear_child_tid(clear_child_tid);
-    Ok(curr.id().as_u64() as isize)
+    Ok(current().id().as_u64() as isize)
 }
 
 #[cfg(target_arch = "x86_64")]

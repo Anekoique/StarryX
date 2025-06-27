@@ -1,8 +1,8 @@
 use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::{Pid, Process};
-use axtask::{TaskExtRef, current};
-use starry_core::task::ProcessData;
+use axtask::current;
+use starry_core::task::{ProcessData, TaskExt};
 
 use crate::{
     ptr::{UserPtr, nullable},
@@ -33,9 +33,8 @@ pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxRe
     let options = WaitOptions::from_bits_truncate(options);
     info!("sys_wait4 <= pid: {:?}, options: {:?}", pid, options);
 
-    let curr = current();
-    let proc_data = curr.task_ext().process_data();
-    let process = curr.task_ext().thread.process();
+    let proc_data = TaskExt::from_task(&current()).process_data();
+    let process = TaskExt::from_task(&current()).thread.process();
 
     let pid = if pid == -1 {
         WaitPid::Any

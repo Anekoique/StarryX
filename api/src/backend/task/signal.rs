@@ -3,13 +3,13 @@ use axhal::{
     trap::{POST_TRAP, register_trap_handler},
 };
 use axsignal::{SignalOSAction, SignalSet};
-use axtask::{TaskExtRef, current};
+use axtask::current;
+use starry_core::task::TaskExt;
 
 use crate::do_exit;
 
 pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> bool {
-    let Some((sig, os_action)) = current()
-        .task_ext()
+    let Some((sig, os_action)) = TaskExt::from_task(&current())
         .thread_data()
         .signal
         .check_signals(tf, restore_blocked)
@@ -42,8 +42,7 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
 }
 
 pub fn check_fatal_signals() {
-    let Some((sig, os_action)) = current()
-        .task_ext()
+    let Some((sig, os_action)) = TaskExt::from_task(&current())
         .thread_data()
         .signal
         .check_fatal_signals()

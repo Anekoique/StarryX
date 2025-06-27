@@ -1,8 +1,8 @@
 use core::sync::atomic::Ordering;
 
 use axerrno::{LinuxError, LinuxResult};
-use axtask::{TaskExtRef, current};
-use starry_core::task::{ThreadData, get_thread};
+use axtask::current;
+use starry_core::task::{TaskExt, ThreadData, get_thread};
 
 use crate::{
     ctypes::{
@@ -23,8 +23,7 @@ pub fn sys_futex(
 ) -> LinuxResult<isize> {
     info!("futex {:?} {} {}", uaddr.address(), futex_op, value);
 
-    let curr = current();
-    let futex_table = &curr.task_ext().process_data().futex_table;
+    let futex_table = &TaskExt::from_task(&current()).process_data().futex_table;
 
     let addr = uaddr.address().as_usize();
     let command = futex_op & (FUTEX_CMD_MASK as u32);
@@ -93,7 +92,7 @@ pub fn sys_get_robust_list(
     size: UserPtr<usize>,
 ) -> LinuxResult<isize> {
     let thr = if tid == 0 {
-        current().task_ext().thread.clone()
+        TaskExt::from_task(&current()).thread.clone()
     } else {
         get_thread(tid)?
     };
@@ -115,8 +114,7 @@ pub fn sys_set_robust_list(
     if size != size_of::<robust_list_head>() {
         return Err(LinuxError::EINVAL);
     }
-    let curr = current();
-    curr.task_ext()
+    TaskExt::from_task(&current())
         .thread_data()
         .robust_list_head
         .store(head.address().as_usize(), Ordering::SeqCst);
@@ -130,8 +128,7 @@ fn handle_futex_death(entry: *mut robust_list, offset: i64) -> LinuxResult<()> {
         .ok_or(LinuxError::EINVAL)?;
     let address: usize = address.try_into().map_err(|_| LinuxError::EINVAL)?;
 
-    let curr = current();
-    let futex_table = &curr.task_ext().process_data().futex_table;
+    let futex_table = &TaskExt::from_task(&current()).process_data().futex_table;
 
     let Some(futex) = futex_table.get(address) else {
         return Ok(());

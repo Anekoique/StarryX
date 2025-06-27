@@ -2,9 +2,10 @@ use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
 use axsync::Mutex;
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use page_table_entry::MappingFlags;
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::__kernel_time_t,
@@ -48,7 +49,7 @@ pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> LinuxResult<isize> {
         mapping_flags.insert(MappingFlags::WRITE);
     }
 
-    let cur_pid = current().task_ext().thread.process().pid();
+    let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
     let ipc_manager = IPC_MANAGER.lock();
     let mut shm_manager = ipc_manager.get_shm().lock();
 
@@ -94,9 +95,8 @@ pub fn sys_shmat(shmid: i32, addr: usize, shmflg: u32) -> LinuxResult<isize> {
 
     // TODO: solve shmflg: SHM_RND and SHM_REMAP
 
-    let curr = current();
-    let cur_pid = curr.task_ext().thread.process().pid();
-    let process_data = curr.task_ext().process_data();
+    let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
+    let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
 
     let start_aligned = memory_addr::align_down_4k(addr);
@@ -195,10 +195,7 @@ pub fn sys_shmctl(shmid: i32, cmd: u32, buf: UserPtr<ShmInfo>) -> LinuxResult<is
 
 pub fn sys_shmdt(shmaddr: usize) -> LinuxResult<isize> {
     let shmaddr = VirtAddr::from(shmaddr);
-    let pid = {
-        let curr = current();
-        curr.task_ext().thread.process().pid()
-    };
+    let pid = TaskExt::from_task(&current()).thread.process().pid();
     let shmid = {
         let ipc_manager = IPC_MANAGER.lock();
         let shm_manager = ipc_manager.get_shm().lock();
@@ -217,8 +214,7 @@ pub fn sys_shmdt(shmaddr: usize) -> LinuxResult<isize> {
     let mut shm_inner = shm_inner.lock();
     let va_range = shm_inner.get_addr_range(pid).ok_or(LinuxError::EINVAL)?;
 
-    let curr = current();
-    let mut aspace = curr.task_ext().process_data().aspace.lock();
+    let mut aspace = TaskExt::from_task(&current()).process_data().aspace.lock();
     aspace.unmap(va_range.start, va_range.size())?;
     axhal::arch::flush_tlb(None);
 

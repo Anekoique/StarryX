@@ -1,7 +1,8 @@
 use alloc::{sync::Arc, vec};
 use axerrno::{LinuxError, LinuxResult};
 use axsync::Mutex;
-use axtask::{TaskExtRef, current};
+use axtask::current;
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{__kernel_mode_t, c_long},
@@ -15,7 +16,7 @@ use crate::{
 // System call: msgget - get message queue identifier
 pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
     info!("sys_msgget: key = {}, msgflg = {}", key, msgflg);
-    let current_pid = current().task_ext().thread.process().pid();
+    let current_pid = TaskExt::from_task(&current()).thread.process().pid();
     let ipc_manager = IPC_MANAGER.lock();
     let mut msg_manager = ipc_manager.get_msg().lock();
 
@@ -76,7 +77,7 @@ pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> L
         return Err(LinuxError::EINVAL);
     }
 
-    let current_pid = current().task_ext().thread.process().pid();
+    let current_pid = TaskExt::from_task(&current()).thread.process().pid();
 
     let msg_manager = ipc_manager.get_msg().lock();
 
@@ -140,7 +141,7 @@ pub fn sys_msgrcv(
         "sys_msgrcv: msqid = {}, msgsz = {}, msgtyp = {}, msgflg = {}",
         msqid, msgsz, msgtyp, msgflg
     );
-    let current_pid = current().task_ext().thread.process().pid();
+    let current_pid = TaskExt::from_task(&current()).thread.process().pid();
     let ipc_manager = IPC_MANAGER.lock();
     let msg_manager = ipc_manager.get_msg().lock();
 

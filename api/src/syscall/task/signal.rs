@@ -5,9 +5,9 @@ use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::TrapFrame;
 use axprocess::{Pid, Thread};
 use axsignal::{SignalInfo, SignalSet, SignalStack, Signo};
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use starry_core::task::{
-    get_process, get_process_group, get_thread, processes, send_signal_process,
+    TaskExt, get_process, get_process_group, get_thread, processes, send_signal_process,
     send_signal_process_group, send_signal_thread,
 };
 
@@ -40,8 +40,7 @@ pub fn sys_rt_sigprocmask(
 ) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
 
-    current()
-        .task_ext()
+    TaskExt::from_task(&current())
         .thread_data()
         .signal
         .with_blocked_mut::<LinuxResult<_>>(|blocked| {
@@ -76,8 +75,11 @@ pub fn sys_rt_sigaction(
         return Err(LinuxError::EINVAL);
     }
 
-    let curr = current();
-    let mut actions = curr.task_ext().process_data().signal.actions.lock();
+    let mut actions = TaskExt::from_task(&current())
+        .process_data()
+        .signal
+        .actions
+        .lock();
     if let Some(oldact) = nullable!(oldact.get_as_mut())? {
         actions[signo].to_ctype(oldact);
     }
@@ -89,7 +91,10 @@ pub fn sys_rt_sigaction(
 
 pub fn sys_rt_sigpending(set: UserPtr<SignalSet>, sigsetsize: usize) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
-    *set.get_as_mut()? = current().task_ext().thread_data().signal.pending();
+    *set.get_as_mut()? = TaskExt::from_task(&current())
+        .thread_data()
+        .signal
+        .pending();
     Ok(0)
 }
 
@@ -107,7 +112,6 @@ pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
         return Ok(0);
     };
 
-    let curr = current();
     match pid {
         1.. => {
             let proc = get_process(pid as Pid)?;
@@ -115,7 +119,7 @@ pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
             Ok(0)
         }
         0 => {
-            let pg = curr.task_ext().thread.process().group();
+            let pg = TaskExt::from_task(&current()).thread.process().group();
             Ok(send_signal_process_group(&pg, sig) as _)
         }
         -1 => {
@@ -174,7 +178,7 @@ fn make_queue_signal_info(
     let signo = parse_signo(signo)?;
     let mut sig = sig.get_as_ref()?.clone();
     sig.set_signo(signo);
-    if current().task_ext().thread.process().pid() != tgid
+    if TaskExt::from_task(&current()).thread.process().pid() != tgid
         && (sig.code() >= 0 || sig.code() == SI_TKILL)
     {
         return Err(LinuxError::EPERM);
@@ -210,8 +214,10 @@ pub fn sys_rt_tgsigqueueinfo(
 }
 
 pub fn sys_rt_sigreturn(tf: &mut TrapFrame) -> LinuxResult<isize> {
-    let curr = current();
-    curr.task_ext().thread_data().signal.restore(tf);
+    TaskExt::from_task(&current())
+        .thread_data()
+        .signal
+        .restore(tf);
     Ok(tf.retval() as isize)
 }
 
@@ -227,8 +233,7 @@ pub fn sys_rt_sigtimedwait(
     let timeout: Option<Duration> =
         nullable!(timeout.get_as_ref())?.map(|ts| timespec::to_time_value(*ts));
 
-    let Some(sig) = current()
-        .task_ext()
+    let Some(sig) = TaskExt::from_task(&current())
         .thread_data()
         .signal
         .wait_timeout(set, timeout)
@@ -250,8 +255,7 @@ pub fn sys_rt_sigsuspend(
 ) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
 
-    let curr = current();
-    let thr_data = curr.task_ext().thread_data();
+    let thr_data = TaskExt::from_task(&current()).thread_data();
     let mut set = *set.get_as_ref()?;
 
     set.remove(Signo::SIGKILL);
@@ -265,7 +269,10 @@ pub fn sys_rt_sigsuspend(
         if check_signals(tf, Some(old_blocked)) {
             break;
         }
-        curr.task_ext().process_data().signal.wait_signal();
+        TaskExt::from_task(&current())
+            .process_data()
+            .signal
+            .wait_signal();
     }
 
     Err(LinuxError::EINTR)
@@ -275,8 +282,7 @@ pub fn sys_sigaltstack(
     ss: UserConstPtr<SignalStack>,
     old_ss: UserPtr<SignalStack>,
 ) -> LinuxResult<isize> {
-    current()
-        .task_ext()
+    TaskExt::from_task(&current())
         .thread_data()
         .signal
         .with_stack_mut(|stack| {

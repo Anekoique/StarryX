@@ -1,7 +1,8 @@
 use alloc::vec::Vec;
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
-use axtask::{TaskExtRef, current};
+use axtask::current;
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::__kernel_time_t,
@@ -19,7 +20,7 @@ pub fn sys_semget(key: i32, nsems: i32, semflg: i32) -> LinuxResult<isize> {
         return Err(LinuxError::EINVAL);
     }
 
-    let cur_pid = current().task_ext().thread.process().pid();
+    let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
     let ipc_manager = IPC_MANAGER.lock();
     let mut sem_manager = ipc_manager.get_sem().lock();
 
@@ -62,7 +63,7 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
         operations.push(*sop);
     }
 
-    let cur_pid = current().task_ext().thread.process().pid();
+    let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
     let ipc_manager = IPC_MANAGER.lock();
     let sem_manager = ipc_manager.get_sem().lock();
 
@@ -204,7 +205,8 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 return Err(LinuxError::ERANGE);
             }
             semset.semaphores[semnum as usize].semval = val;
-            semset.semaphores[semnum as usize].sempid = current().task_ext().thread.process().pid();
+            semset.semaphores[semnum as usize].sempid =
+                TaskExt::from_task(&current()).thread.process().pid();
             semset.sem_info.sem_ctime = monotonic_time_nanos() as __kernel_time_t;
             semset.wake_up_processes();
             Ok(0)
@@ -247,7 +249,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                     return Err(LinuxError::ERANGE);
                 }
                 sem.semval = val;
-                sem.sempid = current().task_ext().thread.process().pid();
+                sem.sempid = TaskExt::from_task(&current()).thread.process().pid();
             }
             semset.sem_info.sem_ctime = monotonic_time_nanos() as __kernel_time_t;
             semset.wake_up_processes();
