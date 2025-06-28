@@ -2,7 +2,7 @@ use axsignal::{SignalInfo, Signo};
 use axtask::current;
 use linux_raw_sys::general::{SI_KERNEL, SIGALRM};
 
-use crate::task::{send_signal_process, TaskExt};
+use crate::task::{TaskExt, send_signal_process};
 
 numeric_enum_macro::numeric_enum! {
     #[repr(i32)]
@@ -150,7 +150,11 @@ impl TimeStat {
     }
 
     pub fn stat_timer(&self) -> (TimerType, usize, usize) {
-        (self.timer_type, self.timer_interval_ns, self.timer_remained_ns)
+        (
+            self.timer_type,
+            self.timer_interval_ns,
+            self.timer_remained_ns,
+        )
     }
 
     /// Clear/stop the timer

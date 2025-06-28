@@ -1,6 +1,6 @@
 use axerrno::{LinuxError, LinuxResult};
-use starry_core::task::{TaskExt, time_stat_output};
 use axtask::current;
+use starry_core::task::{TaskExt, time_stat_output};
 
 use crate::{
     ctypes::{
@@ -78,7 +78,8 @@ pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize
     if let Some(value) = nullable!(value.get_as_mut())? {
         match which {
             ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
-                let (_, interval_ns, remained_ns) = TaskExt::from_task(&current()).time.borrow().stat_timer();
+                let (_, interval_ns, remained_ns) =
+                    TaskExt::from_task(&current()).time.borrow().stat_timer();
                 *value = itimerval {
                     it_interval: timeval::from_nanos(interval_ns as u64),
                     it_value: timeval::from_nanos(remained_ns as u64),
@@ -115,7 +116,10 @@ pub fn sys_setitimer(
                 let remained_ns = new_value.it_value.to_nanos();
 
                 if remained_ns == 0 {
-                    TaskExt::from_task(&current()).time.borrow_mut().clear_timer();
+                    TaskExt::from_task(&current())
+                        .time
+                        .borrow_mut()
+                        .clear_timer();
                 } else {
                     let timer_type = which as usize;
                     TaskExt::from_task(&current()).time.borrow_mut().set_timer(

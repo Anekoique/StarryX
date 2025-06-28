@@ -382,7 +382,7 @@ impl ShmManager {
 
     /// Validate segment parameters
     pub fn validate_segment_params(&self, size: usize, _flags: u32) -> LinuxResult<()> {
-        if size < SHMMIN || size > SHMMAX {
+        if !(SHMMIN..=SHMMAX).contains(&size) {
             return Err(LinuxError::EINVAL);
         }
 

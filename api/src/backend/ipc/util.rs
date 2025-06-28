@@ -121,7 +121,7 @@ pub struct IpcLimits {
     pub msgmnb: usize,
     /// Maximum number of message queue identifiers
     pub msgmni: usize,
-    
+
     // Semaphore limits
     /// Maximum number of semaphores per semaphore set
     pub semmsl: usize,
@@ -233,7 +233,7 @@ impl IpcManager {
     /// Check if resource limits are exceeded
     pub fn check_limits(&self) -> bool {
         let stats = self.get_ipc_stats();
-        
+
         stats.shm_segments <= self.limits.shmmni
             && stats.msg_queues <= self.limits.msgmni
             && stats.sem_arrays <= self.limits.semmni

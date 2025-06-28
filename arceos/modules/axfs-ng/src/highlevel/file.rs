@@ -1,10 +1,8 @@
 use core::fmt;
 
-use axfs_ng_vfs::{FileNode, Location, Metadata, NodePermission, VfsError, VfsResult, path::Path};
+use axfs_ng_vfs::{FileNode, Location, Metadata, VfsError, VfsResult};
 use axio::SeekFrom;
 use lock_api::RawMutex;
-
-use super::FsContext;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy)]
@@ -147,50 +145,61 @@ impl OpenOptions {
         self
     }
 
-    pub fn open<M: RawMutex>(
-        &self,
-        context: &FsContext<M>,
-        path: impl AsRef<Path>,
-    ) -> VfsResult<OpenResult<M>> {
-        self._open(context, path.as_ref())
+    // Getter methods for internal use
+
+    /// Gets the read option.
+    pub fn get_read(&self) -> bool {
+        self.read
     }
-    fn _open<M: RawMutex>(&self, context: &FsContext<M>, path: &Path) -> VfsResult<OpenResult<M>> {
-        if !self.is_valid() {
-            return Err(VfsError::EINVAL);
-        }
-        let flags = self.to_flags()?;
 
-        let loc = match context.resolve_parent(path.as_ref()) {
-            Ok((parent, name)) => parent
-                .open_file_or_create(
-                    &name,
-                    self.create,
-                    self.create_new,
-                    NodePermission::from_bits_truncate(self.mode as _),
-                    self.user,
-                )?
-                .clone(),
-            Err(VfsError::EINVAL) => {
-                // root directory
-                context.root_dir().clone()
-            }
-            Err(err) => return Err(err),
-        };
-        if self.directory {
-            if flags.contains(FileFlags::WRITE) {
-                return Err(VfsError::EISDIR);
-            }
-            loc.check_is_dir()?;
-        }
-        if self.truncate {
-            loc.entry().as_file()?.set_len(0)?;
-        }
+    /// Gets the write option.
+    pub fn get_write(&self) -> bool {
+        self.write
+    }
 
-        Ok(if loc.is_dir() {
-            OpenResult::Dir(loc)
-        } else {
-            OpenResult::File(FsFile::new(loc, flags))
-        })
+    /// Gets the execute option.
+    pub fn get_execute(&self) -> bool {
+        self.execute
+    }
+
+    /// Gets the append option.
+    pub fn get_append(&self) -> bool {
+        self.append
+    }
+
+    /// Gets the truncate option.
+    pub fn get_truncate(&self) -> bool {
+        self.truncate
+    }
+
+    /// Gets the create option.
+    pub fn get_create(&self) -> bool {
+        self.create
+    }
+
+    /// Gets the create_new option.
+    pub fn get_create_new(&self) -> bool {
+        self.create_new
+    }
+
+    /// Gets the directory option.
+    pub fn get_directory(&self) -> bool {
+        self.directory
+    }
+
+    /// Gets the user option.
+    pub fn get_user(&self) -> Option<(u32, u32)> {
+        self.user
+    }
+
+    /// Gets the custom flags.
+    pub fn get_custom_flags(&self) -> i32 {
+        self.custom_flags
+    }
+
+    /// Gets the mode.
+    pub fn get_mode(&self) -> u32 {
+        self.mode
     }
 
     pub(crate) fn to_flags(&self) -> VfsResult<FileFlags> {
@@ -269,21 +278,6 @@ impl<M: RawMutex> FsFile<M> {
             flags,
             position: 0,
         }
-    }
-
-    pub fn open(context: &FsContext<M>, path: impl AsRef<Path>) -> VfsResult<Self> {
-        OpenOptions::new()
-            .read(true)
-            .open(context, path.as_ref())
-            .and_then(OpenResult::into_file)
-    }
-    pub fn create(context: &FsContext<M>, path: impl AsRef<Path>) -> VfsResult<Self> {
-        OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(context, path.as_ref())
-            .and_then(OpenResult::into_file)
     }
 
     pub fn access(&self, cap: FileFlags) -> VfsResult<&FileNode<M>> {

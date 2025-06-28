@@ -1,7 +1,6 @@
 use core::ffi::c_char;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FileFlags, OpenOptions};
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
 use starry_core::task::processes;
 
@@ -88,12 +87,7 @@ pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<is
 
     // Try reading from device, fallback to PRNG
     with_fs(AT_FDCWD, device_path, |fs| {
-        OpenOptions::new()
-            .read(true)
-            .open(fs, device_path)?
-            .into_file()?
-            .access(FileFlags::READ)?
-            .read_at(buffer, 0)
+        fs.open_file(device_path)?.read_at(buffer, 0)
     })
     .map(|bytes_read| bytes_read as isize)
     .or_else(|_| {

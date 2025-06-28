@@ -33,20 +33,22 @@ pub fn get_msg_stats() -> (usize, usize, usize) {
 }
 
 /// Get message queue identifier
-/// 
+///
 /// # Arguments
 /// * `key` - IPC key for the message queue
 /// * `msgflg` - Flags controlling creation and permissions
 pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
     info!("sys_msgget: key = {}, msgflg = {}", key, msgflg);
     let current_pid = current_pid();
-    
+
     IPC_MANAGER.with_msg(|msg_manager| {
         // Check if key already exists
         if key != IPC_PRIVATE {
             if let Some(existing_msgid) = msg_manager.get_msgid_by_key(key) {
                 // Key exists, check flags
-                if msgflg & (IPC_CREAT as i32 | IPC_EXCL as i32) == (IPC_CREAT as i32 | IPC_EXCL as i32) {
+                if msgflg & (IPC_CREAT as i32 | IPC_EXCL as i32)
+                    == (IPC_CREAT as i32 | IPC_EXCL as i32)
+                {
                     return Err(LinuxError::EEXIST);
                 }
 
@@ -71,7 +73,7 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
         }
 
         // Check system limits
-        let limits = IPC_MANAGER.lock().get_limits().clone();
+        let limits = *IPC_MANAGER.lock().get_limits();
         if msg_manager.queue_count() >= limits.msgmni {
             return Err(LinuxError::ENOSPC);
         }
@@ -90,7 +92,7 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
 }
 
 /// Send message to queue
-/// 
+///
 /// # Arguments
 /// * `msqid` - Message queue identifier
 /// * `msgp` - Pointer to message structure
@@ -101,9 +103,9 @@ pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> L
         "sys_msgsnd: msqid = {}, msgsz = {}, msgflg = {}",
         msqid, msgsz, msgflg
     );
-    
+
     // Check message size against system limits
-    let limits = IPC_MANAGER.lock().get_limits().clone();
+    let limits = *IPC_MANAGER.lock().get_limits();
     if msgsz > limits.msgmax {
         return Err(LinuxError::EINVAL);
     }
@@ -130,7 +132,7 @@ pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> L
         let queue_arc = msg_manager
             .get_queue_by_msgid(msqid)
             .ok_or(LinuxError::EINVAL)?;
-        
+
         let mut queue = queue_arc.lock();
 
         // Check if queue is marked for removal
@@ -161,7 +163,7 @@ pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> L
 }
 
 /// Receive message from queue
-/// 
+///
 /// # Arguments
 /// * `msqid` - Message queue identifier
 /// * `msgp` - Pointer to message buffer
@@ -201,7 +203,8 @@ pub fn sys_msgrcv(
         // Try to receive message
         match queue.receive_message(msgtyp, msgflg as u32, current_pid) {
             Ok(msg) => {
-                if msg.mtext.len() > msgsz && (msgflg & MsgRcvFlags::MSG_NOERROR.bits() as i32 == 0) {
+                if msg.mtext.len() > msgsz && (msgflg & MsgRcvFlags::MSG_NOERROR.bits() as i32 == 0)
+                {
                     return Err(LinuxError::E2BIG);
                 }
 
@@ -234,7 +237,7 @@ pub fn sys_msgrcv(
 }
 
 /// Message queue control operations
-/// 
+///
 /// # Arguments
 /// * `msqid` - Message queue identifier
 /// * `cmd` - Control command (IPC_STAT, IPC_SET, IPC_RMID, etc.)

@@ -30,7 +30,7 @@ pub fn get_sem_stats() -> (usize, usize) {
 }
 
 /// Get a semaphore set identifier
-/// 
+///
 /// # Arguments
 /// * `key` - IPC key for the semaphore set
 /// * `nsems` - Number of semaphores in the set
@@ -41,7 +41,7 @@ pub fn sys_semget(key: i32, nsems: i32, semflg: i32) -> LinuxResult<isize> {
     }
 
     let cur_pid = current_pid();
-    
+
     IPC_MANAGER.with_sem(|sem_manager| {
         // If not IPC_PRIVATE, check if semaphore set already exists
         if key != IPC_PRIVATE {
@@ -71,7 +71,7 @@ pub fn sys_semget(key: i32, nsems: i32, semflg: i32) -> LinuxResult<isize> {
 }
 
 /// Perform operations on semaphores
-/// 
+///
 /// # Arguments
 /// * `semid` - Semaphore set identifier
 /// * `sops` - Array of semaphore operations
@@ -121,11 +121,11 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
             }
             // Need to wait - add to waiting queue
             semset.add_waiting_process(cur_pid, operations.clone());
-            return Ok(true);
+            Ok(true)
         } else {
             // Perform operations immediately
             semset.perform_operations(&operations, cur_pid)?;
-            return Ok(false);
+            Ok(false)
         }
     })?;
 
@@ -133,7 +133,7 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
         // In a real implementation, we would wait here
         // For now, we'll use a simplified approach
         // TODO: Implement proper waiting mechanism
-        
+
         // Wait for the operation to complete
         // This is a simplified version - in practice you'd want proper blocking
         loop {
@@ -141,7 +141,7 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EIDRM)?;
-                
+
                 let mut semset = semset_arc.lock();
                 if semset.can_perform_operations(&operations) {
                     semset.perform_operations(&operations, cur_pid)?;
@@ -150,11 +150,11 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
                     Ok(false)
                 }
             })?;
-            
+
             if completed {
                 break;
             }
-            
+
             // Simple yield - in practice this would be a proper wait
             core::hint::spin_loop();
         }
@@ -189,7 +189,7 @@ const GETALL: u32 = 13;
 const SETALL: u32 = 17;
 
 /// Control operations on semaphores
-/// 
+///
 /// # Arguments
 /// * `semid` - Semaphore set identifier
 /// * `semnum` - Semaphore number within the set
@@ -205,43 +205,43 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
 
                 let mut semset = semset_arc.lock();
                 semset.rmid = true;
-                
+
                 // Wake up all waiting processes with error
                 while let Some(mut waiting) = semset.waiting_queue.lock().pop_front() {
                     waiting.error = Some(LinuxError::EIDRM);
                     semset.wait_queue.notify_all(true);
                 }
-                
+
                 drop(semset);
                 sem_manager.remove_semset(semid);
                 Ok(0)
             })
         }
-        
+
         IPC_SET => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserConstPtr::<SemInfo>::from(arg);
                 let new_info = buf_ptr.get_as_ref()?;
-                
+
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let mut semset = semset_arc.lock();
                 semset.sem_info = *new_info;
                 semset.sem_info.sem_ctime = monotonic_time_nanos() as __kernel_time_t;
                 Ok(0)
             })
         }
-        
+
         IPC_STAT => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserPtr::<SemInfo>::from(arg);
-                
+
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let semset = semset_arc.lock();
                 if let Some(buf) = nullable!(buf_ptr.get_as_mut())? {
                     *buf = semset.sem_info;
@@ -249,13 +249,13 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(0)
             })
         }
-        
+
         GETVAL => {
             with_ipc_manager!(sem, sem_manager, {
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let semset = semset_arc.lock();
                 if semnum < 0 || semnum as usize >= semset.semaphores.len() {
                     return Err(LinuxError::EINVAL);
@@ -263,23 +263,23 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(semset.semaphores[semnum as usize].semval as isize)
             })
         }
-        
+
         SETVAL => {
             with_ipc_manager!(sem, sem_manager, {
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let mut semset = semset_arc.lock();
                 if semnum < 0 || semnum as usize >= semset.semaphores.len() {
                     return Err(LinuxError::EINVAL);
                 }
-                
+
                 let val = arg as i16;
                 if val < 0 || val as usize > crate::ipc::SEMVMX {
                     return Err(LinuxError::ERANGE);
                 }
-                
+
                 semset.semaphores[semnum as usize].semval = val;
                 semset.semaphores[semnum as usize].sempid = current_pid();
                 semset.sem_info.sem_ctime = monotonic_time_nanos() as __kernel_time_t;
@@ -287,13 +287,13 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(0)
             })
         }
-        
+
         GETPID => {
             with_ipc_manager!(sem, sem_manager, {
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let semset = semset_arc.lock();
                 if semnum < 0 || semnum as usize >= semset.semaphores.len() {
                     return Err(LinuxError::EINVAL);
@@ -301,13 +301,13 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(semset.semaphores[semnum as usize].sempid as isize)
             })
         }
-        
+
         GETNCNT => {
             with_ipc_manager!(sem, sem_manager, {
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let semset = semset_arc.lock();
                 if semnum < 0 || semnum as usize >= semset.semaphores.len() {
                     return Err(LinuxError::EINVAL);
@@ -315,13 +315,13 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(semset.semaphores[semnum as usize].semncnt as isize)
             })
         }
-        
+
         GETZCNT => {
             with_ipc_manager!(sem, sem_manager, {
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let semset = semset_arc.lock();
                 if semnum < 0 || semnum as usize >= semset.semaphores.len() {
                     return Err(LinuxError::EINVAL);
@@ -329,15 +329,15 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(semset.semaphores[semnum as usize].semzcnt as isize)
             })
         }
-        
+
         GETALL => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserPtr::<i16>::from(arg);
-                
+
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let semset = semset_arc.lock();
                 for (i, sem) in semset.semaphores.iter().enumerate() {
                     *buf_ptr.offset(i).get_as_mut()? = sem.semval;
@@ -345,15 +345,15 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 Ok(0)
             })
         }
-        
+
         SETALL => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserConstPtr::<i16>::from(arg);
-                
+
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
-                
+
                 let mut semset = semset_arc.lock();
                 for (i, sem) in semset.semaphores.iter_mut().enumerate() {
                     let val = *buf_ptr.offset(i).get_as_ref()?;
@@ -363,13 +363,13 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                     sem.semval = val;
                     sem.sempid = current_pid();
                 }
-                
+
                 semset.sem_info.sem_ctime = monotonic_time_nanos() as __kernel_time_t;
                 semset.wake_up_processes();
                 Ok(0)
             })
         }
-        
+
         _ => Err(LinuxError::EINVAL),
     }
 }

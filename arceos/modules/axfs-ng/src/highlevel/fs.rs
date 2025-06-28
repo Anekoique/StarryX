@@ -12,7 +12,7 @@ use axfs_ng_vfs::{
     path::{Component, Components, Path, PathBuf},
 };
 
-use super::{FileFlags, FsFile};
+use super::{FileFlags, FsFile, OpenOptions, OpenResult};
 
 pub const SYMLINKS_MAX: usize = 40;
 
@@ -20,18 +20,12 @@ pub const SYMLINKS_MAX: usize = 40;
 axns::def_resource! {
     pub static FS_CONTEXT: axns::ResArc<axsync::Mutex<FsContext<axsync::RawMutex>>> = axns::ResArc::new();
 }
+
 #[cfg(feature = "thread-local")]
 impl FS_CONTEXT {
     pub fn copy_inner(&self) -> axsync::Mutex<FsContext<axsync::RawMutex>> {
         axsync::Mutex::new(self.lock().clone())
     }
-}
-
-pub struct ReadDirEntry {
-    pub name: String,
-    pub ino: u64,
-    pub node_type: NodeType,
-    pub offset: u64,
 }
 
 /// Provides `std::fs`-like interface.
@@ -203,7 +197,7 @@ impl<M: RawMutex> FsContext<M> {
 
     /// Writes the entire contents of a bytes vector into a file.
     pub fn write(&self, path: impl AsRef<Path>, data: impl AsRef<[u8]>) -> VfsResult<()> {
-        FsFile::create(self, path.as_ref())?.write_all(data.as_ref())?;
+        self.create_file(path)?.write_all(data.as_ref())?;
         Ok(())
     }
 
@@ -288,6 +282,86 @@ impl<M: RawMutex> FsContext<M> {
     pub fn canonicalize(&self, path: impl AsRef<Path>) -> VfsResult<PathBuf> {
         self.resolve(path.as_ref())?.absolute_path()
     }
+
+    /// Open file with the given options
+    pub fn open(&self, options: &OpenOptions, path: impl AsRef<Path>) -> VfsResult<OpenResult<M>> {
+        let path = path.as_ref();
+
+        // Validate options
+        if !options.is_valid() {
+            return Err(VfsError::EINVAL);
+        }
+
+        // Convert options to flags
+        let flags = options.to_flags()?;
+
+        // Resolve the file location
+        let loc = match self.resolve_parent(path) {
+            Ok((parent, name)) => parent
+                .open_file_or_create(
+                    &name,
+                    options.get_create(),
+                    options.get_create_new(),
+                    NodePermission::from_bits_truncate(options.get_mode() as _),
+                    options.get_user(),
+                )?
+                .clone(),
+            Err(VfsError::EINVAL) => {
+                // root directory
+                self.root_dir().clone()
+            }
+            Err(err) => return Err(err),
+        };
+
+        // Check directory-specific constraints
+        if options.get_directory() {
+            if flags.contains(FileFlags::WRITE) {
+                return Err(VfsError::EISDIR);
+            }
+            loc.check_is_dir()?;
+        }
+
+        // Handle file truncation
+        if options.get_truncate() {
+            loc.entry().as_file()?.set_len(0)?;
+        }
+
+        // Return appropriate result based on whether it's a directory or file
+        Ok(if loc.is_dir() {
+            OpenResult::Dir(loc)
+        } else {
+            OpenResult::File(FsFile::new(loc, flags))
+        })
+    }
+
+    /// Convenience method to open a file for reading
+    pub fn open_file(&self, path: impl AsRef<Path>) -> VfsResult<FsFile<M>> {
+        let options = OpenOptions::new().read(true).clone();
+        self.open(&options, path)?.into_file()
+    }
+
+    /// Convenience method to create a new file for writing
+    pub fn create_file(&self, path: impl AsRef<Path>) -> VfsResult<FsFile<M>> {
+        let options = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .clone();
+        self.open(&options, path)?.into_file()
+    }
+
+    /// Convenience method to open a directory
+    pub fn open_dir(&self, path: impl AsRef<Path>) -> VfsResult<Location<M>> {
+        let options = OpenOptions::new().directory(true).clone();
+        self.open(&options, path)?.into_dir()
+    }
+}
+
+pub struct ReadDirEntry {
+    pub name: String,
+    pub ino: u64,
+    pub node_type: NodeType,
+    pub offset: u64,
 }
 
 /// Iterator returned by [`FsContext::read_dir`].
