@@ -2,7 +2,7 @@ use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axtask::current;
 use memory_addr::{VirtAddr, VirtAddrRange};
-use starry_core::task::TaskExt;
+use starry_core::{mm::MmapRegion, task::TaskExt};
 
 use crate::{
     fs::{File, FileLike},
@@ -68,22 +68,27 @@ pub fn sys_mmap(
             .ok_or(LinuxError::ENOMEM)?
     };
 
-    let mut populate = map_flags.contains(MmapFlags::POPULATE);
+    // FIXME: real lazy alloc
+    let populate = if fd == -1 {
+        false
+    } else {
+        !map_flags.contains(MmapFlags::ANONYMOUS)
+    };
+    // let mut populate = map_flags.contains(MmapFlags::POPULATE);
     // FIXME: Force populate for the application's TEXT segment to prove
     // that lazy allocation is not the source of the error.
-    if fd != -1
-        && (permission_flags.contains(MmapProt::EXEC) || length == 0xa000 || length == 0xb000)
-    {
-        warn!("Forcing POPULATE=true for application TEXT segment");
-        populate = true;
-    }
+    // if fd != -1
+    //     && (permission_flags.contains(MmapProt::EXEC) || length == 0xa000 || length == 0xb000)
+    // {
+    //     warn!("Forcing POPULATE=true for application TEXT segment");
+    //     populate = true;
+    // }
 
     aspace.map_alloc(
         start_addr,
         aligned_length,
         permission_flags.into(),
         populate,
-        map_flags.contains(MmapFlags::SHARED),
     )?;
 
     if populate {

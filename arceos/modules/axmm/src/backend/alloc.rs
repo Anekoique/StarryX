@@ -1,5 +1,5 @@
-use axalloc::global_allocator;
 use ::alloc::vec::Vec;
+use axalloc::global_allocator;
 use axhal::mem::{phys_to_virt, virt_to_phys};
 use axhal::paging::{MappingFlags, PageSize, PageTable};
 use memory_addr::{PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr};

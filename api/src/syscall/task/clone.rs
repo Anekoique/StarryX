@@ -6,7 +6,6 @@ use axprocess::Pid;
 use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
-use bitflags::bitflags;
 use spin::RwLock;
 use starry_core::{
     mm::copy_from_kernel,

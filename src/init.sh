@@ -41,6 +41,7 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
+./libctest_testcode.sh
 ./basic_testcode.sh
 ./lua_testcode.sh
 ./busybox_testcode.sh

@@ -13,7 +13,7 @@ use alloc::{
     vec::Vec,
 };
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::File;
+use axfs_ng::FsFile;
 use axhal::{
     arch::UspaceContext,
     irq::with_irqs_disabled,
@@ -36,7 +36,7 @@ use crate::{
     futex::FutexTable,
     mm::{MmapRegion, VmaMapping},
     resources::Rlimits,
-    time::{TimeStat, TimerType},
+    time::TimeStat,
 };
 
 /// Create a new user task.
@@ -187,10 +187,6 @@ impl axsignal::api::WaitQueue for WaitQueueWrapper {
 
 /// Extended data for [`Thread`].
 pub struct ThreadData {
-    /// The clear thread tid field
-    ///
-    /// See <https://manpages.debian.org/unstable/manpages-dev/set_tid_address.2.en.html#clear_child_tid>
-    ///
     /// When the thread exits, the kernel clears the word at this address if it is not NULL.
     pub clear_child_tid: AtomicUsize,
     /// The head of the robust list
@@ -323,7 +319,7 @@ impl ProcessData {
     }
 
     /// Get the file associated with the given virtual address
-    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<File<RawMutex>>>> {
+    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<FsFile<RawMutex>>>> {
         self.vma_mapping.read().get_file_by_addr(vaddr)
     }
 

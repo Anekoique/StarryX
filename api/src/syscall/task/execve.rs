@@ -8,8 +8,11 @@ use alloc::{
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axhal::arch::TrapFrame;
-use axtask::{TaskExtRef, current};
-use starry_core::mm::{load_user_app, map_trampoline};
+use axtask::current;
+use starry_core::{
+    mm::{load_user_app, map_trampoline},
+    task::TaskExt,
+};
 
 use crate::ptr::UserConstPtr;
 
@@ -50,9 +53,7 @@ pub fn sys_execve(
         path, args, envs
     );
 
-    let curr = current();
-    let curr_ext = curr.task_ext();
-
+    let curr_ext = TaskExt::from_task(&current());
     if curr_ext.thread.process().threads().len() > 1 {
         // TODO: handle multi-thread case
         error!("sys_execve: multi-thread not supported");
@@ -76,7 +77,7 @@ pub fn sys_execve(
     let name = path
         .rsplit_once('/')
         .map_or(path.as_str(), |(_, name)| name);
-    curr.set_name(name);
+    current().set_name(name);
     *curr_ext.process_data().exe_path.write() = FS_CONTEXT.lock().canonicalize(path)?.to_string();
 
     // TODO: fd close-on-exec

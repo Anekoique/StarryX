@@ -5,11 +5,12 @@ use core::ffi::CStr;
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},
+    sync::Arc,
     vec,
     vec::Vec,
 };
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, File};
+use axfs_ng::{FS_CONTEXT, FsFile};
 use axhal::{mem::virt_to_phys, paging::MappingFlags};
 use axmm::{AddrSpace, kernel_aspace};
 use axsync::{Mutex, RawMutex};
@@ -237,7 +238,7 @@ pub struct MmapRegion {
     /// Virtual address range of the mapping
     pub vaddr_range: VirtAddrRange,
     /// Associated file descriptor (None for anonymous mappings)
-    pub vm_file: Option<Arc<Mutex<File<RawMutex>>>>,
+    pub vm_file: Option<Arc<Mutex<FsFile<RawMutex>>>>,
     /// Offset in the file
     pub file_offset: isize,
     /// Protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
@@ -364,7 +365,7 @@ impl VmaMapping {
     }
 
     /// Get the file of the region by address
-    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<File<RawMutex>>>> {
+    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<FsFile<RawMutex>>>> {
         let region = self.find_region_by_addr(vaddr)?;
         region.vm_file.clone()
     }

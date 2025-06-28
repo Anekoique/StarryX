@@ -4,9 +4,12 @@ use axhal::{
     trap::{PAGE_FAULT, register_trap_handler},
 };
 use axsignal::{SignalInfo, Signo};
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
-use starry_core::{mm::is_accessing_user_memory, task::send_signal_process};
+use starry_core::{
+    mm::is_accessing_user_memory,
+    task::{TaskExt, send_signal_process},
+};
 
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
@@ -18,11 +21,11 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         return false;
     }
 
-    let curr = current();
+    let curr_ext = TaskExt::from_task(&current());
     let send_sigsegv = || {
         debug!("Sending SIGSEGV");
         let _ = send_signal_process(
-            curr.task_ext().thread.process(),
+            curr_ext.thread.process(),
             SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
         );
     };
@@ -32,7 +35,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         .contains(&vaddr.as_usize())
     {
         // Stack extension, check rlimit
-        let rlimit = &curr.task_ext().process_data().rlimits.read()[RLIMIT_STACK];
+        let rlimit = &curr_ext.process_data().rlimits.read()[RLIMIT_STACK];
         let size = axconfig::plat::USER_STACK_TOP - vaddr.as_usize();
         if size as u64 > rlimit.current {
             send_sigsegv();
@@ -41,8 +44,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
 
     // First check if we can find a region, return false if not found
 
-    let buf = curr
-        .task_ext()
+    let buf = curr_ext
         .process_data()
         .find_mmap_region_by_addr(vaddr)
         .and_then(|region| region.has_file())
@@ -53,8 +55,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
                 .map_err(|_| send_sigsegv())
         });
 
-    if !curr
-        .task_ext()
+    if !curr_ext
         .process_data()
         .aspace
         .lock()
@@ -62,20 +63,19 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
     {
         warn!(
             "{} ({:?}): segmentation fault at {:#x}, sending SIGSEGV",
-            curr.id_name(),
-            curr.task_ext().thread,
+            current().id_name(),
+            curr_ext.thread,
             vaddr
         );
         let _ = send_signal_process(
-            curr.task_ext().thread.process(),
+            curr_ext.thread.process(),
             SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
         );
     }
 
     // Write buffer to address space if we have one
     if let Some(Ok(data)) = buf {
-        let _ = curr
-            .task_ext()
+        let _ = curr_ext
             .process_data()
             .aspace
             .lock()
