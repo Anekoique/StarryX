@@ -271,6 +271,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::getpid => sys_getpid(),
         Sysno::getppid => sys_getppid(),
         Sysno::gettid => sys_gettid(),
+        Sysno::setsid => sys_setsid(),
 
         // task sched
         Sysno::sched_yield => sys_sched_yield(),
