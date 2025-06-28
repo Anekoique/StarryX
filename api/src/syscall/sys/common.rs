@@ -39,12 +39,12 @@ const fn pad_str(info: &str) -> [c_char; 65] {
 }
 
 const UTSNAME: new_utsname = new_utsname {
-    sysname: pad_str("Starry"),
-    nodename: pad_str("Starry - machine[0]"),
+    sysname: pad_str("StarryX"),
+    nodename: pad_str("StarryX - machine[0]"),
     release: pad_str("10.0.0"),
     version: pad_str("10.0.0"),
     machine: pad_str("10.0.0"),
-    domainname: pad_str("https://github.com/oscomp/starry-next"),
+    domainname: pad_str("https://github.com/Anekoique/StarryX"),
 };
 
 pub fn sys_uname(name: UserPtr<new_utsname>) -> LinuxResult<isize> {

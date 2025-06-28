@@ -1,3 +1,5 @@
+//! Shared memory system calls implementation.
+
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
@@ -8,223 +10,297 @@ use page_table_entry::MappingFlags;
 use starry_core::task::TaskExt;
 
 use crate::{
-    ctypes::__kernel_time_t,
     ipc::{
         IPC_MANAGER, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, ShmAtFlags, ShmGetFlags, ShmInfo,
         ShmSegment,
     },
     ptr::{UserPtr, nullable},
-    time::monotonic_time_nanos,
+    with_ipc_manager,
 };
 
-// called when a process exit, detach all the shmem related
-pub fn clear_proc_shm(pid: Pid) {
-    let ipc_manager = IPC_MANAGER.lock();
-    let mut shm_manager = ipc_manager.get_shm().lock();
-    if let Some(shmids) = shm_manager.get_shmids_by_pid(pid) {
-        for shmid in shmids {
-            let shm_inner = shm_manager.get_inner_by_shmid(shmid).unwrap();
-            let mut shm_inner = shm_inner.lock();
-            shm_inner.detach_process(pid);
-
-            if shm_inner.rmid && shm_inner.attach_count() == 0 {
-                shm_manager.remove_shmid(shmid);
-            }
-        }
-    }
-    shm_manager.remove_pid(pid);
-}
-
-pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> LinuxResult<isize> {
-    let page_num = memory_addr::align_up_4k(size) / PAGE_SIZE_4K;
-    if page_num == 0 {
-        return Err(LinuxError::EINVAL);
-    }
-
-    let mut mapping_flags = MappingFlags::from_name("USER").unwrap();
+/// Convert shared memory flags to mapping flags
+fn convert_shm_flags_to_mapping(shmflg: usize) -> LinuxResult<MappingFlags> {
+    let mut mapping_flags = MappingFlags::from_name("USER")
+        .ok_or(LinuxError::EINVAL)?;
+    
     if (shmflg as u32) & ShmGetFlags::SHM_R.bits() != 0 {
         mapping_flags.insert(MappingFlags::READ);
     }
     if (shmflg as u32) & ShmGetFlags::SHM_W.bits() != 0 {
         mapping_flags.insert(MappingFlags::WRITE);
     }
-
-    let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
-    let ipc_manager = IPC_MANAGER.lock();
-    let mut shm_manager = ipc_manager.get_shm().lock();
-
-    if key != IPC_PRIVATE {
-        // This process has already created a shared memory segment with the same key
-        if let Some(shmid) = shm_manager.get_shmid_by_key(key) {
-            let shm_inner = shm_manager
-                .get_inner_by_shmid(shmid)
-                .ok_or(LinuxError::EINVAL)?;
-            let mut shm_inner = shm_inner.lock();
-            return shm_inner.try_update(size, mapping_flags, cur_pid);
-        }
-    }
-
-    // Create a new shm_inner
-    let shmid = shm_manager.allocate_shmid();
-    let shm_inner = Arc::new(Mutex::new(ShmSegment::new(
-        key,
-        shmid,
-        size,
-        mapping_flags,
-        cur_pid,
-    )));
-    shm_manager.insert_key_shmid(key, shmid);
-    shm_manager.insert_shmid_inner(shmid, shm_inner);
-
-    Ok(shmid as isize)
+    
+    Ok(mapping_flags)
 }
 
-pub fn sys_shmat(shmid: i32, addr: usize, shmflg: u32) -> LinuxResult<isize> {
-    let shm_inner = {
-        let ipc_manager = IPC_MANAGER.lock();
-        let shm_manager = ipc_manager.get_shm().lock();
-        shm_manager.get_inner_by_shmid(shmid).unwrap()
-    };
-    let mut shm_inner = shm_inner.lock();
-    let mut mapping_flags = shm_inner.mapping_flags;
-    let shm_flg = ShmAtFlags::from_bits_truncate(shmflg);
+/// Get shared memory statistics (example using macro)
+pub fn get_shm_stats() -> (usize, usize) {
+    with_ipc_manager!(shm, manager, {
+        (manager.segment_count(), manager.total_pages())
+    })
+}
 
-    if shm_flg.contains(ShmAtFlags::SHM_RDONLY) {
-        mapping_flags.remove(MappingFlags::WRITE);
+/// Cleanup shared memory for a specific process on exit
+pub fn clear_proc_shm(pid: Pid) {
+    IPC_MANAGER.with_shm(|shm_manager| {
+        if let Some(shmids) = shm_manager.get_shmids_by_pid(pid) {
+            for shmid in shmids {
+                if let Some(segment) = shm_manager.get_segment_by_shmid(shmid) {
+                    let mut segment = segment.lock();
+                    if segment.detach_process(pid).is_ok() && segment.should_remove() {
+                        // Segment will be cleaned up by cleanup_orphaned_segments
+                    }
+                }
+            }
+        }
+        
+        shm_manager.remove_pid(pid);
+        shm_manager.cleanup_orphaned_segments();
+    });
+}
+
+/// Create or get a shared memory segment
+/// 
+/// # Arguments
+/// * `key` - IPC key for the segment
+/// * `size` - Size of the segment in bytes
+/// * `shmflg` - Flags controlling creation and permissions
+pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> LinuxResult<isize> {
+    // Validate basic parameters
+    let page_num = memory_addr::align_up_4k(size) / PAGE_SIZE_4K;
+    if page_num == 0 {
+        return Err(LinuxError::EINVAL);
     }
 
-    // TODO: solve shmflg: SHM_RND and SHM_REMAP
-
+    let mapping_flags = convert_shm_flags_to_mapping(shmflg)?;
     let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
-    let process_data = TaskExt::from_task(&current()).process_data();
-    let mut aspace = process_data.aspace.lock();
+    
+    IPC_MANAGER.with_shm(|shm_manager| {
+        // Validate system limits
+        shm_manager.validate_segment_params(size, shmflg as u32)?;
 
-    let start_aligned = memory_addr::align_down_4k(addr);
-    let length = shm_inner.page_num * PAGE_SIZE_4K;
+        // Check if segment with this key already exists
+        if key != IPC_PRIVATE {
+            if let Some(shmid) = shm_manager.get_shmid_by_key(key) {
+                let segment = shm_manager.get_segment_by_shmid(shmid)
+                    .ok_or(LinuxError::EINVAL)?;
+                let mut segment = segment.lock();
+                return segment.try_update(size, mapping_flags, cur_pid);
+            }
+        }
 
-    // alloc the virtual address range
-    assert!(shm_inner.get_addr_range(cur_pid).is_none());
-    let start_addr = aspace
-        .find_free_area(
-            VirtAddr::from(start_aligned),
-            length,
-            VirtAddrRange::new(aspace.base(), aspace.end()),
-        )
-        .or_else(|| {
-            aspace.find_free_area(
-                aspace.base(),
-                length,
-                VirtAddrRange::new(aspace.base(), aspace.end()),
-            )
-        })
-        .ok_or(LinuxError::ENOMEM)?;
-    let end_addr = VirtAddr::from(start_addr.as_usize() + length);
-    let va_range = VirtAddrRange::new(start_addr, end_addr);
+        // Create new shared memory segment
+        let shmid = shm_manager.allocate_shmid();
+        let segment = Arc::new(Mutex::new(ShmSegment::new(
+            key,
+            shmid,
+            size,
+            mapping_flags,
+            cur_pid,
+        )));
+        
+        shm_manager.insert_key_shmid(key, shmid);
+        shm_manager.insert_shmid_segment(shmid, segment);
 
-    let ipc_manager = IPC_MANAGER.lock();
-    let mut shm_manager = ipc_manager.get_shm().lock();
-    shm_manager.insert_shmid_vaddr(cur_pid, shm_inner.shmid, start_addr);
-    info!(
-        "Process {} alloc shm virt addr start: {:#x}, size: {}, mapping_flags: {:#x?}",
-        cur_pid,
-        start_addr.as_usize(),
-        length,
-        mapping_flags
-    );
+        Ok(shmid as isize)
+    })
+}
 
-    // map the virtual address range to the physical address
-    if let Some(phys_pages) = shm_inner.phys_pages.clone() {
-        // Another proccess has attached the shared memory
+/// Find available virtual address range for shared memory mapping
+fn find_mapping_address(
+    aspace: &mut axmm::AddrSpace,
+    requested_addr: usize,
+    length: usize,
+) -> LinuxResult<VirtAddr> {
+    let start_aligned = memory_addr::align_down_4k(requested_addr);
+    let range = VirtAddrRange::new(aspace.base(), aspace.end());
+    
+    // Try requested address first
+    let start_addr = if requested_addr != 0 {
+        aspace.find_free_area(VirtAddr::from(start_aligned), length, range)
+            .or_else(|| aspace.find_free_area(aspace.base(), length, range))
+    } else {
+        aspace.find_free_area(aspace.base(), length, range)
+    };
+    
+    start_addr.ok_or(LinuxError::ENOMEM)
+}
+
+/// Map shared memory segment to virtual address space
+fn map_shared_memory(
+    aspace: &mut axmm::AddrSpace,
+    segment: &mut ShmSegment,
+    start_addr: VirtAddr,
+    length: usize,
+    mapping_flags: MappingFlags,
+    cur_pid: Pid,
+) -> LinuxResult<()> {
+    if let Some(phys_pages) = segment.phys_pages.clone() {
+        // Segment already has physical pages from another process
         aspace.map_shared(start_addr, length, mapping_flags, Some(phys_pages))?;
     } else {
-        // This is the first process to attach the shared memory
-        let result = aspace.map_shared(start_addr, length, mapping_flags, None);
-
-        match result {
+        // First process to attach - allocate physical pages
+        match aspace.map_shared(start_addr, length, mapping_flags, None) {
             Ok(pages) => {
                 info!(
-                    "proc {} map shm addr: {:#x}, size: {}",
-                    cur_pid,
-                    start_addr.as_usize(),
-                    length
+                    "Process {} allocated shared memory: addr={:#x}, size={}",
+                    cur_pid, start_addr.as_usize(), length
                 );
-                shm_inner.map_to_phys(pages);
+                segment.map_to_phys(pages);
             }
             Err(e) => {
                 error!(
-                    "proc {} map shm addr: {:#x}, size: {}, error: {:?}",
-                    cur_pid,
-                    start_addr.as_usize(),
-                    length,
-                    e
+                    "Failed to map shared memory for process {}: addr={:#x}, size={}, error={:?}",
+                    cur_pid, start_addr.as_usize(), length, e
                 );
                 return Err(LinuxError::ENOMEM);
             }
         }
     }
-
-    shm_inner.attach_process(cur_pid, va_range);
-    Ok(start_addr.as_usize() as isize)
+    
+    Ok(())
 }
 
-pub fn sys_shmctl(shmid: i32, cmd: u32, buf: UserPtr<ShmInfo>) -> LinuxResult<isize> {
-    let shm_inner = {
-        let ipc_manager = IPC_MANAGER.lock();
-        let shm_manager = ipc_manager.get_shm().lock();
-        shm_manager
-            .get_inner_by_shmid(shmid)
-            .ok_or(LinuxError::EINVAL)?
-    };
-    let mut shm_inner = shm_inner.lock();
+/// Attach a shared memory segment to the calling process
+/// 
+/// # Arguments
+/// * `shmid` - Shared memory identifier
+/// * `addr` - Requested address (0 for automatic allocation)
+/// * `shmflg` - Flags controlling attachment behavior
+pub fn sys_shmat(shmid: i32, addr: usize, shmflg: u32) -> LinuxResult<isize> {
+    let segment = IPC_MANAGER.with_shm(|shm_manager| {
+        shm_manager.get_segment_by_shmid(shmid).ok_or(LinuxError::EINVAL)
+    })?;
+    
+    let mut segment = segment.lock();
+    let mut mapping_flags = segment.mapping_flags;
+    let shm_flg = ShmAtFlags::from_bits_truncate(shmflg);
 
-    if cmd == IPC_SET {
-        shm_inner.shmid_ds = *buf.get_as_mut()?;
-    } else if cmd == IPC_STAT {
-        if let Some(shmid_ds) = nullable!(buf.get_as_mut())? {
-            *shmid_ds = shm_inner.shmid_ds;
-        }
-    } else if cmd == IPC_RMID {
-        shm_inner.rmid = true;
-    } else {
+    // Apply read-only flag
+    if shm_flg.contains(ShmAtFlags::SHM_RDONLY) {
+        mapping_flags.remove(MappingFlags::WRITE);
+    }
+
+    let cur_pid = TaskExt::from_task(&current()).thread.process().pid();
+    let process_data = TaskExt::from_task(&current()).process_data();
+    let mut aspace = process_data.aspace.lock();
+
+    let length = segment.page_num * PAGE_SIZE_4K;
+
+    // Check if process is already attached
+    if segment.is_attached(cur_pid) {
         return Err(LinuxError::EINVAL);
     }
 
-    shm_inner.shmid_ds.shm_ctime = monotonic_time_nanos() as __kernel_time_t;
+    // Find virtual address for mapping
+    let start_addr = find_mapping_address(&mut aspace, addr, length)?;
+    let end_addr = VirtAddr::from(start_addr.as_usize() + length);
+    let va_range = VirtAddrRange::new(start_addr, end_addr);
+
+    // Register mapping before actual memory mapping
+    IPC_MANAGER.with_shm(|shm_manager| {
+        shm_manager.insert_shmid_vaddr(cur_pid, segment.shmid, start_addr);
+    });
+    
+    info!(
+        "Process {} attaching shared memory: shmid={}, addr={:#x}, size={}, flags={:#x?}",
+        cur_pid, shmid, start_addr.as_usize(), length, mapping_flags
+    );
+
+    // Perform the actual memory mapping
+    map_shared_memory(&mut aspace, &mut segment, start_addr, length, mapping_flags, cur_pid)?;
+
+    // Update segment metadata
+    segment.attach_process(cur_pid, va_range)
+        .map_err(|_| LinuxError::EINVAL)?;
+    
+    Ok(start_addr.as_usize() as isize)
+}
+
+/// Control operations on shared memory segments
+/// 
+/// # Arguments
+/// * `shmid` - Shared memory identifier
+/// * `cmd` - Control command (IPC_STAT, IPC_SET, IPC_RMID)
+/// * `buf` - Buffer for shared memory information
+pub fn sys_shmctl(shmid: i32, cmd: u32, buf: UserPtr<ShmInfo>) -> LinuxResult<isize> {
+    let segment = IPC_MANAGER.with_shm(|shm_manager| {
+        shm_manager.get_segment_by_shmid(shmid).ok_or(LinuxError::EINVAL)
+    })?;
+    
+    let mut segment = segment.lock();
+
+    match cmd {
+        IPC_SET => {
+            // Update segment information
+            if !buf.is_null() {
+                segment.shmid_ds = *buf.get_as_mut()?;
+                segment.shmid_ds.update_change_time();
+            }
+        }
+        IPC_STAT => {
+            // Get segment information
+            if let Some(shmid_ds) = nullable!(buf.get_as_mut())? {
+                *shmid_ds = segment.shmid_ds;
+            }
+        }
+        IPC_RMID => {
+            // Mark segment for removal
+            segment.rmid = true;
+            segment.shmid_ds.update_change_time();
+        }
+        _ => {
+            return Err(LinuxError::EINVAL);
+        }
+    }
+
     Ok(0)
 }
 
+/// Detach shared memory segment from the calling process
+/// 
+/// # Arguments
+/// * `shmaddr` - Address of the shared memory segment to detach
 pub fn sys_shmdt(shmaddr: usize) -> LinuxResult<isize> {
     let shmaddr = VirtAddr::from(shmaddr);
     let pid = TaskExt::from_task(&current()).thread.process().pid();
-    let shmid = {
-        let ipc_manager = IPC_MANAGER.lock();
-        let shm_manager = ipc_manager.get_shm().lock();
-        shm_manager
+    
+    // Find the shared memory ID for this address and perform detach operations
+    let should_remove_segment = IPC_MANAGER.with_shm(|shm_manager| -> LinuxResult<(i32, bool)> {
+        let shmid = shm_manager
             .get_shmid_by_vaddr(pid, shmaddr)
-            .ok_or(LinuxError::EINVAL)?
-    };
+            .ok_or(LinuxError::EINVAL)?;
 
-    let shm_inner = {
-        let ipc_manager = IPC_MANAGER.lock();
-        let shm_manager = ipc_manager.get_shm().lock();
-        shm_manager
-            .get_inner_by_shmid(shmid)
-            .ok_or(LinuxError::EINVAL)?
-    };
-    let mut shm_inner = shm_inner.lock();
-    let va_range = shm_inner.get_addr_range(pid).ok_or(LinuxError::EINVAL)?;
+        let segment = shm_manager
+            .get_segment_by_shmid(shmid)
+            .ok_or(LinuxError::EINVAL)?;
+        
+        let mut segment = segment.lock();
+        
+        // Get the virtual address range for validation
+        let va_range = segment.get_addr_range(pid)
+            .ok_or(LinuxError::EINVAL)?;
 
-    let mut aspace = TaskExt::from_task(&current()).process_data().aspace.lock();
-    aspace.unmap(va_range.start, va_range.size())?;
-    axhal::arch::flush_tlb(None);
+        // Unmap from virtual address space
+        let mut aspace = TaskExt::from_task(&current()).process_data().aspace.lock();
+        aspace.unmap(va_range.start, va_range.size())?;
+        axhal::arch::flush_tlb(None);
 
-    let ipc_manager = IPC_MANAGER.lock();
-    let mut shm_manager = ipc_manager.get_shm().lock();
-    shm_manager.remove_shmaddr(pid, shmaddr);
-    shm_inner.detach_process(pid);
+        // Update bookkeeping
+        shm_manager.remove_shmaddr(pid, shmaddr);
+        segment.detach_process(pid)
+            .map_err(|_| LinuxError::EINVAL)?;
 
-    if shm_inner.rmid && shm_inner.attach_count() == 0 {
-        shm_manager.remove_shmid(shmid);
+        // Check if segment should be removed
+        let should_remove = segment.should_remove();
+        Ok((shmid, should_remove))
+    })?;
+
+    // Remove segment if needed (done outside the closure to avoid deadlock)
+    if should_remove_segment.1 {
+        IPC_MANAGER.with_shm(|shm_manager| {
+            shm_manager.remove_shmid(should_remove_segment.0);
+        });
     }
 
     Ok(0)

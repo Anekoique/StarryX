@@ -1,6 +1,9 @@
+//! IPC utilities and common structures.
+
+use core::sync::atomic::{AtomicI32, Ordering};
+
 use axns::{ResArc, def_resource};
 use axsync::Mutex;
-use core::sync::atomic::{AtomicI32, Ordering};
 
 use super::msg::{MSGMAX, MSGMNB, MSGMNI, MsgManager};
 use super::sem::{SEMMNI, SEMMNS, SEMMSL, SEMOPM, SEMVMX, SemManager};
@@ -9,78 +12,132 @@ use crate::utils::ctypes::{
     __kernel_gid_t, __kernel_key_t, __kernel_mode_t, __kernel_uid_t, c_long, c_ushort,
 };
 
+/// IPC private key constant
 pub const IPC_PRIVATE: i32 = 0;
 
+/// IPC control flags
 pub const IPC_CREAT: u32 = 0o1000;
 pub const IPC_EXCL: u32 = 0o2000;
 pub const IPC_NOWAIT: u32 = 0o4000;
 
+/// IPC control commands
 pub const IPC_RMID: u32 = 0;
 pub const IPC_SET: u32 = 1;
 pub const IPC_STAT: u32 = 2;
 pub const IPC_INFO: u32 = 3;
 
+/// IPC permission structure as defined by POSIX
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct IpcPerm {
+    /// Key supplied to shmget(2)
     pub key: __kernel_key_t,
+    /// Effective UID of owner
     pub uid: __kernel_uid_t,
+    /// Effective GID of owner
     pub gid: __kernel_gid_t,
+    /// Effective UID of creator
     pub cuid: __kernel_uid_t,
+    /// Effective GID of creator
     pub cgid: __kernel_gid_t,
+    /// Permissions + SHM_DEST and SHM_LOCKED flags
     pub mode: __kernel_mode_t,
+    /// Sequence number
     pub seq: c_ushort,
-    pub pad: c_ushort,   // for memory align
-    pub unused0: c_long, // for memory align
-    pub unused1: c_long, // for memory align
+    /// Padding for memory alignment
+    pub pad: c_ushort,
+    /// Reserved for future use
+    pub unused0: c_long,
+    /// Reserved for future use
+    pub unused1: c_long,
 }
 
+impl IpcPerm {
+    /// Create a new IPC permission structure
+    pub fn new(key: i32, mode: __kernel_mode_t) -> Self {
+        Self {
+            key,
+            uid: 0,
+            gid: 0,
+            cuid: 0,
+            cgid: 0,
+            mode,
+            seq: 0,
+            pad: 0,
+            unused0: 0,
+            unused1: 0,
+        }
+    }
+}
+
+/// IPC ID generator for unique resource identification
+#[derive(Debug)]
 pub struct IpcidGenerator {
     next_ipcid: AtomicI32,
 }
 
 impl Clone for IpcidGenerator {
     fn clone(&self) -> Self {
-        IpcidGenerator {
+        Self {
             next_ipcid: AtomicI32::new(self.next_ipcid.load(Ordering::SeqCst)),
         }
     }
 }
 
 impl IpcidGenerator {
+    /// Create a new IPC ID generator
     pub const fn new() -> Self {
-        IpcidGenerator {
+        Self {
             next_ipcid: AtomicI32::new(0),
         }
     }
 
+    /// Allocate a new IPC ID
     pub fn alloc(&self) -> i32 {
         self.next_ipcid.fetch_add(1, Ordering::SeqCst)
     }
+
+    /// Get the current ID without incrementing
+    pub fn current(&self) -> i32 {
+        self.next_ipcid.load(Ordering::SeqCst)
+    }
 }
 
-#[derive(Clone, Copy)]
+/// System-wide IPC resource limits
+#[derive(Clone, Copy, Debug)]
 pub struct IpcLimits {
     // Shared Memory limits
+    /// Maximum size in bytes for a shared memory segment
     pub shmmax: usize,
+    /// Maximum number of shared memory identifiers
     pub shmmni: usize,
+    /// Maximum number of shared memory pages system-wide
     pub shmall: usize,
 
     // Message Queue limits
+    /// Maximum size in bytes for a message
     pub msgmax: usize,
+    /// Default maximum size in bytes for a message queue
     pub msgmnb: usize,
+    /// Maximum number of message queue identifiers
     pub msgmni: usize,
+    
     // Semaphore limits
+    /// Maximum number of semaphores per semaphore set
     pub semmsl: usize,
+    /// Maximum number of semaphores system-wide
     pub semmns: usize,
+    /// Maximum number of operations per semop call
     pub semopm: usize,
+    /// Maximum number of semaphore identifiers
     pub semmni: usize,
+    /// Maximum value for a semaphore
     pub semvmx: usize,
 }
 
 impl Default for IpcLimits {
     fn default() -> Self {
-        IpcLimits {
+        Self {
             // Shared Memory
             shmmax: SHMMAX,
             shmmni: SHMMNI,
@@ -101,6 +158,7 @@ impl Default for IpcLimits {
     }
 }
 
+/// Central IPC manager coordinating all IPC resources
 pub struct IpcManager {
     shm: Mutex<ShmManager>,
     msg: Mutex<MsgManager>,
@@ -110,7 +168,7 @@ pub struct IpcManager {
 
 impl Clone for IpcManager {
     fn clone(&self) -> Self {
-        IpcManager {
+        Self {
             shm: Mutex::new(self.shm.lock().clone()),
             msg: Mutex::new(self.msg.lock().clone()),
             sem: Mutex::new(self.sem.lock().clone()),
@@ -120,8 +178,9 @@ impl Clone for IpcManager {
 }
 
 impl IpcManager {
+    /// Create a new IPC manager with default limits
     pub fn new() -> Self {
-        IpcManager {
+        Self {
             shm: Mutex::new(ShmManager::new()),
             msg: Mutex::new(MsgManager::new()),
             sem: Mutex::new(SemManager::new()),
@@ -129,27 +188,32 @@ impl IpcManager {
         }
     }
 
+    /// Get reference to shared memory manager
     pub fn get_shm(&self) -> &Mutex<ShmManager> {
         &self.shm
     }
 
+    /// Get reference to message queue manager
     pub fn get_msg(&self) -> &Mutex<MsgManager> {
         &self.msg
     }
 
+    /// Get reference to semaphore manager
     pub fn get_sem(&self) -> &Mutex<SemManager> {
         &self.sem
     }
 
+    /// Get current IPC limits
     pub fn get_limits(&self) -> &IpcLimits {
         &self.limits
     }
 
+    /// Update IPC limits
     pub fn set_limits(&mut self, limits: IpcLimits) {
         self.limits = limits;
     }
 
-    // Get statistics for all IPC resources
+    /// Get comprehensive statistics for all IPC resources
     pub fn get_ipc_stats(&self) -> IpcStats {
         let shm_manager = self.shm.lock();
         let msg_manager = self.msg.lock();
@@ -159,40 +223,107 @@ impl IpcManager {
             shm_segments: shm_manager.segment_count(),
             msg_queues: msg_manager.queue_count(),
             sem_arrays: sem_manager.array_count(),
-            total_shm_pages: 0, // Would need to calculate from segments
+            total_shm_pages: shm_manager.total_pages(),
             total_msg_bytes: msg_manager.total_queues_bytes(),
             total_messages: msg_manager.total_messages(),
             total_semaphores: sem_manager.total_semaphores(),
         }
     }
+
+    /// Check if resource limits are exceeded
+    pub fn check_limits(&self) -> bool {
+        let stats = self.get_ipc_stats();
+        
+        stats.shm_segments <= self.limits.shmmni
+            && stats.msg_queues <= self.limits.msgmni
+            && stats.sem_arrays <= self.limits.semmni
+            && stats.total_shm_pages <= self.limits.shmall
+            && stats.total_semaphores <= self.limits.semmns
+    }
 }
 
+impl Default for IpcManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Comprehensive IPC resource statistics
 #[derive(Debug, Clone, Copy)]
 pub struct IpcStats {
+    /// Number of shared memory segments
     pub shm_segments: usize,
+    /// Number of message queues
     pub msg_queues: usize,
+    /// Number of semaphore arrays
     pub sem_arrays: usize,
+    /// Total pages used by shared memory
     pub total_shm_pages: usize,
+    /// Total bytes used by message queues
     pub total_msg_bytes: usize,
+    /// Total number of messages across all queues
     pub total_messages: usize,
+    /// Total number of semaphores across all arrays
     pub total_semaphores: usize,
 }
 
 def_resource! {
+    /// Global IPC manager instance
     pub static IPC_MANAGER: ResArc<Mutex<IpcManager>> = ResArc::new();
 }
 
 impl IPC_MANAGER {
+    /// Create a copy of the inner IPC manager
     pub fn copy_inner(&self) -> Mutex<IpcManager> {
         Mutex::new(self.lock().clone())
     }
+
+    /// Execute a closure with access to the shared memory manager
+    pub fn with_shm<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut ShmManager) -> R,
+    {
+        let manager = self.lock();
+        let mut shm_manager = manager.get_shm().lock();
+        f(&mut shm_manager)
+    }
+
+    /// Execute a closure with access to the message queue manager
+    pub fn with_msg<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut MsgManager) -> R,
+    {
+        let manager = self.lock();
+        let mut msg_manager = manager.get_msg().lock();
+        f(&mut msg_manager)
+    }
+
+    /// Execute a closure with access to the semaphore manager
+    pub fn with_sem<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut SemManager) -> R,
+    {
+        let manager = self.lock();
+        let mut sem_manager = manager.get_sem().lock();
+        f(&mut sem_manager)
+    }
 }
 
-// TODO: implement System V Ipc with IpcOps
-// pub trait IpcOps {
-//     fn get_new() -> i32;
-// }
+/// Macro to simplify IPC manager access
+#[macro_export]
+macro_rules! with_ipc_manager {
+    (shm, $var:ident, $body:expr) => {
+        $crate::ipc::IPC_MANAGER.with_shm(|$var| $body)
+    };
+    (msg, $var:ident, $body:expr) => {
+        $crate::ipc::IPC_MANAGER.with_msg(|$var| $body)
+    };
+    (sem, $var:ident, $body:expr) => {
+        $crate::ipc::IPC_MANAGER.with_sem(|$var| $body)
+    };
+}
 
+/// Initialize the global IPC manager
 #[ctor_bare::register_ctor]
 fn init_ipc_manager() {
     IPC_MANAGER.init_new(Mutex::new(IpcManager::new()));

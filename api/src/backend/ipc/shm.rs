@@ -1,3 +1,5 @@
+//! Shared memory management implementation.
+
 use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axmm::SharedPages;
@@ -14,81 +16,123 @@ use crate::{
     time::monotonic_time_nanos,
 };
 
+/// Minimum shared memory segment size
 pub const SHMMIN: usize = 1;
+/// Maximum number of shared memory identifiers
 pub const SHMMNI: usize = 4096;
+/// Maximum shared memory segment size
 pub const SHMMAX: usize = usize::MAX - (1 << 24);
+/// Maximum shared memory pages system-wide
 pub const SHMALL: usize = usize::MAX - (1 << 24);
+/// Maximum shared memory segments per process
 pub const SHMSEG: usize = SHMMNI;
 
 bitflags! {
+    /// Shared memory get flags
     pub struct ShmGetFlags: u32 {
+        /// Read permission
         const SHM_R = 0o400;
+        /// Write permission
         const SHM_W = 0o200;
     }
 }
 
 bitflags! {
+    /// Shared memory attach flags
     pub struct ShmAtFlags: u32 {
+        /// Attach for read-only access
         const SHM_RDONLY = 0o10000;
+        /// Round address to SHMLBA boundary
         const SHM_RND = 0o20000;
+        /// Remap existing mapping
         const SHM_REMAP = 0o40000;
+        /// Allow execution of shared memory
         const SHM_EXEC = 0o100000;
     }
 }
 
+/// Shared memory segment information structure
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ShmInfo {
+    /// IPC permissions
     pub shm_perm: IpcPerm,
+    /// Size of segment in bytes
     pub shm_segsz: __kernel_size_t,
+    /// Last attach time
     pub shm_atime: __kernel_time_t,
+    /// Last detach time
     pub shm_dtime: __kernel_time_t,
+    /// Last change time
     pub shm_ctime: __kernel_time_t,
+    /// PID of creator
     pub shm_cpid: __kernel_pid_t,
+    /// PID of last shmat/shmdt
     pub shm_lpid: __kernel_pid_t,
+    /// Number of current attaches
     pub shm_nattch: c_ushort,
 }
 
 impl ShmInfo {
+    /// Create a new shared memory info structure
     pub fn new(key: i32, size: usize, mode: __kernel_mode_t, pid: __kernel_pid_t) -> Self {
+        let current_time = monotonic_time_nanos() as __kernel_time_t;
+
         Self {
-            shm_perm: IpcPerm {
-                key,
-                uid: 0,
-                gid: 0,
-                cuid: 0,
-                cgid: 0,
-                mode,
-                seq: 0,
-                pad: 0,
-                unused0: 0,
-                unused1: 0,
-            },
+            shm_perm: IpcPerm::new(key, mode),
             shm_segsz: size as __kernel_size_t,
             shm_atime: 0,
             shm_dtime: 0,
-            shm_ctime: 0,
+            shm_ctime: current_time,
             shm_cpid: pid,
             shm_lpid: pid,
             shm_nattch: 0,
         }
     }
+
+    /// Update timestamps for attach operation
+    pub fn update_attach_time(&mut self, pid: __kernel_pid_t) {
+        self.shm_atime = monotonic_time_nanos() as __kernel_time_t;
+        self.shm_lpid = pid;
+        self.shm_nattch += 1;
+    }
+
+    /// Update timestamps for detach operation
+    pub fn update_detach_time(&mut self, pid: __kernel_pid_t) {
+        self.shm_dtime = monotonic_time_nanos() as __kernel_time_t;
+        self.shm_lpid = pid;
+        self.shm_nattch = self.shm_nattch.saturating_sub(1);
+    }
+
+    /// Update timestamps for control operation
+    pub fn update_change_time(&mut self) {
+        self.shm_ctime = monotonic_time_nanos() as __kernel_time_t;
+    }
 }
 
+/// Shared memory segment implementation
 #[derive(Clone)]
 pub struct ShmSegment {
+    /// Shared memory identifier
     pub shmid: i32,
+    /// Number of pages in this segment
     pub page_num: usize,
+    /// Virtual address ranges mapped by each process
     pub va_range: BTreeMap<Pid, VirtAddrRange>,
+    /// Physical pages backing this segment
     pub phys_pages: Option<Arc<SharedPages>>,
+    /// Whether segment is marked for removal
     pub rmid: bool,
+    /// Memory mapping flags
     pub mapping_flags: MappingFlags,
+    /// Segment metadata
     pub shmid_ds: ShmInfo,
 }
 
 impl ShmSegment {
+    /// Create a new shared memory segment
     pub fn new(key: i32, shmid: i32, size: usize, mapping_flags: MappingFlags, pid: Pid) -> Self {
-        ShmSegment {
+        Self {
             shmid,
             page_num: memory_addr::align_up_4k(size) / PAGE_SIZE_4K,
             va_range: BTreeMap::new(),
@@ -104,62 +148,106 @@ impl ShmSegment {
         }
     }
 
+    /// Try to update an existing segment with new parameters
     pub fn try_update(
         &mut self,
         size: usize,
         mapping_flags: MappingFlags,
         pid: Pid,
     ) -> LinuxResult<isize> {
+        // Validate that size and permissions match
         if size as __kernel_size_t != self.shmid_ds.shm_segsz
             || mapping_flags.bits() as __kernel_mode_t != self.shmid_ds.shm_perm.mode
         {
             return Err(LinuxError::EINVAL);
         }
+
         self.shmid_ds.shm_lpid = pid as i32;
         Ok(self.shmid as isize)
     }
 
+    /// Set the physical pages backing this segment
     pub fn map_to_phys(&mut self, phys_pages: Arc<SharedPages>) {
         self.phys_pages = Some(phys_pages);
     }
 
+    /// Get the number of processes currently attached
     pub fn attach_count(&self) -> usize {
         self.va_range.len()
     }
 
+    /// Get the virtual address range for a specific process
     pub fn get_addr_range(&self, pid: Pid) -> Option<VirtAddrRange> {
         self.va_range.get(&pid).cloned()
     }
 
-    // called by sys_shmat
-    pub fn attach_process(&mut self, pid: Pid, va_range: VirtAddrRange) {
-        assert!(self.get_addr_range(pid).is_none());
-        self.va_range.insert(pid, va_range);
-        self.shmid_ds.shm_nattch += 1;
-        self.shmid_ds.shm_lpid = pid as __kernel_pid_t;
-        self.shmid_ds.shm_atime = monotonic_time_nanos() as __kernel_time_t;
+    /// Check if a process is attached to this segment
+    pub fn is_attached(&self, pid: Pid) -> bool {
+        self.va_range.contains_key(&pid)
     }
 
-    // called by sys_shmdt
-    pub fn detach_process(&mut self, pid: Pid) {
-        assert!(self.get_addr_range(pid).is_some());
+    /// Attach a process to this segment
+    pub fn attach_process(&mut self, pid: Pid, va_range: VirtAddrRange) -> LinuxResult<()> {
+        if self.is_attached(pid) {
+            return Err(LinuxError::EINVAL);
+        }
+
+        self.va_range.insert(pid, va_range);
+        self.shmid_ds.update_attach_time(pid as __kernel_pid_t);
+
+        Ok(())
+    }
+
+    /// Detach a process from this segment
+    pub fn detach_process(&mut self, pid: Pid) -> LinuxResult<()> {
+        if !self.is_attached(pid) {
+            return Err(LinuxError::EINVAL);
+        }
+
         self.va_range.remove(&pid);
-        self.shmid_ds.shm_nattch -= 1;
-        self.shmid_ds.shm_lpid = pid as __kernel_pid_t;
-        self.shmid_ds.shm_dtime = monotonic_time_nanos() as __kernel_time_t;
+        self.shmid_ds.update_detach_time(pid as __kernel_pid_t);
+
+        Ok(())
+    }
+
+    /// Check if this segment should be removed
+    pub fn should_remove(&self) -> bool {
+        self.rmid && self.attach_count() == 0
+    }
+
+    /// Get total memory usage in pages
+    pub fn memory_usage(&self) -> usize {
+        self.page_num
     }
 }
 
+/// Shared memory manager
 pub struct ShmManager {
+    /// Map from key to shared memory ID
     index: BTreeMap<i32, i32>,
+    /// Map from shared memory ID to segment
     segments: BTreeMap<i32, Arc<Mutex<ShmSegment>>>,
+    /// Map from process ID to (shmid -> virtual address) mappings
     pid_shmid_vaddr: BTreeMap<Pid, BiBTreeMap<i32, VirtAddr>>,
+    /// ID generator for new segments
     id_generator: Mutex<IpcidGenerator>,
 }
 
+impl Clone for ShmManager {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index.clone(),
+            segments: self.segments.clone(),
+            pid_shmid_vaddr: self.pid_shmid_vaddr.clone(),
+            id_generator: Mutex::new(self.id_generator.lock().clone()),
+        }
+    }
+}
+
 impl ShmManager {
+    /// Create a new shared memory manager
     pub const fn new() -> Self {
-        ShmManager {
+        Self {
             segments: BTreeMap::new(),
             index: BTreeMap::new(),
             pid_shmid_vaddr: BTreeMap::new(),
@@ -167,122 +255,146 @@ impl ShmManager {
         }
     }
 
-    // used by sys_shmget
+    /// Find shared memory ID by key
     pub fn get_shmid_by_key(&self, key: i32) -> Option<i32> {
         self.index.get(&key).cloned()
     }
 
-    // the only way to find shm_inner -- the data structure to maintain shm
-    pub fn get_inner_by_shmid(&self, shmid: i32) -> Option<Arc<Mutex<ShmSegment>>> {
+    /// Get shared memory segment by ID
+    pub fn get_segment_by_shmid(&self, shmid: i32) -> Option<Arc<Mutex<ShmSegment>>> {
         self.segments.get(&shmid).cloned()
     }
 
-    // used by sys_shmdt
+    /// Find shared memory ID by process and virtual address
     pub fn get_shmid_by_vaddr(&self, pid: Pid, vaddr: VirtAddr) -> Option<i32> {
         self.pid_shmid_vaddr
-            .get(&pid)
-            .and_then(|map| map.get_by_value(&vaddr))
+            .get(&pid)?
+            .get_by_value(&vaddr)
             .cloned()
     }
 
+    /// Get all shared memory IDs for a process
     pub fn get_shmids_by_pid(&self, pid: Pid) -> Option<Vec<i32>> {
         let map = self.pid_shmid_vaddr.get(&pid)?;
-        let mut res = Vec::new();
-        for key in map.forward.keys() {
-            res.push(*key);
-        }
-        Some(res)
+        Some(map.forward.keys().cloned().collect())
     }
 
-    // used by garbage collection
-    #[allow(dead_code)]
+    /// Find virtual address by process and shared memory ID
     pub fn find_vaddr_by_shmid(&self, pid: Pid, shmid: i32) -> Option<VirtAddr> {
-        self.pid_shmid_vaddr
-            .get(&pid)
-            .and_then(|map| map.get_by_key(&shmid))
-            .cloned()
+        self.pid_shmid_vaddr.get(&pid)?.get_by_key(&shmid).cloned()
     }
 
-    // used by sys_shmget
+    /// Register a new key-to-shmid mapping
     pub fn insert_key_shmid(&mut self, key: i32, shmid: i32) {
         self.index.insert(key, shmid);
     }
 
-    // used by sys_shmat
-    pub fn insert_shmid_inner(&mut self, shmid: i32, segment: Arc<Mutex<ShmSegment>>) {
+    /// Register a new shared memory segment
+    pub fn insert_shmid_segment(&mut self, shmid: i32, segment: Arc<Mutex<ShmSegment>>) {
         self.segments.insert(shmid, segment);
     }
 
-    // used by sys_shmat, aiming at garbage collection when called sys_shmdt
+    /// Register a virtual address mapping for a process
     pub fn insert_shmid_vaddr(&mut self, pid: Pid, shmid: i32, vaddr: VirtAddr) {
-        // maintain the map 'shmid_vaddr'
         self.pid_shmid_vaddr
             .entry(pid)
             .or_insert_with(BiBTreeMap::new)
             .insert(shmid, vaddr);
     }
 
-    /*
-     * Garbage collection for shared memory:
-     * 1. when the process call sys_shmdt, delete everything related to shmaddr,
-     *   including map 'shmid_vaddr';
-     * 2. when the last process detach the shared memory and this shared memory
-     *   was specified with IPC_RMID, delete everything related to this shared memory,
-     *   including all the 3 maps;
-     * 3. when a process exit, delete everything related to this process, including 2
-     *   maps: 'shmid_vaddr' and 'shmid_inner';
-     *
-     *
-     * The attach between the process and the shared memory occurs in sys_shmat,
-     *  and the detach occurs in sys_shmdt, or when the process exits.
-     */
-
-    /*
-     * Note: all the below delete functions only delete the mapping between the shm_id and the shm_inner,
-     *   but the shm_inner is not deleted or modifyed!
-     */
-
-    // called by shmdt
-    pub fn remove_shmaddr(&mut self, pid: Pid, shmaddr: VirtAddr) {
-        let mut empty: bool = false;
-        if let Some(map) = self.pid_shmid_vaddr.get_mut(&pid) {
+    /// Remove a virtual address mapping
+    pub fn remove_shmaddr(&mut self, pid: Pid, shmaddr: VirtAddr) -> bool {
+        let should_remove_pid = if let Some(map) = self.pid_shmid_vaddr.get_mut(&pid) {
             map.remove_by_value(&shmaddr);
-            empty = map.forward.is_empty();
-        }
-        if empty {
+            map.forward.is_empty()
+        } else {
+            false
+        };
+
+        if should_remove_pid {
             self.pid_shmid_vaddr.remove(&pid);
         }
+
+        should_remove_pid
     }
 
-    // called when a process exit
+    /// Remove all mappings for a process
     pub fn remove_pid(&mut self, pid: Pid) {
         self.pid_shmid_vaddr.remove(&pid);
     }
 
-    pub fn remove_shmid(&mut self, shmid: i32) {
-        self.index.remove(&shmid);
+    /// Remove a shared memory segment completely
+    pub fn remove_shmid(&mut self, shmid: i32) -> bool {
+        let key_removed = if let Some(segment) = self.segments.get(&shmid) {
+            let segment = segment.lock();
+            let key = segment.shmid_ds.shm_perm.key;
+            self.index.remove(&key);
+            true
+        } else {
+            false
+        };
+
         self.segments.remove(&shmid);
-        // for map in self.pid_shmid_vaddr.values() {
-        // assert!(map.get_by_key(&shmid).is_none());
-        // }
+        key_removed
     }
 
+    /// Allocate a new shared memory ID
     pub fn allocate_shmid(&self) -> i32 {
         self.id_generator.lock().alloc()
     }
 
+    /// Get the number of segments
     pub fn segment_count(&self) -> usize {
         self.segments.len()
     }
-}
 
-impl Clone for ShmManager {
-    fn clone(&self) -> Self {
-        ShmManager {
-            segments: self.segments.clone(),
-            index: self.index.clone(),
-            pid_shmid_vaddr: self.pid_shmid_vaddr.clone(),
-            id_generator: Mutex::new(self.id_generator.lock().clone()),
+    /// Calculate total pages used by all segments
+    pub fn total_pages(&self) -> usize {
+        self.segments
+            .values()
+            .map(|segment| segment.lock().memory_usage())
+            .sum()
+    }
+
+    /// Cleanup orphaned segments marked for removal
+    pub fn cleanup_orphaned_segments(&mut self) -> usize {
+        let mut removed_count = 0;
+        let shmids_to_remove: Vec<i32> = self
+            .segments
+            .iter()
+            .filter_map(|(shmid, segment)| {
+                if segment.lock().should_remove() {
+                    Some(*shmid)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for shmid in shmids_to_remove {
+            if self.remove_shmid(shmid) {
+                removed_count += 1;
+            }
         }
+
+        removed_count
+    }
+
+    /// Validate segment parameters
+    pub fn validate_segment_params(&self, size: usize, _flags: u32) -> LinuxResult<()> {
+        if size < SHMMIN || size > SHMMAX {
+            return Err(LinuxError::EINVAL);
+        }
+
+        let page_count = memory_addr::align_up_4k(size) / PAGE_SIZE_4K;
+        if self.total_pages() + page_count > SHMALL {
+            return Err(LinuxError::ENOSPC);
+        }
+
+        if self.segment_count() >= SHMMNI {
+            return Err(LinuxError::ENOSPC);
+        }
+
+        Ok(())
     }
 }

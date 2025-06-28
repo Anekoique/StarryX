@@ -1,8 +1,8 @@
 use axsignal::{SignalInfo, Signo};
-use axtask::{TaskExtRef, current};
+use axtask::current;
 use linux_raw_sys::general::{SI_KERNEL, SIGALRM};
 
-use crate::task::send_signal_process;
+use crate::task::{send_signal_process, TaskExt};
 
 numeric_enum_macro::numeric_enum! {
     #[repr(i32)]
@@ -134,15 +134,10 @@ impl TimeStat {
             return;
         }
         if self.timer_remained_ns > delta {
-            debug!(
-                "update_timer: delta: {}, timer_remained_ns: {}",
-                delta, self.timer_remained_ns
-            );
             self.timer_remained_ns -= delta;
         } else {
-            let current_task = current();
             let _ = send_signal_process(
-                current_task.task_ext().thread.process(),
+                TaskExt::from_task(&current()).thread.process(),
                 SignalInfo::new(Signo::from_repr(SIGALRM as u8).unwrap(), SI_KERNEL as _),
             );
             self.timer_remained_ns = 0;
@@ -154,14 +149,8 @@ impl TimeStat {
         self.timer_type
     }
 
-    /// Get current timer interval in nanoseconds
-    pub fn get_timer_interval_ns(&self) -> usize {
-        self.timer_interval_ns
-    }
-
-    /// Get remaining timer time in nanoseconds
-    pub fn get_timer_remained_ns(&self) -> usize {
-        self.timer_remained_ns
+    pub fn stat_timer(&self) -> (TimerType, usize, usize) {
+        (self.timer_type, self.timer_interval_ns, self.timer_remained_ns)
     }
 
     /// Clear/stop the timer

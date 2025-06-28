@@ -34,7 +34,7 @@ use weak_map::WeakMap;
 use crate::{
     futex::FutexTable,
     resources::Rlimits,
-    time::{TimeStat, TimerType},
+    time::TimeStat,
 };
 
 /// Create a new user task.
@@ -140,24 +140,17 @@ axtask::def_task_ext!(TaskExt);
 
 /// Update the time statistics to reflect a switch from kernel mode to user mode.
 pub fn time_stat_from_kernel_to_user() {
-    let curr_task = current();
-    curr_task
-        .task_ext()
-        .time_stat_from_kernel_to_user(monotonic_time_nanos() as usize);
+    TaskExt::from_task(&current()).time_stat_from_kernel_to_user(monotonic_time_nanos() as usize);
 }
 
 /// Update the time statistics to reflect a switch from user mode to kernel mode.
 pub fn time_stat_from_user_to_kernel() {
-    let curr_task = current();
-    curr_task
-        .task_ext()
-        .time_stat_from_user_to_kernel(monotonic_time_nanos() as usize);
+    TaskExt::from_task(&current()).time_stat_from_user_to_kernel(monotonic_time_nanos() as usize);
 }
 
 /// Get the time statistics for the current task.
 pub fn time_stat_output() -> (usize, usize, usize, usize, usize, usize) {
-    let curr_task = current();
-    let (utime_ns, stime_ns) = curr_task.task_ext().time_stat_output();
+    let (utime_ns, stime_ns) = TaskExt::from_task(&current()).time_stat_output();
     (
         utime_ns,
         utime_ns / NANOS_PER_SEC as usize,
@@ -324,24 +317,17 @@ struct AxTaskExtImpl;
 #[crate_interface::impl_interface]
 impl AxTaskExtIf for AxTaskExtImpl {
     fn switch_to_task() {
-        let curr_task = current();
-        curr_task
-            .task_ext()
+        TaskExt::from_task(&current())
             .time_stat_switch_to_new_task(monotonic_time_nanos() as usize);
     }
 
     fn switch_from_task() {
-        let curr_task = current();
-        curr_task
-            .task_ext()
+        TaskExt::from_task(&current())
             .time_stat_switch_from_old_task(monotonic_time_nanos() as usize);
     }
 
     fn update_real_timer() {
-        let curr_task = current();
-        curr_task
-            .task_ext()
-            .time_stat_update_real_timer(monotonic_time_nanos() as usize);
+        TaskExt::from_task(&current()).time_stat_update_real_timer(monotonic_time_nanos() as usize);
     }
 }
 
@@ -432,37 +418,6 @@ pub fn get_process_group(pgid: Pid) -> LinuxResult<Arc<ProcessGroup>> {
 /// Finds the session with the given SID.
 pub fn get_session(sid: Pid) -> LinuxResult<Arc<Session>> {
     SESSION_TABLE.read().get(&sid).ok_or(LinuxError::ESRCH)
-}
-
-/// Set timer for the current task
-pub fn time_stat_set_timer(
-    timer_interval_ns: usize,
-    timer_remained_ns: usize,
-    timer_type: usize,
-) -> bool {
-    let curr_task = current();
-    curr_task.task_ext().time.borrow_mut().set_timer(
-        timer_interval_ns,
-        timer_remained_ns,
-        timer_type,
-    )
-}
-
-/// Get timer information for the current task
-pub fn time_stat_get_timer() -> (TimerType, usize, usize) {
-    let curr_task = current();
-    let time_stat = curr_task.task_ext().time.borrow();
-    (
-        time_stat.get_timer_type(),
-        time_stat.get_timer_interval_ns(),
-        time_stat.get_timer_remained_ns(),
-    )
-}
-
-/// Clear timer for the current task
-pub fn time_stat_clear_timer() {
-    let curr_task = current();
-    curr_task.task_ext().time.borrow_mut().clear_timer();
 }
 
 /// Send a signal to a thread.

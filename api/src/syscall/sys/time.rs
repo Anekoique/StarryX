@@ -1,7 +1,6 @@
 use axerrno::{LinuxError, LinuxResult};
-use starry_core::task::{
-    time_stat_clear_timer, time_stat_get_timer, time_stat_output, time_stat_set_timer,
-};
+use starry_core::task::{TaskExt, time_stat_output};
+use axtask::current;
 
 use crate::{
     ctypes::{
@@ -79,12 +78,11 @@ pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize
     if let Some(value) = nullable!(value.get_as_mut())? {
         match which {
             ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
-                let (_timer_type, interval_ns, remained_ns) = time_stat_get_timer();
+                let (_, interval_ns, remained_ns) = TaskExt::from_task(&current()).time.borrow().stat_timer();
                 *value = itimerval {
                     it_interval: timeval::from_nanos(interval_ns as u64),
                     it_value: timeval::from_nanos(remained_ns as u64),
                 };
-                debug!("getitimer: {:?}", value);
                 Ok(0)
             }
             _ => {
@@ -117,13 +115,15 @@ pub fn sys_setitimer(
                 let remained_ns = new_value.it_value.to_nanos();
 
                 if remained_ns == 0 {
-                    time_stat_clear_timer();
+                    TaskExt::from_task(&current()).time.borrow_mut().clear_timer();
                 } else {
                     let timer_type = which as usize;
-                    time_stat_set_timer(interval_ns as usize, remained_ns as usize, timer_type);
+                    TaskExt::from_task(&current()).time.borrow_mut().set_timer(
+                        interval_ns as usize,
+                        remained_ns as usize,
+                        timer_type,
+                    );
                 }
-                debug!("timer_type: {:?}", which);
-                debug!("interval_ns: {}, remained_ns: {}", interval_ns, remained_ns);
                 Ok(0)
             }
             _ => {
