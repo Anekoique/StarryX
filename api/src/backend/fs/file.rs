@@ -29,11 +29,11 @@ pub trait FileLike: Send + Sync {
             .map_err(|_| LinuxError::EINVAL)
     }
 
-    fn add_to_fd_table(self) -> LinuxResult<c_int>
+    fn add_to_fd_table(self, cloexec: bool) -> LinuxResult<c_int>
     where
         Self: Sized + 'static,
     {
-        add_file_like(Arc::new(self))
+        add_file_like(Arc::new(self), cloexec)
     }
 
     fn get_location(&self) -> Option<Location<RawMutex>> {

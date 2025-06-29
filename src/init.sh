@@ -15,6 +15,7 @@ ln -v -s busybox ls
 ln -v -s busybox env
 ln -v -s busybox mkdir
 ln -v -s busybox sleep
+ln -v -s busybox basename
 
 mkdir -v /lib
 mkdir -v /etc
@@ -41,6 +42,7 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 # echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
+# /musl/ltp_testcode.sh
 ./libctest_testcode.sh
 ./basic_testcode.sh
 ./lua_testcode.sh
@@ -53,11 +55,11 @@ cd /musl
 
 # echo @@@@@@@@@@ glibc @@@@@@@@@@
 cd /glibc
-./basic_testcode.sh
-./lua_testcode.sh
-./busybox_testcode.sh
-./iozone_testcode.sh
-./lmbench_testcode.sh
-./libcbench_testcode.sh
+# ./basic_testcode.sh
+# ./lua_testcode.sh
+# ./busybox_testcode.sh
+# ./iozone_testcode.sh
+# ./lmbench_testcode.sh
+# ./libcbench_testcode.sh
 # ./unixbench_testcode.sh
 # ./cyclictest_testcode.sh

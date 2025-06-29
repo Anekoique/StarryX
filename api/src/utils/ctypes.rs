@@ -20,3 +20,6 @@ pub struct rtc_time {
     pub tm_yday: c_int,
     pub tm_isdst: c_int,
 }
+
+// net
+pub const SOCK_CLOEXEC: u32 = O_CLOEXEC;

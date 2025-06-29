@@ -9,8 +9,9 @@ use axsync::RawMutex;
 
 use crate::{
     ctypes::{
-        __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFL, FD_CLOEXEC,
-        O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC, O_WRONLY,
+        __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
+        FD_CLOEXEC, O_APPEND, O_CLOEXEC, O_CREAT, O_DIRECTORY, O_EXCL, O_NONBLOCK, O_PATH,
+        O_RDONLY, O_TRUNC, O_WRONLY,
     },
     fs::{
         Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like, with_fs,
@@ -49,13 +50,16 @@ fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32))
     if flags & O_DIRECTORY != 0 {
         options.directory(true);
     }
+    if flags & O_CLOEXEC != 0 {
+        options.cloexec(true);
+    }
     options
 }
 
-fn add_to_fd(result: OpenResult<RawMutex>) -> LinuxResult<i32> {
+fn add_to_fd(result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
     match result {
-        OpenResult::File(file) => File::new(file).add_to_fd_table(),
-        OpenResult::Dir(dir) => Directory::new(dir).add_to_fd_table(),
+        OpenResult::File(file) => File::new(file).add_to_fd_table(cloexec),
+        OpenResult::Dir(dir) => Directory::new(dir).add_to_fd_table(cloexec),
     }
 }
 
@@ -79,7 +83,7 @@ pub fn sys_openat(
 
     let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
     with_fs(dirfd, path, |fs| fs.open(&options, path))
-        .and_then(add_to_fd)
+        .and_then(|result| add_to_fd(result, options.cloexec))
         .map(|fd| fd as isize)
 }
 
@@ -103,7 +107,7 @@ pub fn sys_close(fd: c_int) -> LinuxResult<isize> {
 
 fn dup_fd(old_fd: c_int) -> LinuxResult<isize> {
     let f = get_file_like(old_fd)?;
-    let new_fd = add_file_like(f)?;
+    let new_fd = add_file_like(f, false)?;
     Ok(new_fd as _)
 }
 
@@ -114,15 +118,11 @@ pub fn sys_dup(old_fd: c_int) -> LinuxResult<isize> {
 
 pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> LinuxResult<isize> {
     debug!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
-    let mut fd_table = FD_TABLE.write();
-    let f = fd_table
-        .get(old_fd as _)
-        .cloned()
-        .ok_or(LinuxError::EBADF)?;
+    let f = FD_TABLE.get(old_fd as _).ok_or(LinuxError::EBADF)?;
 
     if old_fd != new_fd {
-        fd_table.remove(new_fd as _);
-        fd_table
+        FD_TABLE.remove(new_fd as _);
+        FD_TABLE
             .add_at(new_fd as _, f)
             .unwrap_or_else(|_| panic!("new_fd should be valid"));
     }
@@ -136,8 +136,10 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
     match cmd as u32 {
         F_DUPFD => dup_fd(fd),
         F_DUPFD_CLOEXEC => {
-            warn!("sys_fcntl: treat F_DUPFD_CLOEXEC as F_DUPFD");
-            dup_fd(fd)
+            let new_fd = dup_fd(fd)?;
+            // Set CLOEXEC flag for the new fd
+            FD_TABLE.set_cloexec(new_fd as usize, true);
+            Ok(new_fd)
         }
         F_SETFL => {
             if fd == 0 || fd == 1 || fd == 2 {
@@ -147,8 +149,13 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             Ok(0)
         }
         F_GETFD => {
-            warn!("unsupported fcntl parameters: F_GETFD, returning FD_CLOEXEC");
-            Ok(FD_CLOEXEC as _)
+            // Get file descriptor flags
+            Ok(FD_TABLE.has_cloexec(fd as usize) as isize)
+        }
+        F_SETFD => {
+            // Set file descriptor flags
+            FD_TABLE.set_cloexec(fd as usize, arg & (FD_CLOEXEC as usize) != 0);
+            Ok(0)
         }
         F_GETFL => {
             warn!("unsupported fcntl parameters: F_GETFL, returning O_NONBLOCK");

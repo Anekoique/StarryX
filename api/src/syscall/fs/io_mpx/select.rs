@@ -36,16 +36,17 @@ fn do_select(
         f: impl Fn(PollState) -> bool,
     ) -> LinuxResult<usize> {
         let Some(fds) = fds else { return Ok(0) };
-        let fd_table = FD_TABLE.write();
         let mut num = 0;
-        for fd in fd_table.ids() {
+        for fd in FD_TABLE.ids() {
             if fd >= nfds as usize {
                 break;
             }
-            if f(fd_table.get(fd).unwrap().poll()?) {
-                debug!("select: fd: {} is ready, nfds: {}", fd, nfds);
-                fds[fd / 8] |= 1 << (fd % 8);
-                num += 1;
+            if let Some(file) = FD_TABLE.get(fd) {
+                if f(file.poll()?) {
+                    debug!("select: fd: {} is ready, nfds: {}", fd, nfds);
+                    fds[fd / 8] |= 1 << (fd % 8);
+                    num += 1;
+                }
             }
         }
         Ok(num)

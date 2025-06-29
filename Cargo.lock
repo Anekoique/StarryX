@@ -1477,6 +1477,7 @@ dependencies = [
  "axsync",
  "axtask",
  "bitflags 2.9.1",
+ "bitmaps",
  "cfg-if",
  "chrono",
  "ctor_bare",

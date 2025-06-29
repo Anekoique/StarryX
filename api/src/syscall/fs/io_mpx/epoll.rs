@@ -2,15 +2,17 @@ use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 
 use crate::{
-    ctypes::{EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT, epoll_event},
+    ctypes::{
+        EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT, epoll_event,
+    },
     fs::{EpollInstance, add_file_like, get_file_like},
     ptr::{UserConstPtr, UserPtr},
     time::{TimeValue, wall_time},
 };
 
-pub fn sys_epoll_create1(_flags: u32) -> LinuxResult<isize> {
+pub fn sys_epoll_create1(flags: u32) -> LinuxResult<isize> {
     let epoll = Arc::new(EpollInstance::new());
-    let fd = add_file_like(epoll)?;
+    let fd = add_file_like(epoll, flags & EPOLL_CLOEXEC != 0)?;
     Ok(fd as isize)
 }
 

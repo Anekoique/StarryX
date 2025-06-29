@@ -54,6 +54,7 @@ pub struct OpenOptions {
     create: bool,
     create_new: bool,
     directory: bool,
+    pub cloexec: bool,
     user: Option<(u32, u32)>,
     // system-specific
     custom_flags: i32,
@@ -72,6 +73,7 @@ impl OpenOptions {
             create: false,
             create_new: false,
             directory: false,
+            cloexec: false,
             user: None,
             // system-specific
             custom_flags: 0,
@@ -124,6 +126,12 @@ impl OpenOptions {
     /// Sets the option to open directory instead.
     pub fn directory(&mut self, directory: bool) -> &mut Self {
         self.directory = directory;
+        self
+    }
+
+    /// Sets the option to close the file on exec.
+    pub fn cloexec(&mut self, cloexec: bool) -> &mut Self {
+        self.cloexec = cloexec;
         self
     }
 
@@ -244,6 +252,7 @@ impl fmt::Debug for OpenOptions {
             create,
             create_new,
             directory,
+            cloexec,
             user,
             custom_flags,
             mode,
@@ -257,6 +266,7 @@ impl fmt::Debug for OpenOptions {
             .field("create", create)
             .field("create_new", create_new)
             .field("directory", directory)
+            .field("cloexec", cloexec)
             .field("user", user)
             .field("custom_flags", custom_flags)
             .field("mode", mode)

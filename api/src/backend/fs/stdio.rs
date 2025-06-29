@@ -6,7 +6,7 @@ use axio::{BufReader, PollState, prelude::*};
 use axsync::Mutex;
 
 use super::{FileLike, Kstat};
-use crate::ctypes::S_IFCHR;
+use crate::{ctypes::S_IFCHR, task::check_fatal_signals};
 
 fn console_read_bytes(buf: &mut [u8]) -> AxResult<usize> {
     let len = axhal::console::read_bytes(buf);
@@ -68,6 +68,7 @@ impl Stdin {
             if read_len > 0 {
                 return Ok(read_len);
             }
+            check_fatal_signals();
             axtask::yield_now();
         }
     }

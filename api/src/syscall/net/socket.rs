@@ -5,14 +5,19 @@ use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
 use crate::{
-    ctypes::{AF_INET, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM, SOCK_STREAM, socklen_t},
+    ctypes::{
+        AF_INET, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, SOCK_CLOEXEC, SOCK_DGRAM, SOCK_STREAM,
+        socklen_t,
+    },
     fs::FileLike,
     net::{SockAddr, Socket},
     ptr::{UserConstPtr, UserPtr},
 };
 
 pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
-    let ty = ty & 0xFF;
+    // Extract socket type from low bits and flags from high bits
+    let sock_type = ty & 0xFF;
+    let sock_flags = ty & !0xFF;
 
     debug!(
         "sys_socket <= domain: {}, ty: {}, proto: {}",
@@ -23,7 +28,7 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
         return Err(LinuxError::EAFNOSUPPORT);
     }
 
-    let socket = match ty {
+    let socket = match sock_type {
         SOCK_STREAM => {
             if proto != 0 && proto != IPPROTO_TCP as _ {
                 return Err(LinuxError::EPROTONOSUPPORT);
@@ -39,10 +44,11 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
         _ => return Err(LinuxError::ESOCKTNOSUPPORT),
     };
 
-    socket
-        .add_to_fd_table()
-        .map(|fd| fd as isize)
-        .map_err(|_| LinuxError::EMFILE)
+    let fd = socket
+        .add_to_fd_table(sock_flags & SOCK_CLOEXEC != 0)
+        .map_err(|_| LinuxError::EMFILE)?;
+
+    Ok(fd as isize)
 }
 
 fn to_socketaddr(addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<SocketAddr> {
@@ -124,7 +130,7 @@ pub fn sys_accept(fd: i32, addr: UserPtr<u8>, addrlen: UserPtr<socklen_t>) -> Li
 
     let remote_addr = socket.local_addr()?;
     let fd = socket
-        .add_to_fd_table()
+        .add_to_fd_table(false)
         .map(|fd| fd as isize)
         .map_err(|_| LinuxError::EMFILE)?;
     debug!("sys_accept => fd: {}, addr: {:?}", fd, remote_addr);
@@ -196,8 +202,12 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
         let (sock1, sock2) = UnixSocket::pair();
         let socket1 = Socket::Unix(Mutex::new(sock1));
         let socket2 = Socket::Unix(Mutex::new(sock2));
-        let fd1 = socket1.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
-        let fd2 = socket2.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+        let fd1 = socket1
+            .add_to_fd_table(false)
+            .map_err(|_| LinuxError::EMFILE)?;
+        let fd2 = socket2
+            .add_to_fd_table(false)
+            .map_err(|_| LinuxError::EMFILE)?;
         let sv_slice = sv.get_as_mut_slice(2)?;
         sv_slice[0] = fd1;
         sv_slice[1] = fd2;
@@ -238,9 +248,13 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
     };
 
     // 分配文件描述符
-    let fd1 = socket1.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+    let fd1 = socket1
+        .add_to_fd_table(false)
+        .map_err(|_| LinuxError::EMFILE)?;
 
-    let fd2 = socket2.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
+    let fd2 = socket2
+        .add_to_fd_table(false)
+        .map_err(|_| LinuxError::EMFILE)?;
 
     // 将文件描述符写入用户空间
     let sv_slice = sv.get_as_mut_slice(2)?;
