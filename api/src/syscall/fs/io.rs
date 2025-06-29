@@ -13,7 +13,10 @@ use crate::{
 
 /// Read data from the file indicated by `fd`.
 ///
-/// Return the read size if success.
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `buf` - Buffer to read data into
+/// * `len` - Length of data to read
 pub fn sys_read(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
     let buf = buf.get_as_mut_slice(len)?;
     debug!(
@@ -77,6 +80,12 @@ fn writev_impl(
     Ok(total as isize)
 }
 
+/// Read data from multiple buffers from the file indicated by `fd`.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `iov` - Array of iovec structures
+/// * `iocnt` - Number of iovec structures
 pub fn sys_readv(fd: i32, iov: UserPtr<iovec>, iocnt: usize) -> LinuxResult<isize> {
     let f = get_file_like(fd)?;
     readv_impl(iov, iocnt, |buf| f.read(buf))
@@ -84,7 +93,10 @@ pub fn sys_readv(fd: i32, iov: UserPtr<iovec>, iocnt: usize) -> LinuxResult<isiz
 
 /// Write data to the file indicated by `fd`.
 ///
-/// Return the written size if success.
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `buf` - Buffer containing data to write
+/// * `len` - Length of data to write
 pub fn sys_write(fd: i32, buf: UserConstPtr<u8>, len: usize) -> LinuxResult<isize> {
     let buf = buf.get_as_slice(len)?;
     debug!(
@@ -96,11 +108,23 @@ pub fn sys_write(fd: i32, buf: UserConstPtr<u8>, len: usize) -> LinuxResult<isiz
     Ok(get_file_like(fd)?.write(buf)? as _)
 }
 
+/// Write data from multiple buffers to the file indicated by `fd`.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `iov` - Array of iovec structures
+/// * `iocnt` - Number of iovec structures
 pub fn sys_writev(fd: i32, iov: UserConstPtr<iovec>, iocnt: usize) -> LinuxResult<isize> {
     let f = get_file_like(fd)?;
     writev_impl(iov, iocnt, |buf| f.write(buf))
 }
 
+/// Reposition read/write file offset.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `offset` - Offset value
+/// * `whence` - How to interpret the offset (SEEK_SET, SEEK_CUR, SEEK_END)
 pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResult<isize> {
     debug!("sys_lseek <= {} {} {}", fd, offset, whence);
     let pos = match whence {
@@ -113,6 +137,11 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
     Ok(off as _)
 }
 
+/// Truncate a file to a specified length.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `length` - New length for the file
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     debug!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, |file| {
@@ -121,16 +150,31 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     .map(|_| 0)
 }
 
+/// Synchronize a file's in-core state with storage device.
+///
+/// # Arguments
+/// * `fd` - File descriptor
 pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fsync <= {}", fd);
     with_file(fd, |file| file.sync(false)).map(|_| 0)
 }
 
+/// Synchronize a file's in-core data with storage device.
+///
+/// # Arguments
+/// * `fd` - File descriptor
 pub fn sys_fdatasync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fdatasync <= {}", fd);
     with_file(fd, |file| file.sync(true)).map(|_| 0)
 }
 
+/// Read from a file descriptor at a given offset.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `buf` - Buffer to read data into
+/// * `len` - Length of data to read
+/// * `offset` - Offset to read from
 pub fn sys_pread64(
     fd: c_int,
     buf: UserPtr<u8>,
@@ -141,6 +185,13 @@ pub fn sys_pread64(
     with_file(fd, |file| file.read_at(buf, offset as _)).map(|read| read as isize)
 }
 
+/// Write to a file descriptor at a given offset.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `buf` - Buffer containing data to write
+/// * `len` - Length of data to write
+/// * `offset` - Offset to write to
 pub fn sys_pwrite64(
     fd: c_int,
     buf: UserConstPtr<u8>,
@@ -151,6 +202,13 @@ pub fn sys_pwrite64(
     with_file(fd, |file| file.write_at(buf, offset as _)).map(|written| written as isize)
 }
 
+/// Read data into multiple buffers from a file descriptor at a given offset.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `iov` - Array of iovec structures
+/// * `iocnt` - Number of iovec structures
+/// * `offset` - Offset to read from
 pub fn sys_preadv(
     fd: c_int,
     iov: UserPtr<iovec>,
@@ -160,6 +218,13 @@ pub fn sys_preadv(
     sys_preadv2(fd, iov, iocnt, offset, 0)
 }
 
+/// Write data from multiple buffers to a file descriptor at a given offset.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `iov` - Array of iovec structures
+/// * `iocnt` - Number of iovec structures
+/// * `offset` - Offset to write to
 pub fn sys_pwritev(
     fd: c_int,
     iov: UserConstPtr<iovec>,
@@ -169,6 +234,14 @@ pub fn sys_pwritev(
     sys_pwritev2(fd, iov, iocnt, offset, 0)
 }
 
+/// Read data into multiple buffers from a file descriptor at a given offset with flags.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `iov` - Array of iovec structures
+/// * `iocnt` - Number of iovec structures
+/// * `offset` - Offset to read from
+/// * `flags` - Flags for the operation (currently unused)
 pub fn sys_preadv2(
     fd: c_int,
     iov: UserPtr<iovec>,
@@ -185,6 +258,14 @@ pub fn sys_preadv2(
     })
 }
 
+/// Write data from multiple buffers to a file descriptor at a given offset with flags.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `iov` - Array of iovec structures
+/// * `iocnt` - Number of iovec structures
+/// * `offset` - Offset to write to
+/// * `flags` - Flags for the operation (currently unused)
 pub fn sys_pwritev2(
     fd: c_int,
     iov: UserConstPtr<iovec>,
@@ -224,6 +305,13 @@ where
     Ok(total_written)
 }
 
+/// Transfer data between file descriptors.
+///
+/// # Arguments
+/// * `out_fd` - Output file descriptor
+/// * `in_fd` - Input file descriptor
+/// * `offset` - Pointer to offset in input file (NULL for current position)
+/// * `len` - Maximum number of bytes to transfer
 pub fn sys_sendfile(
     out_fd: c_int,
     in_fd: c_int,

@@ -61,7 +61,7 @@ make AX_TESTCASE=libc run_apps ARCH={ARCH}
 
 ## ✨ 项目说明
 
-StarryX是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，文件系统截止目前我们实现了约140条系统调用，完整通过了初赛的basic，busybox，libtest，lmbench，libcbench，lua，iozone相关测例，我们完整撰写了初赛文档和PPT，在开发过程中我们践行了组件化内核的开发理念与原则，并详细记录了我们参加开源操作系统训练营、学习和开发ArceOS/Srarry的过程。
+StarryX是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，文件系统，信号系统等功能，并通过硬件抽象层axhal能够运行在四个架构上（riscv64 / loongarch64 / x86_64 / aarch64）,截止目前我们实现了约140条系统调用，完整通过了初赛的basic，busybox，libtest，lmbench，libcbench，lua，iozone相关测例，我们完整撰写了初赛文档和PPT，在开发过程中我们始终践行组件化内核的开发理念与原则，并详细记录了我们参加开源操作系统训练营、学习和开发ArceOS/Srarry的过程。
 
 [初赛文档](./docs/StarryX.docx)
 

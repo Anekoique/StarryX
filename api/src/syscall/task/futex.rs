@@ -13,6 +13,15 @@ use crate::{
     utils::time::TimeValueLike,
 };
 
+/// Fast user-space locking system call.
+///
+/// # Arguments
+/// * `uaddr` - Address of the futex variable
+/// * `futex_op` - Operation to perform (FUTEX_WAIT, FUTEX_WAKE, etc.)
+/// * `value` - Expected value for FUTEX_WAIT or wake count for FUTEX_WAKE
+/// * `timeout` - Timeout for FUTEX_WAIT (NULL for infinite)
+/// * `uaddr2` - Second futex address for FUTEX_REQUEUE operations
+/// * `value3` - Additional value for some operations
 pub fn sys_futex(
     uaddr: UserConstPtr<u32>,
     futex_op: u32,
@@ -86,6 +95,12 @@ pub fn sys_futex(
     }
 }
 
+/// Get robust futex list head for a thread.
+///
+/// # Arguments
+/// * `tid` - Thread ID (0 for calling thread)
+/// * `head` - Buffer to store robust list head pointer
+/// * `size` - Buffer to store robust list head size
 pub fn sys_get_robust_list(
     tid: u32,
     head: UserPtr<UserConstPtr<robust_list_head>>,
@@ -107,6 +122,11 @@ pub fn sys_get_robust_list(
     Ok(0)
 }
 
+/// Set robust futex list head for the calling thread.
+///
+/// # Arguments
+/// * `head` - Robust list head pointer
+/// * `size` - Size of the robust list head structure
 pub fn sys_set_robust_list(
     head: UserConstPtr<robust_list_head>,
     size: usize,

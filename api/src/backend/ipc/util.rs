@@ -240,6 +240,18 @@ impl IpcManager {
             && stats.total_shm_pages <= self.limits.shmall
             && stats.total_semaphores <= self.limits.semmns
     }
+
+    /// Clear all IPC resources (shared memory, message queues, semaphores)
+    pub fn clear(&mut self) {
+        // Clear shared memory resources
+        self.shm.lock().clear();
+
+        // Clear message queue resources
+        self.msg.lock().clear();
+
+        // Clear semaphore resources
+        self.sem.lock().clear();
+    }
 }
 
 impl Default for IpcManager {
@@ -276,6 +288,11 @@ impl IPC_MANAGER {
     /// Create a copy of the inner IPC manager
     pub fn copy_inner(&self) -> Mutex<IpcManager> {
         Mutex::new(self.lock().clone())
+    }
+
+    /// Clear the inner IPC manager
+    pub fn clear(&self) {
+        self.lock().clear();
     }
 
     /// Execute a closure with access to the shared memory manager

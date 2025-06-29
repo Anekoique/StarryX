@@ -16,6 +16,13 @@ use starry_core::{
 
 use crate::ptr::UserConstPtr;
 
+/// Execute a program.
+///
+/// # Arguments
+/// * `tf` - Trap frame to modify for the new program
+/// * `path` - Path to the executable
+/// * `argv` - Program arguments (null-terminated array)
+/// * `envp` - Environment variables (null-terminated array)
 pub fn sys_execve(
     tf: &mut TrapFrame,
     path: UserConstPtr<c_char>,

@@ -29,6 +29,12 @@ impl WaitPid {
     }
 }
 
+/// Wait for a child process to change state.
+///
+/// # Arguments
+/// * `pid` - Process ID to wait for (-1 for any, 0 for same group, >0 specific PID)
+/// * `exit_code_ptr` - Buffer to store exit status (NULL if not needed)
+/// * `options` - Wait options (WNOHANG, WUNTRACED, etc.)
 pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxResult<isize> {
     let options = WaitOptions::from_bits_truncate(options);
     info!("sys_wait4 <= pid: {:?}, options: {:?}", pid, options);

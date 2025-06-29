@@ -14,6 +14,15 @@ use starry_core::{
 
 use crate::{ctypes::SIGCHLD, fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr, task::CloneFlags};
 
+/// Create a child process or thread.
+///
+/// # Arguments
+/// * `tf` - Trap frame containing register state
+/// * `flags` - Clone flags controlling behavior
+/// * `stack` - Stack pointer for the new task (0 for same stack)
+/// * `parent_tid` - Address to store parent thread ID
+/// * `child_tid` - Address to store child thread ID
+/// * `tls` - Thread-local storage pointer
 pub fn sys_clone(
     tf: &TrapFrame,
     flags: u32,
@@ -159,6 +168,10 @@ pub fn sys_clone(
     Ok(tid as _)
 }
 
+/// Create a child process (fork).
+///
+/// # Arguments
+/// * `tf` - Trap frame containing register state
 pub fn sys_fork(tf: &TrapFrame) -> LinuxResult<isize> {
     sys_clone(tf, SIGCHLD, 0, 0, 0, 0)
 }

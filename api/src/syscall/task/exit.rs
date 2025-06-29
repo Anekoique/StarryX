@@ -9,6 +9,7 @@ use crate::{
     ctypes::{SI_KERNEL, robust_list_head},
     exit_robust_list,
     fs::FD_TABLE,
+    ipc::IPC_MANAGER,
     ptr::{UserPtr, nullable},
 };
 
@@ -59,6 +60,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
         // TODO: clear namespace resources
         // FIXME: axns should drop all the resources
         FD_TABLE.clear();
+        IPC_MANAGER.clear();
     }
     if group_exit && !process.is_group_exited() {
         process.group_exit();
@@ -70,10 +72,18 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
     axtask::exit(exit_code)
 }
 
+/// Terminate the calling thread.
+///
+/// # Arguments
+/// * `exit_code` - Exit status code
 pub fn sys_exit(exit_code: i32) -> ! {
     do_exit(exit_code << 8, false)
 }
 
+/// Terminate all threads in the current process.
+///
+/// # Arguments
+/// * `exit_code` - Exit status code
 pub fn sys_exit_group(exit_code: i32) -> ! {
     do_exit(exit_code << 8, true)
 }

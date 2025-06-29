@@ -55,6 +55,12 @@ fn do_poll(fds: &mut [pollfd], timeout: Option<TimeValue>) -> LinuxResult<isize>
     }
 }
 
+/// Wait for events on file descriptors.
+///
+/// # Arguments
+/// * `fds` - Array of file descriptors to monitor
+/// * `nfds` - Number of file descriptors in the array
+/// * `timeout` - Timeout in milliseconds (-1 for infinite)
 pub fn sys_poll(fds: UserPtr<pollfd>, nfds: u32, timeout: i32) -> LinuxResult<isize> {
     let fds = fds.get_as_mut_slice(nfds as usize)?;
     let timeout = if timeout < 0 {
@@ -65,6 +71,13 @@ pub fn sys_poll(fds: UserPtr<pollfd>, nfds: u32, timeout: i32) -> LinuxResult<is
     do_poll(fds, timeout)
 }
 
+/// Wait for events on file descriptors with signal mask.
+///
+/// # Arguments
+/// * `fds` - Array of file descriptors to monitor
+/// * `nfds` - Number of file descriptors in the array
+/// * `timeout` - Timeout specification (NULL for infinite)
+/// * `_sigmask` - Signal mask (currently unused)
 pub fn sys_ppoll(
     fds: UserPtr<pollfd>,
     nfds: u32,

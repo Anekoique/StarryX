@@ -77,6 +77,14 @@ fn do_select(
     }
 }
 
+/// Monitor multiple file descriptors for I/O events.
+///
+/// # Arguments
+/// * `nfds` - Number of file descriptors to monitor
+/// * `read_fds` - Bit mask of file descriptors to check for readability
+/// * `write_fds` - Bit mask of file descriptors to check for writability
+/// * `except_fds` - Bit mask of file descriptors to check for exceptions
+/// * `timeout` - Timeout value (NULL for infinite)
 pub fn sys_select(
     nfds: u32,
     read_fds: UserPtr<u8>,
@@ -93,6 +101,15 @@ pub fn sys_select(
     )
 }
 
+/// Monitor multiple file descriptors for I/O events with signal mask.
+///
+/// # Arguments
+/// * `nfds` - Number of file descriptors to monitor
+/// * `read_fds` - Bit mask of file descriptors to check for readability
+/// * `write_fds` - Bit mask of file descriptors to check for writability
+/// * `except_fds` - Bit mask of file descriptors to check for exceptions
+/// * `timeout` - Timeout specification (NULL for infinite)
+/// * `_sigmask` - Signal mask (currently unused)
 pub fn sys_pselect6(
     nfds: u32,
     read_fds: UserPtr<u8>,

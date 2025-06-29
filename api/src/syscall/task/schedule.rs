@@ -8,11 +8,21 @@ use crate::{
     utils::time::TimeValueLike,
 };
 
+/// Yield the processor to other threads.
+///
+/// # Arguments
+/// None
 pub fn sys_sched_yield() -> LinuxResult<isize> {
     axtask::yield_now();
     Ok(0)
 }
 
+/// Set CPU affinity mask for a thread.
+///
+/// # Arguments
+/// * `pid` - Thread ID (0 for calling thread)
+/// * `cpuset_size` - Size of the CPU mask
+/// * `mask` - CPU affinity mask
 pub fn sys_sched_setaffinity(
     pid: Pid,
     cpuset_size: usize,
@@ -37,6 +47,12 @@ pub fn sys_sched_setaffinity(
     .ok_or(LinuxError::ESRCH)?
 }
 
+/// Get CPU affinity mask for a thread.
+///
+/// # Arguments
+/// * `pid` - Thread ID (0 for calling thread)
+/// * `cpuset_size` - Size of the CPU mask buffer
+/// * `mask` - Buffer to store CPU affinity mask
 pub fn sys_sched_getaffinity(
     pid: Pid,
     cpuset_size: usize,
@@ -60,16 +76,32 @@ pub fn sys_sched_getaffinity(
     .ok_or(LinuxError::ESRCH)?
 }
 
+/// Get scheduling parameters for a thread.
+///
+/// # Arguments
+/// * `_pid` - Thread ID (currently unused)
+/// * `_param` - Buffer to store scheduling parameters (currently unused)
 pub fn sys_sched_getparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> {
     warn!("sys_sched_getparam not implemented");
     Ok(0)
 }
 
+/// Set scheduling parameters for a thread.
+///
+/// # Arguments
+/// * `_pid` - Thread ID (currently unused)
+/// * `_param` - New scheduling parameters (currently unused)
 pub fn sys_sched_setparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> {
     warn!("sys_sched_setparam not implemented");
     Ok(0)
 }
 
+/// Set scheduling algorithm and parameters for a thread.
+///
+/// # Arguments
+/// * `_pid` - Thread ID (currently unused)
+/// * `policy` - Scheduling policy
+/// * `_param` - Scheduling parameters (currently unused)
 pub fn sys_sched_setscheduler(_pid: Pid, policy: usize, _param: UserPtr<u8>) -> LinuxResult<isize> {
     if policy as u32 != SCHED_FIFO {
         error!("Not supported policy: {}", policy);
@@ -78,10 +110,20 @@ pub fn sys_sched_setscheduler(_pid: Pid, policy: usize, _param: UserPtr<u8>) -> 
     Ok(0)
 }
 
+/// Get scheduling algorithm for a thread.
+///
+/// # Arguments
+/// * `_pid` - Thread ID (currently unused)
 pub fn sys_sched_getscheduler(_pid: Pid) -> LinuxResult<isize> {
     Ok(SCHED_FIFO as isize)
 }
 
+/// Get maximum priority value for a scheduling algorithm.
+///
+/// # Arguments
+/// * `_pid` - Thread ID (currently unused)
+/// * `_sched` - Scheduling algorithm (currently unused)
+/// * `_param_size` - Parameter size (currently unused)
 pub fn sys_sched_getscheduler_max(
     _pid: Pid,
     _sched: usize,
@@ -91,6 +133,12 @@ pub fn sys_sched_getscheduler_max(
     Ok(0)
 }
 
+/// Get minimum priority value for a scheduling algorithm.
+///
+/// # Arguments
+/// * `_pid` - Thread ID (currently unused)
+/// * `_sched` - Scheduling algorithm (currently unused)
+/// * `_param_size` - Parameter size (currently unused)
 pub fn sys_sched_getscheduler_min(
     _pid: Pid,
     _sched: usize,
@@ -100,9 +148,11 @@ pub fn sys_sched_getscheduler_min(
     Ok(0)
 }
 
-/// Sleep some nanoseconds
+/// Sleep for a specified time.
 ///
-/// TODO: should be woken by signals, and set errno
+/// # Arguments
+/// * `req` - Time to sleep
+/// * `rem` - Remaining time if interrupted (NULL if not needed)
 pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> LinuxResult<isize> {
     let req = req.get_as_ref()?;
 
@@ -130,6 +180,13 @@ pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> Lin
     }
 }
 
+/// Sleep for a specified time using a specific clock.
+///
+/// # Arguments
+/// * `clock_id` - Clock identifier (CLOCK_REALTIME, CLOCK_MONOTONIC)
+/// * `flags` - Sleep flags (currently unused)
+/// * `req` - Time to sleep
+/// * `rem` - Remaining time if interrupted (NULL if not needed)
 pub fn sys_clock_nanosleep(
     clock_id: usize,
     flags: usize,

@@ -14,6 +14,12 @@ use crate::{
     ptr::{UserConstPtr, UserPtr},
 };
 
+/// Create a socket.
+///
+/// # Arguments
+/// * `domain` - Communication domain (AF_INET, AF_UNIX)
+/// * `ty` - Socket type (SOCK_STREAM, SOCK_DGRAM) and flags
+/// * `proto` - Protocol (0 for default)
 pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
     // Extract socket type from low bits and flags from high bits
     let sock_type = ty & 0xFF;
@@ -57,6 +63,12 @@ fn to_socketaddr(addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<SocketAddr
     SocketAddr::try_from(addr)
 }
 
+/// Bind a socket to an address.
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `addr` - Address to bind to
+/// * `addrlen` - Length of the address structure
 pub fn sys_bind(fd: i32, addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<isize> {
     let addr = to_socketaddr(addr, addrlen)?;
     debug!("sys_bind <= fd: {}, addr: {:?}", fd, addr);
@@ -66,6 +78,12 @@ pub fn sys_bind(fd: i32, addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<is
     Ok(0)
 }
 
+/// Connect a socket to an address.
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `addr` - Address to connect to
+/// * `addrlen` - Length of the address structure
 pub fn sys_connect(fd: i32, addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<isize> {
     let addr = to_socketaddr(addr, addrlen)?;
     debug!("sys_connect <= fd: {}, addr: {:?}", fd, addr);
@@ -75,6 +93,12 @@ pub fn sys_connect(fd: i32, addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult
     Ok(0)
 }
 
+/// Get socket name (local address).
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `addr` - Buffer to store the address
+/// * `addrlen` - Pointer to address length (input/output)
 pub fn sys_getsockname(
     fd: i32,
     addr: UserPtr<u8>,
@@ -92,6 +116,12 @@ pub fn sys_getsockname(
     Ok(0)
 }
 
+/// Get peer name (remote address).
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `addr` - Buffer to store the address
+/// * `addrlen` - Pointer to address length (input/output)
 pub fn sys_getpeername(
     fd: i32,
     addr: UserPtr<u8>,
@@ -110,6 +140,11 @@ pub fn sys_getpeername(
     Ok(0)
 }
 
+/// Listen for connections on a socket.
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `backlog` - Maximum number of pending connections
 pub fn sys_listen(fd: i32, backlog: i32) -> LinuxResult<isize> {
     debug!("sys_listen: fd: {}, backlog: {}", fd, backlog);
 
@@ -122,6 +157,12 @@ pub fn sys_listen(fd: i32, backlog: i32) -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Accept a connection on a socket.
+///
+/// # Arguments
+/// * `fd` - Listening socket file descriptor
+/// * `addr` - Buffer to store the client address
+/// * `addrlen` - Pointer to address length (input/output)
 pub fn sys_accept(fd: i32, addr: UserPtr<u8>, addrlen: UserPtr<socklen_t>) -> LinuxResult<isize> {
     debug!("sys_accept <= fd: {}", fd);
 
@@ -143,6 +184,15 @@ pub fn sys_accept(fd: i32, addr: UserPtr<u8>, addrlen: UserPtr<socklen_t>) -> Li
     Ok(fd)
 }
 
+/// Send data to a specific address.
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `buf` - Buffer containing data to send
+/// * `len` - Length of data to send
+/// * `flags` - Send flags
+/// * `addr` - Destination address
+/// * `addrlen` - Length of the address structure
 pub fn sys_sendto(
     fd: i32,
     buf: UserConstPtr<u8>,
@@ -164,6 +214,15 @@ pub fn sys_sendto(
     Ok(sent as isize)
 }
 
+/// Receive data from a socket.
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `buf` - Buffer to store received data
+/// * `len` - Maximum length of data to receive
+/// * `flags` - Receive flags
+/// * `addr` - Buffer to store sender address
+/// * `addrlen` - Pointer to address length (input/output)
 pub fn sys_recvfrom(
     fd: i32,
     buf: UserPtr<u8>,
@@ -191,6 +250,13 @@ pub fn sys_recvfrom(
     Ok(recv as isize)
 }
 
+/// Create a pair of connected sockets.
+///
+/// # Arguments
+/// * `domain` - Communication domain (AF_INET, AF_UNIX)
+/// * `ty` - Socket type (SOCK_STREAM, SOCK_DGRAM)
+/// * `proto` - Protocol (0 for default)
+/// * `sv` - Array to store the two socket file descriptors
 pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> LinuxResult<isize> {
     let ty = ty & 0xFF;
 

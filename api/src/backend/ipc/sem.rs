@@ -348,6 +348,45 @@ impl SemManager {
     pub fn total_semaphores(&self) -> usize {
         self.total_semaphores
     }
+
+    /// Clear all semaphore resources
+    pub fn clear(&mut self) {
+        // Get all semaphore set IDs to remove
+        let all_semids: Vec<i32> = self.semsets.keys().cloned().collect();
+
+        // Mark all semaphore sets for removal and clear them
+        for semid in all_semids {
+            if let Some(semset_arc) = self.semsets.get(&semid) {
+                let mut semset = semset_arc.lock();
+                semset.rmid = true;
+
+                // Clear all waiting processes with error
+                let mut waiting_queue = semset.waiting_queue.lock();
+                while let Some(mut waiting) = waiting_queue.pop_front() {
+                    waiting.error = Some(LinuxError::EIDRM);
+                }
+                drop(waiting_queue);
+
+                // Wake up all waiting processes
+                semset.wait_queue.notify_all(true);
+
+                // Reset semaphore values
+                for sem in &mut semset.semaphores {
+                    sem.semval = 0;
+                    sem.sempid = 0;
+                    sem.semncnt = 0;
+                    sem.semzcnt = 0;
+                }
+            }
+            self.remove_semset(semid);
+        }
+
+        // Clear all mappings and undo operations
+        self.index.clear();
+        self.semsets.clear();
+        self.pid_undo.clear();
+        self.total_semaphores = 0;
+    }
 }
 
 impl Clone for SemManager {

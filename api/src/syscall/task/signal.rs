@@ -32,6 +32,13 @@ fn parse_signo(signo: u32) -> LinuxResult<Signo> {
     Signo::from_repr(signo as u8).ok_or(LinuxError::EINVAL)
 }
 
+/// Examine and change blocked signals.
+///
+/// # Arguments
+/// * `how` - How to change the signal mask (SIG_BLOCK, SIG_UNBLOCK, SIG_SETMASK)
+/// * `set` - New signal set (NULL to only query current mask)
+/// * `oldset` - Buffer to store previous signal mask (NULL if not needed)
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigprocmask(
     how: i32,
     set: UserConstPtr<SignalSet>,
@@ -62,6 +69,13 @@ pub fn sys_rt_sigprocmask(
     Ok(0)
 }
 
+/// Examine and change signal action.
+///
+/// # Arguments
+/// * `signo` - Signal number
+/// * `act` - New signal action (NULL to only query current action)
+/// * `oldact` - Buffer to store previous signal action (NULL if not needed)
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigaction(
     signo: u32,
     act: UserConstPtr<kernel_sigaction>,
@@ -89,6 +103,11 @@ pub fn sys_rt_sigaction(
     Ok(0)
 }
 
+/// Examine pending signals.
+///
+/// # Arguments
+/// * `set` - Buffer to store pending signal set
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigpending(set: UserPtr<SignalSet>, sigsetsize: usize) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
     *set.get_as_mut()? = TaskExt::from_task(&current())
@@ -106,6 +125,11 @@ fn make_siginfo(signo: u32, code: i32) -> LinuxResult<Option<SignalInfo>> {
     Ok(Some(SignalInfo::new(signo, code)))
 }
 
+/// Send signal to a process or process group.
+///
+/// # Arguments
+/// * `pid` - Process ID or process group ID
+/// * `signo` - Signal number to send
 pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
     let Some(sig) = make_siginfo(signo, SI_USER as _)? else {
         // TODO: should also check permissions
@@ -141,6 +165,11 @@ pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
     }
 }
 
+/// Send signal to a specific thread.
+///
+/// # Arguments
+/// * `tid` - Thread ID
+/// * `signo` - Signal number to send
 pub fn sys_tkill(tid: Pid, signo: u32) -> LinuxResult<isize> {
     let Some(sig) = make_siginfo(signo, SI_TKILL)? else {
         // TODO: should also check permissions
@@ -152,6 +181,12 @@ pub fn sys_tkill(tid: Pid, signo: u32) -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Send signal to a specific thread in a specific thread group.
+///
+/// # Arguments
+/// * `tgid` - Thread group ID (process ID)
+/// * `tid` - Thread ID
+/// * `signo` - Signal number to send
 pub fn sys_tgkill(tgid: Pid, tid: Pid, signo: u32) -> LinuxResult<isize> {
     let Some(sig) = make_siginfo(signo, SI_TKILL)? else {
         // TODO: should also check permissions
@@ -186,6 +221,13 @@ fn make_queue_signal_info(
     Ok(sig)
 }
 
+/// Queue a signal with additional data to a process.
+///
+/// # Arguments
+/// * `tgid` - Target process ID
+/// * `signo` - Signal number to queue
+/// * `sig` - Signal information structure
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigqueueinfo(
     tgid: Pid,
     signo: u32,
@@ -199,6 +241,14 @@ pub fn sys_rt_sigqueueinfo(
     Ok(0)
 }
 
+/// Queue a signal with additional data to a specific thread.
+///
+/// # Arguments
+/// * `tgid` - Thread group ID (process ID)
+/// * `tid` - Target thread ID
+/// * `signo` - Signal number to queue
+/// * `sig` - Signal information structure
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_tgsigqueueinfo(
     tgid: Pid,
     tid: Pid,
@@ -213,6 +263,10 @@ pub fn sys_rt_tgsigqueueinfo(
     Ok(0)
 }
 
+/// Return from signal handler and restore context.
+///
+/// # Arguments
+/// * `tf` - Trap frame to restore
 pub fn sys_rt_sigreturn(tf: &mut TrapFrame) -> LinuxResult<isize> {
     TaskExt::from_task(&current())
         .thread_data()
@@ -221,6 +275,13 @@ pub fn sys_rt_sigreturn(tf: &mut TrapFrame) -> LinuxResult<isize> {
     Ok(tf.retval() as isize)
 }
 
+/// Wait for queued signals with timeout.
+///
+/// # Arguments
+/// * `set` - Set of signals to wait for
+/// * `info` - Buffer to store signal information (NULL if not needed)
+/// * `timeout` - Timeout specification (NULL for infinite)
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigtimedwait(
     set: UserConstPtr<SignalSet>,
     info: UserPtr<siginfo>,
@@ -248,6 +309,12 @@ pub fn sys_rt_sigtimedwait(
     Ok(0)
 }
 
+/// Temporarily replace signal mask and suspend until signal.
+///
+/// # Arguments
+/// * `tf` - Trap frame for signal handling
+/// * `set` - Temporary signal mask
+/// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigsuspend(
     tf: &mut TrapFrame,
     set: UserConstPtr<SignalSet>,
@@ -278,6 +345,11 @@ pub fn sys_rt_sigsuspend(
     Err(LinuxError::EINTR)
 }
 
+/// Set and/or get signal stack context.
+///
+/// # Arguments
+/// * `ss` - New signal stack (NULL to only query current stack)
+/// * `old_ss` - Buffer to store current signal stack (NULL if not needed)
 pub fn sys_sigaltstack(
     ss: UserConstPtr<SignalStack>,
     old_ss: UserPtr<SignalStack>,

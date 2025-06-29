@@ -63,12 +63,13 @@ fn add_to_fd(result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
     }
 }
 
-/// Open or create a file.
-/// fd: file descriptor
-/// filename: file path to be opened or created
-/// flags: open flags
-/// mode: see man 7 inode
-/// return new file descriptor if succeed, or return -1.
+/// Open or create a file relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor (AT_FDCWD for current working directory)
+/// * `path` - Path to the file to open
+/// * `flags` - Open flags controlling how the file is opened
+/// * `mode` - File mode for newly created files
 pub fn sys_openat(
     dirfd: c_int,
     path: UserConstPtr<c_char>,
@@ -87,10 +88,12 @@ pub fn sys_openat(
         .map(|fd| fd as isize)
 }
 
-/// Open a file by `filename` and insert it into the file descriptor table.
+/// Open a file by filename and insert it into the file descriptor table.
 ///
-/// Return its index in the file table (`fd`). Return `EMFILE` if it already
-/// has the maximum number of files open.
+/// # Arguments
+/// * `path` - Path to the file to open
+/// * `flags` - Open flags controlling how the file is opened
+/// * `mode` - File mode for newly created files
 pub fn sys_open(
     path: UserConstPtr<c_char>,
     flags: i32,
@@ -99,6 +102,10 @@ pub fn sys_open(
     sys_openat(AT_FDCWD as _, path, flags, mode)
 }
 
+/// Close a file descriptor.
+///
+/// # Arguments
+/// * `fd` - File descriptor to close
 pub fn sys_close(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_close <= {}", fd);
     close_file_like(fd)?;
@@ -111,11 +118,20 @@ fn dup_fd(old_fd: c_int) -> LinuxResult<isize> {
     Ok(new_fd as _)
 }
 
+/// Duplicate a file descriptor.
+///
+/// # Arguments
+/// * `old_fd` - File descriptor to duplicate
 pub fn sys_dup(old_fd: c_int) -> LinuxResult<isize> {
     debug!("sys_dup <= {}", old_fd);
     dup_fd(old_fd)
 }
 
+/// Duplicate a file descriptor to a specific file descriptor number.
+///
+/// # Arguments
+/// * `old_fd` - File descriptor to duplicate
+/// * `new_fd` - Target file descriptor number
 pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> LinuxResult<isize> {
     debug!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
     let f = FD_TABLE.get(old_fd as _).ok_or(LinuxError::EBADF)?;
@@ -130,6 +146,12 @@ pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> LinuxResult<isize> {
     Ok(new_fd as _)
 }
 
+/// Manipulate file descriptor properties.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `cmd` - Command to execute
+/// * `arg` - Command argument
 pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
     debug!("sys_fcntl <= fd: {} cmd: {} arg: {}", fd, cmd, arg);
 

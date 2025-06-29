@@ -11,6 +11,11 @@ use crate::{
     time::{TimeValueLike, Tms, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
 
+/// Get current time from a clock.
+///
+/// # Arguments
+/// * `clock_id` - Clock identifier (CLOCK_REALTIME, CLOCK_MONOTONIC, etc.)
+/// * `tp` - Buffer to store the current time
 pub fn sys_clock_gettime(
     clock_id: __kernel_clockid_t,
     tp: UserPtr<timespec>,
@@ -31,6 +36,11 @@ pub fn sys_clock_gettime(
     Ok(0)
 }
 
+/// Set time for a clock.
+///
+/// # Arguments
+/// * `_clock_id` - Clock identifier (currently unused)
+/// * `_tp` - New time to set (currently unused)
 pub fn sys_clock_settime(
     _clock_id: __kernel_clockid_t,
     _tp: UserConstPtr<timespec>,
@@ -39,6 +49,11 @@ pub fn sys_clock_settime(
     Ok(0)
 }
 
+/// Get clock resolution.
+///
+/// # Arguments
+/// * `clock_id` - Clock identifier
+/// * `res` - Buffer to store the clock resolution
 pub fn sys_clock_getres(
     clock_id: __kernel_clockid_t,
     res: UserPtr<timespec>,
@@ -54,11 +69,19 @@ pub fn sys_clock_getres(
     Ok(0)
 }
 
+/// Get current time of day.
+///
+/// # Arguments
+/// * `ts` - Buffer to store the current time
 pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
     *ts.get_as_mut()? = timeval::from_time_value(wall_time());
     Ok(0)
 }
 
+/// Get process times.
+///
+/// # Arguments
+/// * `tms` - Buffer to store process time information
 pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
     let (_, _, utime_us, _, _, stime_us) = time_stat_output();
     *tms.get_as_mut()? = Tms {
@@ -70,10 +93,11 @@ pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
     Ok(nanos_to_ticks(monotonic_time_nanos()) as _)
 }
 
-/// Get interval timer value
+/// Get interval timer value.
 ///
-/// POSIX specification: getitimer() gets the current value of the timer specified by `which`
-/// and stores it in the structure pointed to by `value`.
+/// # Arguments
+/// * `which` - Timer type (ITIMER_REAL, ITIMER_VIRTUAL, ITIMER_PROF)
+/// * `value` - Buffer to store timer value
 pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize> {
     if let Some(value) = nullable!(value.get_as_mut())? {
         match which {
@@ -96,10 +120,12 @@ pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize
     }
 }
 
-/// Set interval timer value
+/// Set interval timer value.
 ///
-/// POSIX specification: setitimer() sets the timer specified by `which` to the value in `new_value`.
-/// If `old_value` is not NULL, the old value of the timer is stored there.
+/// # Arguments
+/// * `which` - Timer type (ITIMER_REAL, ITIMER_VIRTUAL, ITIMER_PROF)
+/// * `new_value` - New timer value
+/// * `old_value` - Buffer to store previous timer value (NULL if not needed)
 pub fn sys_setitimer(
     which: u32,
     new_value: UserPtr<itimerval>,
@@ -140,6 +166,12 @@ pub fn sys_setitimer(
     }
 }
 
+/// Create a per-process timer.
+///
+/// # Arguments
+/// * `_clock_id` - Clock identifier (currently unused)
+/// * `_sigev` - Signal event structure (currently unused)
+/// * `_timer_id` - Buffer to store timer ID (currently unused)
 pub fn sys_timer_create(
     _clock_id: __kernel_clockid_t,
     _sigev: UserPtr<sigevent>,

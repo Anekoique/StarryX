@@ -47,6 +47,10 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
     Ok(0)
 }
 
+/// Change the current working directory.
+///
+/// # Arguments
+/// * `path` - Path to the new working directory
 pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
     debug!("sys_chdir <= path: {}", path);
@@ -61,10 +65,21 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     })
 }
 
+/// Create a directory.
+///
+/// # Arguments
+/// * `path` - Path where to create the directory
+/// * `mode` - Directory permissions
 pub fn sys_mkdir(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     sys_mkdirat(AT_FDCWD, path, mode)
 }
 
+/// Create a directory relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor
+/// * `path` - Path where to create the directory
+/// * `mode` - Directory permissions
 pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
     let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
@@ -120,6 +135,12 @@ impl<'a> DirBuffer<'a> {
     }
 }
 
+/// Get directory entries.
+///
+/// # Arguments
+/// * `fd` - Directory file descriptor
+/// * `buf` - Buffer to store directory entries
+/// * `len` - Buffer length
 pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
     let buf = buf.get_as_mut_slice(len)?;
     debug!(
@@ -145,11 +166,14 @@ pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isiz
     Ok(buffer.offset as _)
 }
 
-/// create a link from new_path to old_path
-/// old_path: old file path
-/// new_path: new file path
-/// flags: link flags
-/// return value: return 0 when success, else return -1.
+/// Create a hard link relative to directory file descriptors.
+///
+/// # Arguments
+/// * `old_dirfd` - Directory file descriptor for the old path
+/// * `old_path` - Path to the existing file
+/// * `new_dirfd` - Directory file descriptor for the new path
+/// * `new_path` - Path for the new link
+/// * `flags` - Link flags
 pub fn sys_linkat(
     old_dirfd: c_int,
     old_path: UserConstPtr<c_char>,
@@ -179,6 +203,11 @@ pub fn sys_linkat(
     .map(|_| 0)
 }
 
+/// Create a hard link.
+///
+/// # Arguments
+/// * `old_path` - Path to the existing file
+/// * `new_path` - Path for the new link
 pub fn sys_link(
     old_path: UserConstPtr<c_char>,
     new_path: UserConstPtr<c_char>,
@@ -186,11 +215,12 @@ pub fn sys_link(
     sys_linkat(AT_FDCWD, old_path, AT_FDCWD, new_path, 0)
 }
 
-/// remove link of specific file (can be used to delete file)
-/// dir_fd: the directory of link to be removed
-/// path: the name of link to be removed
-/// flags: can be 0 or AT_REMOVEDIR
-/// return 0 when success, else return -1
+/// Remove a file or directory relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor
+/// * `path` - Path to the file or directory to remove
+/// * `flags` - Flags (0 for file, AT_REMOVEDIR for directory)
 pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> LinuxResult<isize> {
     let path = path.get_as_str()?;
 
@@ -209,14 +239,27 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
     .map(|_| 0)
 }
 
+/// Remove a directory.
+///
+/// # Arguments
+/// * `path` - Path to the directory to remove
 pub fn sys_rmdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     sys_unlinkat(AT_FDCWD, path, AT_REMOVEDIR as _)
 }
 
+/// Remove a file.
+///
+/// # Arguments
+/// * `path` - Path to the file to remove
 pub fn sys_unlink(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     sys_unlinkat(AT_FDCWD, path, 0)
 }
 
+/// Get current working directory.
+///
+/// # Arguments
+/// * `buf` - Buffer to store the current working directory path
+/// * `size` - Size of the buffer
 pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
     let buf = nullable!(buf.get_as_mut_slice(size))?;
 
@@ -240,6 +283,11 @@ pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
     })
 }
 
+/// Create a symbolic link.
+///
+/// # Arguments
+/// * `target` - Target path the symbolic link points to
+/// * `linkpath` - Path where the symbolic link will be created
 pub fn sys_symlink(
     target: UserConstPtr<c_char>,
     linkpath: UserConstPtr<c_char>,
@@ -247,6 +295,12 @@ pub fn sys_symlink(
     sys_symlinkat(target, AT_FDCWD, linkpath)
 }
 
+/// Create a symbolic link relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `target` - Target path the symbolic link points to
+/// * `new_dirfd` - Directory file descriptor
+/// * `linkpath` - Path where the symbolic link will be created
 pub fn sys_symlinkat(
     target: UserConstPtr<c_char>,
     new_dirfd: i32,
@@ -258,6 +312,12 @@ pub fn sys_symlinkat(
     with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath)).map(|_| 0)
 }
 
+/// Read value of a symbolic link.
+///
+/// # Arguments
+/// * `path` - Path to the symbolic link
+/// * `buf` - Buffer to store the link target
+/// * `size` - Size of the buffer
 pub fn sys_readlink(
     path: UserConstPtr<c_char>,
     buf: UserPtr<u8>,
@@ -266,6 +326,13 @@ pub fn sys_readlink(
     sys_readlinkat(AT_FDCWD, path, buf, size)
 }
 
+/// Read value of a symbolic link relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor
+/// * `path` - Path to the symbolic link
+/// * `buf` - Buffer to store the link target
+/// * `size` - Size of the buffer
 pub fn sys_readlinkat(
     dirfd: i32,
     path: UserConstPtr<c_char>,
@@ -285,18 +352,44 @@ pub fn sys_readlinkat(
     })
 }
 
+/// Change ownership of a file.
+///
+/// # Arguments
+/// * `path` - Path to the file
+/// * `uid` - New user ID
+/// * `gid` - New group ID
 pub fn sys_chown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
     sys_fchownat(AT_FDCWD, path, uid, gid, 0)
 }
+/// Change ownership of a symbolic link itself.
+///
+/// # Arguments
+/// * `path` - Path to the symbolic link
+/// * `uid` - New user ID
+/// * `gid` - New group ID
 pub fn sys_lchown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
     use linux_raw_sys::general::AT_SYMLINK_NOFOLLOW;
     sys_fchownat(AT_FDCWD, path, uid, gid, AT_SYMLINK_NOFOLLOW)
 }
 
+/// Change ownership of a file by file descriptor.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `uid` - New user ID
+/// * `gid` - New group ID
 pub fn sys_fchown(fd: i32, uid: u32, gid: u32) -> LinuxResult<isize> {
     sys_fchownat(fd, 0.into(), uid, gid, AT_EMPTY_PATH)
 }
 
+/// Change ownership of a file relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor
+/// * `path` - Path to the file
+/// * `uid` - New user ID
+/// * `gid` - New group ID
+/// * `flags` - Control flags
 pub fn sys_fchownat(
     dirfd: i32,
     path: UserConstPtr<c_char>,
@@ -315,14 +408,31 @@ pub fn sys_fchownat(
     .map(|_| 0)
 }
 
+/// Change file permissions.
+///
+/// # Arguments
+/// * `path` - Path to the file
+/// * `mode` - New permission mode
 pub fn sys_chmod(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
     sys_fchmodat(AT_FDCWD, path, mode, 0)
 }
 
+/// Change file permissions by file descriptor.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `mode` - New permission mode
 pub fn sys_fchmod(fd: i32, mode: u32) -> LinuxResult<isize> {
     sys_fchmodat(fd, 0.into(), mode, AT_EMPTY_PATH)
 }
 
+/// Change file permissions relative to a directory file descriptor.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor
+/// * `path` - Path to the file
+/// * `mode` - New permission mode
+/// * `flags` - Control flags
 pub fn sys_fchmodat(
     dirfd: i32,
     path: UserConstPtr<c_char>,
@@ -363,6 +473,11 @@ fn update_times(
     .map(|_| ())
 }
 
+/// Change file access and modification times.
+///
+/// # Arguments
+/// * `path` - Path to the file
+/// * `times` - New access and modification times (NULL for current time)
 pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> LinuxResult<isize> {
     let times = nullable!(times.get_as_ref())?;
     let atime = times.map_or_else(wall_time, |it| TimeValue::from_secs(it.actime as _));
@@ -371,6 +486,11 @@ pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> Li
     Ok(0)
 }
 
+/// Change file access and modification times with microsecond precision.
+///
+/// # Arguments
+/// * `path` - Path to the file
+/// * `times` - Array of two timeval structures for access and modification times (NULL for current time)
 pub fn sys_utimes(path: UserConstPtr<c_char>, times: UserConstPtr<timeval>) -> LinuxResult<isize> {
     let times = nullable!(times.get_as_slice(2))?;
     let atime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[0]));
@@ -379,6 +499,13 @@ pub fn sys_utimes(path: UserConstPtr<c_char>, times: UserConstPtr<timeval>) -> L
     Ok(0)
 }
 
+/// Change file access and modification times with nanosecond precision.
+///
+/// # Arguments
+/// * `dirfd` - Directory file descriptor
+/// * `path` - Path to the file (NULL to use dirfd as file descriptor)
+/// * `times` - Array of two timespec structures for access and modification times (NULL for current time)
+/// * `flags` - Control flags
 pub fn sys_utimensat(
     dirfd: i32,
     path: UserConstPtr<c_char>,
@@ -408,6 +535,11 @@ pub fn sys_utimensat(
     Ok(0)
 }
 
+/// Rename a file.
+///
+/// # Arguments
+/// * `old_path` - Current path of the file
+/// * `new_path` - New path for the file
 pub fn sys_rename(
     old_path: UserConstPtr<c_char>,
     new_path: UserConstPtr<c_char>,
@@ -415,6 +547,13 @@ pub fn sys_rename(
     sys_renameat(AT_FDCWD, old_path, AT_FDCWD, new_path)
 }
 
+/// Rename a file relative to directory file descriptors.
+///
+/// # Arguments
+/// * `old_dirfd` - Directory file descriptor for the old path
+/// * `old_path` - Current path of the file
+/// * `new_dirfd` - Directory file descriptor for the new path
+/// * `new_path` - New path for the file
 pub fn sys_renameat(
     old_dirfd: i32,
     old_path: UserConstPtr<c_char>,
@@ -424,6 +563,14 @@ pub fn sys_renameat(
     sys_renameat2(old_dirfd, old_path, new_dirfd, new_path, 0)
 }
 
+/// Rename a file relative to directory file descriptors with flags.
+///
+/// # Arguments
+/// * `old_dirfd` - Directory file descriptor for the old path
+/// * `old_path` - Current path of the file
+/// * `new_dirfd` - Directory file descriptor for the new path
+/// * `new_path` - New path for the file
+/// * `flags` - Rename flags
 pub fn sys_renameat2(
     old_dirfd: i32,
     old_path: UserConstPtr<c_char>,

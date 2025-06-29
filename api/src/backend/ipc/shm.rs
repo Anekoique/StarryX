@@ -397,4 +397,27 @@ impl ShmManager {
 
         Ok(())
     }
+
+    /// Clear all shared memory resources
+    pub fn clear(&mut self) {
+        // Get all segment IDs to remove
+        let all_shmids: Vec<i32> = self.segments.keys().cloned().collect();
+
+        // Mark all segments for removal and remove them
+        for shmid in all_shmids {
+            if let Some(segment_arc) = self.segments.get(&shmid) {
+                let mut segment = segment_arc.lock();
+                segment.rmid = true;
+                // Force detach all processes
+                segment.va_range.clear();
+                segment.shmid_ds.shm_nattch = 0;
+            }
+            self.remove_shmid(shmid);
+        }
+
+        // Clear all mappings
+        self.index.clear();
+        self.segments.clear();
+        self.pid_shmid_vaddr.clear();
+    }
 }

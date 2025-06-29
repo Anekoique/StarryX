@@ -11,18 +11,34 @@ use crate::{
     time::wall_time_nanos,
 };
 
+/// Get real user ID of the calling process.
+///
+/// # Arguments
+/// None
 pub fn sys_getuid() -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Get effective user ID of the calling process.
+///
+/// # Arguments
+/// None
 pub fn sys_geteuid() -> LinuxResult<isize> {
     Ok(1)
 }
 
+/// Get real group ID of the calling process.
+///
+/// # Arguments
+/// None
 pub fn sys_getgid() -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Get effective group ID of the calling process.
+///
+/// # Arguments
+/// None
 pub fn sys_getegid() -> LinuxResult<isize> {
     Ok(1)
 }
@@ -46,11 +62,19 @@ const UTSNAME: new_utsname = new_utsname {
     domainname: pad_str("https://github.com/Anekoique/StarryX"),
 };
 
+/// Get system identification information.
+///
+/// # Arguments
+/// * `name` - Buffer to store system information
 pub fn sys_uname(name: UserPtr<new_utsname>) -> LinuxResult<isize> {
     *name.get_as_mut()? = UTSNAME;
     Ok(0)
 }
 
+/// Get system information.
+///
+/// # Arguments
+/// * `info` - Buffer to store system information
 pub fn sys_sysinfo(info: UserPtr<sysinfo>) -> LinuxResult<isize> {
     let info = info.get_as_mut()?;
     info.uptime = 0;
@@ -68,12 +92,23 @@ pub fn sys_sysinfo(info: UserPtr<sysinfo>) -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Read from system log.
+///
+/// # Arguments
+/// * `_type` - Log type (currently unused)
+/// * `_buf` - Buffer to store log data (currently unused)
+/// * `_len` - Buffer length (currently unused)
 pub fn sys_syslog(_type: i32, _buf: UserPtr<c_char>, _len: usize) -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Get random bytes.
+///
+/// # Arguments
+/// * `buf` - Buffer to store random bytes
+/// * `len` - Number of bytes to generate
+/// * `flags` - Flags controlling the operation
 pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<isize> {
-    // Validate flags
     if flags & !(GRND_NONBLOCK | GRND_RANDOM) != 0 {
         return Err(LinuxError::EINVAL);
     }
@@ -85,7 +120,6 @@ pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<is
         "/dev/urandom"
     };
 
-    // Try reading from device, fallback to PRNG
     with_fs(AT_FDCWD, device_path, |fs| {
         fs.open_file(device_path)?.read_at(buffer, 0)
     })

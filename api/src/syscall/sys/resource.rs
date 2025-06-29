@@ -12,6 +12,11 @@ use crate::{
     time::TimeValueLike,
 };
 
+/// Get resource limits.
+///
+/// # Arguments
+/// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
+/// * `rlimit` - Buffer to store resource limits
 pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
     if let Some(rlimit) = nullable!(rlimit.get_as_mut())? {
         match resource {
@@ -32,6 +37,11 @@ pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isiz
     }
 }
 
+/// Set resource limits.
+///
+/// # Arguments
+/// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
+/// * `rlimit` - New resource limits to set
 pub fn sys_setrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
     if let Some(_rlimit) = nullable!(rlimit.get_as_mut())? {
         match resource {
@@ -47,6 +57,13 @@ pub fn sys_setrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isiz
     }
 }
 
+/// Get and set resource limits for a process.
+///
+/// # Arguments
+/// * `pid` - Process ID (0 for current process)
+/// * `resource` - Resource type
+/// * `new_limit` - New resource limits to set (NULL to only get)
+/// * `old_limit` - Buffer to store current resource limits (NULL to only set)
 pub fn sys_prlimit64(
     pid: Pid,
     resource: u32,
@@ -88,6 +105,11 @@ pub fn sys_prlimit64(
     Ok(0)
 }
 
+/// Get resource usage statistics.
+///
+/// # Arguments
+/// * `who` - Target for resource usage (RUSAGE_SELF, RUSAGE_CHILDREN)
+/// * `usage` - Buffer to store resource usage statistics
 pub fn sys_getrusage(who: i32, usage: UserPtr<rusage>) -> LinuxResult<isize> {
     const RUSAGE_SELF: i32 = 0;
     if let Some(usage) = nullable!(usage.get_as_mut())? {

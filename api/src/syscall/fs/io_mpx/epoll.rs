@@ -10,12 +10,23 @@ use crate::{
     time::{TimeValue, wall_time},
 };
 
+/// Create an epoll file descriptor.
+///
+/// # Arguments
+/// * `flags` - Flags to control epoll creation (EPOLL_CLOEXEC)
 pub fn sys_epoll_create1(flags: u32) -> LinuxResult<isize> {
     let epoll = Arc::new(EpollInstance::new());
     let fd = add_file_like(epoll, flags & EPOLL_CLOEXEC != 0)?;
     Ok(fd as isize)
 }
 
+/// Control interface for an epoll file descriptor.
+///
+/// # Arguments
+/// * `epfd` - Epoll file descriptor
+/// * `op` - Operation to perform (EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD)
+/// * `fd` - File descriptor to operate on
+/// * `event` - Event configuration
 pub fn sys_epoll_ctl(
     epfd: i32,
     op: i32,
@@ -53,6 +64,13 @@ pub fn sys_epoll_ctl(
     Ok(0)
 }
 
+/// Wait for events on an epoll file descriptor.
+///
+/// # Arguments
+/// * `epfd` - Epoll file descriptor
+/// * `events` - Buffer to store ready events
+/// * `maxevents` - Maximum number of events to return
+/// * `timeout` - Timeout in milliseconds (-1 for infinite)
 pub fn sys_epoll_wait(
     epfd: i32,
     events: UserPtr<epoll_event>,

@@ -9,6 +9,15 @@ use crate::{
     mm::{MmapFlags, MmapProt},
 };
 
+/// Map files or devices into memory.
+///
+/// # Arguments
+/// * `addr` - Hint for the starting address of the mapping
+/// * `length` - Length of the mapping
+/// * `prot` - Memory protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
+/// * `flags` - Mapping flags (MAP_PRIVATE, MAP_SHARED, MAP_ANONYMOUS, etc.)
+/// * `fd` - File descriptor (-1 for anonymous mapping)
+/// * `offset` - Offset in the file
 pub fn sys_mmap(
     addr: usize,
     length: usize,
@@ -127,6 +136,11 @@ pub fn sys_mmap(
     Ok(start_addr.as_usize() as _)
 }
 
+/// Unmap files or devices from memory.
+///
+/// # Arguments
+/// * `addr` - Starting address of the mapping to unmap
+/// * `length` - Length of the mapping to unmap
 pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
     let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
@@ -147,6 +161,12 @@ pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Change memory protection on a mapping.
+///
+/// # Arguments
+/// * `addr` - Starting address of the memory region
+/// * `length` - Length of the memory region
+/// * `prot` - New protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
 pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize> {
     // TODO: implement PROT_GROWSUP & PROT_GROWSDOWN
     let Some(permission_flags) = MmapProt::from_bits(prot) else {
@@ -165,6 +185,12 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
     Ok(0)
 }
 
+/// Synchronize a file with a memory map.
+///
+/// # Arguments
+/// * `_addr` - Starting address of the memory region (currently unused)
+/// * `_length` - Length of the memory region (currently unused)
+/// * `_flags` - Synchronization flags (currently unused)
 pub fn sys_msync(_addr: usize, _length: usize, _flags: u32) -> LinuxResult<isize> {
     // let start = memory_addr::align_down_4k(addr);
     // let end = memory_addr::align_up_4k(addr + length);

@@ -319,6 +319,32 @@ impl MsgManager {
         }
         total
     }
+
+    /// Clear all message queue resources
+    pub fn clear(&mut self) {
+        // Get all message queue IDs to remove
+        let all_msgids: Vec<i32> = self.queues.keys().cloned().collect();
+
+        // Mark all queues for removal and clear their messages
+        for msgid in all_msgids {
+            if let Some(queue_arc) = self.queues.get(&msgid) {
+                let mut queue = queue_arc.lock();
+                queue.rmid = true;
+                // Clear all messages in the queue
+                queue.messages.clear();
+                queue.msqid_ds.msg_cbytes = 0;
+                queue.msqid_ds.msg_qnum = 0;
+                // Clear waiting processes
+                queue.waiting_senders.clear();
+                queue.waiting_receivers.clear();
+            }
+            self.remove_msgid(msgid);
+        }
+
+        // Clear all mappings
+        self.index.clear();
+        self.queues.clear();
+    }
 }
 
 impl Clone for MsgManager {

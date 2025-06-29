@@ -8,6 +8,11 @@ use crate::{
     ptr::UserPtr,
 };
 
+/// Create a pipe with optional flags.
+///
+/// # Arguments
+/// * `fds` - Array to store the read and write file descriptors
+/// * `flags` - Pipe creation flags
 pub fn sys_pipe2(fds: UserPtr<[c_int; 2]>, flags: i32) -> LinuxResult<isize> {
     if flags != 0 {
         warn!("sys_pipe2: unsupported flags: {}", flags);

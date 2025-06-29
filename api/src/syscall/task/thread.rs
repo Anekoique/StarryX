@@ -3,10 +3,18 @@ use axtask::current;
 use num_enum::TryFromPrimitive;
 use starry_core::task::TaskExt;
 
+/// Get process ID of the calling process.
+///
+/// # Arguments
+/// None
 pub fn sys_getpid() -> LinuxResult<isize> {
     Ok(TaskExt::from_task(&current()).thread.process().pid() as _)
 }
 
+/// Get parent process ID of the calling process.
+///
+/// # Arguments
+/// None
 pub fn sys_getppid() -> LinuxResult<isize> {
     Ok(TaskExt::from_task(&current())
         .thread
@@ -16,27 +24,30 @@ pub fn sys_getppid() -> LinuxResult<isize> {
         .pid() as _)
 }
 
+/// Get thread ID of the calling thread.
+///
+/// # Arguments
+/// None
 pub fn sys_gettid() -> LinuxResult<isize> {
     Ok(axtask::current().id().as_u64() as _)
 }
 
 /// Creates a new session if the calling process is not a process group leader.
 /// Returns the session ID (which equals the process ID) on success.
+///
+/// # Arguments
+/// None
 pub fn sys_setsid() -> LinuxResult<isize> {
     let process = TaskExt::from_task(&current()).thread.process();
 
-    // According to POSIX: setsid() shall fail if the calling process is already a process group leader
     let current_group = process.group();
     if current_group.pgid() == process.pid() {
         return Err(axerrno::LinuxError::EPERM);
     }
 
-    // Create new session and process group
-    // The process becomes the session leader and process group leader of the new session
     if let Some((session, _group)) = process.create_session() {
         Ok(session.sid() as _)
     } else {
-        // This should not happen given our check above, but be defensive
         Err(axerrno::LinuxError::EPERM)
     }
 }
@@ -62,9 +73,10 @@ enum ArchPrctlCode {
     SetCpuid = 0x1012,
 }
 
-/// To set the clear_child_tid field in the task extended data.
+/// Set the clear_child_tid field in the task extended data.
 ///
-/// The set_tid_address() always succeeds
+/// # Arguments
+/// * `clear_child_tid` - Address to clear when thread exits
 pub fn sys_set_tid_address(clear_child_tid: usize) -> LinuxResult<isize> {
     TaskExt::from_task(&current())
         .thread_data()
@@ -73,6 +85,12 @@ pub fn sys_set_tid_address(clear_child_tid: usize) -> LinuxResult<isize> {
 }
 
 #[cfg(target_arch = "x86_64")]
+/// Architecture-specific process control operations.
+///
+/// # Arguments
+/// * `tf` - Trap frame
+/// * `code` - Operation code
+/// * `addr` - Address parameter
 pub fn sys_arch_prctl(
     tf: &mut axhal::arch::TrapFrame,
     code: i32,
@@ -84,8 +102,6 @@ pub fn sys_arch_prctl(
     debug!("sys_arch_prctl: code = {:?}, addr = {:#x}", code, addr);
 
     match code {
-        // According to Linux implementation, SetFs & SetGs does not return
-        // error at all
         ArchPrctlCode::GetFs => {
             *UserPtr::from(addr).get_as_mut()? = tf.tls();
             Ok(0)
