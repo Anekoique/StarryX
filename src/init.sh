@@ -50,7 +50,8 @@ cd /musl
 # echo "#### OS COMP TEST GROUP START iozone-glibc ####"
 # ./iozone_testcode.sh
 # echo "#### OS COMP TEST GROUP END iozone-glibc ####"
-./busybox sh iperf_testcode.sh
+# ./busybox sh iperf_testcode.sh
+/musl/runtest.exe -w entry-static.exe socket
 # FIXME: real glibc test
 # echo @@@@@@@@@@ glibc @@@@@@@@@@
 # cd /glibc

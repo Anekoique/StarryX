@@ -1,3 +1,13 @@
+//! Socket system call implementations for the StarryX operating system.
+//!
+//! This module provides implementations for various socket-related system calls,
+//! including socket creation, binding, connecting, listening, accepting connections,
+//! and data transmission. It supports both TCP and UDP sockets over IPv4,
+//! as well as Unix domain sockets.
+//!
+//! The implementations use the `SocketAddrExt` trait for safe user-space to kernel-space
+//! address conversion and provide error handling compatible with Linux system call conventions.
+
 use core::net::SocketAddr;
 
 use axerrno::{LinuxError, LinuxResult};
@@ -5,12 +15,30 @@ use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
 use crate::{
+    backend::net::SocketAddrExt,
     ctypes::{AF_INET, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, SOCK_DGRAM, SOCK_STREAM, socklen_t},
     fs::FileLike,
-    net::{SockAddr, Socket},
+    net::Socket,
     ptr::{UserConstPtr, UserPtr},
 };
+use linux_raw_sys::net::sockaddr;
 
+/// Creates a socket endpoint for communication.
+/// 
+/// # Arguments
+/// * `domain` - Communication domain (e.g., AF_INET for IPv4)
+/// * `ty` - Socket type (e.g., SOCK_STREAM for TCP, SOCK_DGRAM for UDP)  
+/// * `proto` - Protocol to use (0 for default protocol)
+///
+/// # Returns
+/// * `Ok(fd)` - File descriptor of the created socket on success
+/// * `Err(LinuxError)` - Error code on failure
+///
+/// # Errors
+/// * `EAFNOSUPPORT` - Address family not supported
+/// * `EPROTONOSUPPORT` - Protocol not supported 
+/// * `ESOCKTNOSUPPORT` - Socket type not supported
+/// * `EMFILE` - Too many open files
 pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
     let ty = ty & 0xFF;
 
@@ -45,12 +73,33 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
         .map_err(|_| LinuxError::EMFILE)
 }
 
-fn to_socketaddr(addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<SocketAddr> {
-    let addr = addr.get_as_slice(addrlen as usize)?;
-    let addr = unsafe { SockAddr::read(addr.as_ptr().cast(), addrlen)? };
-    SocketAddr::try_from(addr)
+/// Converts a user-space socket address to a kernel SocketAddr.
+///
+/// # Arguments
+/// * `addr` - Pointer to user-space sockaddr structure
+/// * `addrlen` - Length of the address structure
+///
+/// # Returns
+/// * `Ok(SocketAddr)` - Converted socket address on success
+/// * `Err(LinuxError)` - Error code on failure
+///
+/// # Safety
+/// This function safely reads from user space using the SocketAddrExt trait.
+fn to_socketaddr(addr: UserConstPtr<u8>, addrlen: socklen_t) -> LinuxResult<SocketAddr> {
+    let sockaddr_ptr = addr.cast::<sockaddr>();
+    SocketAddr::read_from_user(sockaddr_ptr, addrlen)
 }
 
+/// Binds a socket to a local address.
+///
+/// # Arguments
+/// * `fd` - Socket file descriptor
+/// * `addr` - Pointer to sockaddr structure containing the address to bind to
+/// * `addrlen` - Size of the address structure
+///
+/// # Returns
+/// * `Ok(0)` - Success
+/// * `Err(LinuxError)` - Error code on failure
 pub fn sys_bind(fd: i32, addr: UserConstPtr<u8>, addrlen: u32) -> LinuxResult<isize> {
     let addr = to_socketaddr(addr, addrlen)?;
     debug!("sys_bind <= fd: {}, addr: {:?}", fd, addr);
@@ -78,10 +127,13 @@ pub fn sys_getsockname(
     let local_addr = socket.local_addr()?;
     debug!("sys_getsockname <= fd: {}, addr: {:?}", fd, local_addr);
 
-    let local_addr = SockAddr::from(local_addr);
-    *addrlen.get_as_mut()? = local_addr.addr_len();
-    let bytes = local_addr.bytes();
-    addr.get_as_mut_slice(bytes.len())?.copy_from_slice(bytes);
+    if addr.is_null() {
+        return Err(LinuxError::EFAULT);
+    }
+
+    let sockaddr_ptr = addr.cast::<sockaddr>();
+    let written_len = local_addr.write_to_user(sockaddr_ptr)?;
+    *addrlen.get_as_mut()? = written_len;
 
     Ok(0)
 }
@@ -96,10 +148,13 @@ pub fn sys_getpeername(
 
     debug!("sys_getpeername <= fd: {}, addr: {:?}", fd, peer_addr);
 
-    let peer_addr = SockAddr::from(peer_addr);
-    *addrlen.get_as_mut()? = peer_addr.addr_len();
-    let bytes = peer_addr.bytes();
-    addr.get_as_mut_slice(bytes.len())?.copy_from_slice(bytes);
+    if addr.is_null() {
+        return Err(LinuxError::EFAULT);
+    }
+
+    let sockaddr_ptr = addr.cast::<sockaddr>();
+    let written_len = peer_addr.write_to_user(sockaddr_ptr)?;
+    *addrlen.get_as_mut()? = written_len;
 
     Ok(0)
 }
@@ -116,6 +171,20 @@ pub fn sys_listen(fd: i32, backlog: i32) -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Accepts a connection on a listening socket.
+///
+/// # Arguments
+/// * `fd` - Listening socket file descriptor
+/// * `addr` - Optional pointer to buffer to store peer address (can be null)
+/// * `addrlen` - Optional pointer to address length (can be null)
+///
+/// # Returns
+/// * `Ok(new_fd)` - File descriptor of the accepted connection
+/// * `Err(LinuxError)` - Error code on failure
+///
+/// # Notes
+/// If `addr` and `addrlen` are provided, the peer address information
+/// will be written to the user-space buffer.
 pub fn sys_accept(fd: i32, addr: UserPtr<u8>, addrlen: UserPtr<socklen_t>) -> LinuxResult<isize> {
     debug!("sys_accept <= fd: {}", fd);
 
@@ -129,10 +198,12 @@ pub fn sys_accept(fd: i32, addr: UserPtr<u8>, addrlen: UserPtr<socklen_t>) -> Li
         .map_err(|_| LinuxError::EMFILE)?;
     debug!("sys_accept => fd: {}, addr: {:?}", fd, remote_addr);
 
-    let remote_addr = SockAddr::from(remote_addr);
-    *addrlen.get_as_mut()? = remote_addr.addr_len();
-    let bytes = remote_addr.bytes();
-    addr.get_as_mut_slice(bytes.len())?.copy_from_slice(bytes);
+    // If user provided address buffer, write address information
+    if !addr.is_null() && !addrlen.is_null() {
+        let sockaddr_ptr = addr.cast::<sockaddr>();
+        let written_len = remote_addr.write_to_user(sockaddr_ptr)?;
+        *addrlen.get_as_mut()? = written_len;
+    }
 
     Ok(fd)
 }
@@ -173,12 +244,17 @@ pub fn sys_recvfrom(
     let (recv, remote_addr) = socket.recvfrom(buf)?;
 
     if let Some(remote_addr) = remote_addr {
-        let remote_addr = SockAddr::from(remote_addr);
-        *addrlen.get_as_mut()? = remote_addr.addr_len();
-        let bytes = remote_addr.bytes();
-        addr.get_as_mut_slice(bytes.len())?.copy_from_slice(bytes);
+        // If user provided address buffer, write address information
+        if !addr.is_null() && !addrlen.is_null() {
+            let sockaddr_ptr = addr.cast::<sockaddr>();
+            let written_len = remote_addr.write_to_user(sockaddr_ptr)?;
+            *addrlen.get_as_mut()? = written_len;
+        }
     } else {
-        *addrlen.get_as_mut()? = 0;
+        // Even if there's no remote address, set addrlen to 0 if user provided it
+        if !addrlen.is_null() {
+            *addrlen.get_as_mut()? = 0;
+        }
     }
 
     debug!("sys_recvfrom => fd: {}, recv: {}", fd, recv);
@@ -189,7 +265,7 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
     let ty = ty & 0xFF;
 
     if domain == AF_UNIX {
-        // 只支持 SOCK_STREAM/ SOCK_DGRAM
+        // Only support SOCK_STREAM/SOCK_DGRAM for Unix domain sockets
         if ty != SOCK_STREAM && ty != SOCK_DGRAM {
             return Err(LinuxError::ESOCKTNOSUPPORT);
         }
@@ -209,12 +285,12 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
         domain, ty, proto
     );
 
-    // 检查地址族
+    // Check address family
     if domain != AF_INET {
         return Err(LinuxError::EAFNOSUPPORT);
     }
 
-    // 创建两个相同类型的 socket
+    // Create two sockets of the same type
     let socket1 = match ty {
         SOCK_STREAM => {
             if proto != 0 && proto != IPPROTO_TCP as _ {
@@ -237,12 +313,12 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
         _ => return Err(LinuxError::ESOCKTNOSUPPORT),
     };
 
-    // 分配文件描述符
+    // Allocate file descriptors
     let fd1 = socket1.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
 
     let fd2 = socket2.add_to_fd_table().map_err(|_| LinuxError::EMFILE)?;
 
-    // 将文件描述符写入用户空间
+    // Write file descriptors to user space
     let sv_slice = sv.get_as_mut_slice(2)?;
     sv_slice[0] = fd1;
     sv_slice[1] = fd2;
@@ -260,15 +336,15 @@ pub fn sys_getsockopt(
 ) -> LinuxResult<isize> {
     debug!("sys_getsockopt <= fd: {}, level: {}, optname: {}", fd, level, optname);
     
-    // 验证套接字存在
+    // Verify socket exists
     let _socket = Socket::from_fd(fd)?;
     let optlen_val = *optlen.get_as_mut()?;
     
-    // 基本实现：对于大多数选项返回默认值
+    // Basic implementation: return default values for most options
     match (level, optname) {
         // SOL_SOCKET level options
         (1, 4) => {
-            // SO_ERROR - 返回 0 表示没有错误
+            // SO_ERROR - return 0 indicating no error
             if optlen_val >= 4 {
                 let optval_slice = optval.get_as_mut_slice(4)?;
                 optval_slice[0..4].copy_from_slice(&0i32.to_ne_bytes());
@@ -276,7 +352,7 @@ pub fn sys_getsockopt(
             }
         }
         (1, 13) => {
-            // SO_TYPE - 返回套接字类型
+            // SO_TYPE - return socket type
             if optlen_val >= 4 {
                 let optval_slice = optval.get_as_mut_slice(4)?;
                 optval_slice[0..4].copy_from_slice(&1i32.to_ne_bytes()); // SOCK_STREAM
@@ -285,7 +361,7 @@ pub fn sys_getsockopt(
         }
         // TCP level options
         (6, 1) => {
-            // TCP_NODELAY - 返回默认值 1 (启用)
+            // TCP_NODELAY - return default value 1 (enabled)
             if optlen_val >= 4 {
                 let optval_slice = optval.get_as_mut_slice(4)?;
                 optval_slice[0..4].copy_from_slice(&1i32.to_ne_bytes());
@@ -293,8 +369,8 @@ pub fn sys_getsockopt(
             }
         }
         (6, 2) => {
-            // TCP_MAXSEG - 返回合理的 MSS 值
-            // 标准以太网 MTU (1500) - IP头部 (20) - TCP头部 (20) = 1460
+            // TCP_MAXSEG - return reasonable MSS value
+            // Standard Ethernet MTU (1500) - IP header (20) - TCP header (20) = 1460
             if optlen_val >= 4 {
                 let optval_slice = optval.get_as_mut_slice(4)?;
                 optval_slice[0..4].copy_from_slice(&1460i32.to_ne_bytes());
@@ -302,7 +378,7 @@ pub fn sys_getsockopt(
             }
         }
         _ => {
-            // 对于未知选项，返回默认值 0
+            // For unknown options, return default value 0
             if optlen_val >= 4 {
                 let optval_slice = optval.get_as_mut_slice(4)?;
                 optval_slice[0..4].copy_from_slice(&0i32.to_ne_bytes());
@@ -323,11 +399,11 @@ pub fn sys_setsockopt(
 ) -> LinuxResult<isize> {
     debug!("sys_setsockopt <= fd: {}, level: {}, optname: {}, optlen: {}", fd, level, optname, _optlen);
     
-    // 验证套接字存在
+    // Verify socket exists
     let _socket = Socket::from_fd(fd)?;
     
-    // 基本实现：接受但忽略大多数设置
-    // 这对于 iperf3 的基本功能来说通常是可以接受的
+    // Basic implementation: accept but ignore most settings
+    // This is usually acceptable for basic functionality like iperf3
     
     Ok(0)
 }
