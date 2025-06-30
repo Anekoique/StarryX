@@ -28,13 +28,13 @@ A monolithic kernel based on arceos/starry.
 
 构建全国大学生操作系统内核赛测例 (riscv / loongarch)
 
-```Makefile
+```shell
 make all
 ```
 
 构建自定义程序 (riscv / loonarch / aarch / x86)
 
-```makefile
+```shell
 make AX_TESTCASE=libc user_apps ARCH={ARCH}
 ```
 
@@ -42,20 +42,20 @@ make AX_TESTCASE=libc user_apps ARCH={ARCH}
 
 运行全国大学生操作系统内核赛测例 (riscv / loongarch)
 
-```makefile
+```shell
 make rv ARCH=riscv64 run
 make la ARCH=loongarch64 run
 ```
 
 运行全国大学生操作系统内核赛测例  (riscv / loongarch / aarch / x86)
 
-```makefile
+```shell
 make oscomp_run ARCH={ARCH}
 ```
 
 运行自定义APP
 
-```makefile
+```shell
 make AX_TESTCASE=libc run_apps ARCH={ARCH}
 ```
 
@@ -63,9 +63,11 @@ make AX_TESTCASE=libc run_apps ARCH={ARCH}
 
 StarryX是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，文件系统，信号系统等功能，并通过硬件抽象层axhal能够运行在四个架构上（riscv64 / loongarch64 / x86_64 / aarch64）,截止目前我们实现了约140条系统调用，完整通过了初赛的basic，busybox，libtest，lmbench，libcbench，lua，iozone相关测例，我们完整撰写了初赛文档和PPT，在开发过程中我们始终践行组件化内核的开发理念与原则，并详细记录了我们参加开源操作系统训练营、学习和开发ArceOS/Srarry的过程。
 
-[初赛文档](./docs/StarryX.docx)
+[初赛文档](./docs/StarryX.pdf)
 
 [初赛PPT](./docs/StarryX.pptx)
+
+[初赛视频](https://pan.baidu.com/s/1x0gMF_K7H1GuciTz_kKf5g?pwd=ftns) 提取码：ftns
 
 [学习/开发日志](./docs/record.md)
 
