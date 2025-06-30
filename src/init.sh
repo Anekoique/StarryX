@@ -1,5 +1,3 @@
-echo @@@@@@@@@@ setup @@@@@@@@@@
-
 ./busybox mkdir -v /bin
 ./busybox ln -v -s /musl/busybox /bin/busybox
 cd /bin
@@ -34,13 +32,6 @@ ln -v -s /lib /usr/lib64
 
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
-# echo @@@@@@@@@@ files @@@@@@@@@@
-# ls -lhAR /
-# echo @@@@@@@@@@ env @@@@@@@@@@
-# env
-# echo
-
-# echo @@@@@@@@@@ musl @@@@@@@@@@
 cd /musl
 # /musl/ltp_testcode.sh
 ./libctest_testcode.sh
@@ -53,7 +44,6 @@ cd /musl
 # ./unixbench_testcode.sh
 # ./cyclictest_testcode.sh
 
-# echo @@@@@@@@@@ glibc @@@@@@@@@@
 cd /glibc
 # ./basic_testcode.sh
 # ./lua_testcode.sh

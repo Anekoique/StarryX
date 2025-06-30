@@ -71,7 +71,7 @@ StarryX是基于组件化操作系统ArceOS的宏内核扩展实现，完整实�
 
 [Github代码仓库](https://github.com/Anekoique/StarryX)
 
-我们主要独立完成了以下工作
+我们主要完成了以下工作
 
 - 修复基座已有代码的bug
 - 完善和扩展实现系统调用

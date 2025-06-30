@@ -32,7 +32,7 @@ fn main() {
     ax_println!("{}", LOGO);
     // Create a init process
     axprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
-    starry_core::vfs::mount_all().expect("Failed to mount vfs");
+    starry_core::fs::init_root().expect("Failed to mount vfs");
 
     if option_env!("AX_TESTCASE") == Some("oscomp") {
         let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];

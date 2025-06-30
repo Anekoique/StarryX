@@ -7,7 +7,7 @@ use alloc::ffi::CString;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
 use chrono::{Datelike, Timelike};
-use starry_core::vfs::RTC0_DEVICE_ID;
+use starry_core::fs::RTC0_DEVICE_ID;
 
 use crate::{
     ctypes::{

@@ -8,14 +8,14 @@ use axfs_ng_vfs::{
 use axsync::RawMutex;
 use inherit_methods_macro::inherit_methods;
 
-use super::dynamic::{DynamicFs, DynamicNode};
+use super::virt_fs::{VirtFs, VirtNode};
 
-pub trait SimpleFileOps: Send + Sync {
+pub trait VirtFileOps: Send + Sync {
     fn read_all(&self) -> VfsResult<Cow<[u8]>>;
     fn write_all(&self, data: &[u8]) -> VfsResult<()>;
 }
 
-impl<F, R> SimpleFileOps for F
+impl<F, R> VirtFileOps for F
 where
     F: Fn() -> R + Send + Sync + 'static,
     R: Into<Vec<u8>>,
@@ -29,21 +29,21 @@ where
     }
 }
 
-pub struct SimpleFile {
-    node: DynamicNode,
-    ops: Arc<dyn SimpleFileOps>,
+pub struct VirtFile {
+    node: VirtNode,
+    ops: Arc<dyn VirtFileOps>,
 }
-impl SimpleFile {
-    pub fn new(fs: Arc<DynamicFs>, ops: impl SimpleFileOps + 'static) -> Arc<Self> {
-        let node = DynamicNode::new(fs, NodeType::RegularFile, NodePermission::default());
+impl VirtFile {
+    pub fn new(fs: Arc<VirtFs>, ops: impl VirtFileOps + 'static) -> Arc<Self> {
+        let node = VirtNode::new(fs, NodeType::RegularFile, NodePermission::default());
         Arc::new(Self {
             node,
             ops: Arc::new(ops),
         })
     }
 
-    pub fn new_symlink(fs: Arc<DynamicFs>, ops: impl SimpleFileOps + 'static) -> Arc<Self> {
-        let node = DynamicNode::new(
+    pub fn new_symlink(fs: Arc<VirtFs>, ops: impl VirtFileOps + 'static) -> Arc<Self> {
+        let node = VirtNode::new(
             fs,
             NodeType::Symlink,
             NodePermission::from_bits_truncate(0o777),
@@ -56,7 +56,7 @@ impl SimpleFile {
 }
 
 #[inherit_methods(from = "self.node")]
-impl NodeOps<RawMutex> for SimpleFile {
+impl NodeOps<RawMutex> for VirtFile {
     fn inode(&self) -> u64;
     fn metadata(&self) -> VfsResult<Metadata>;
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
@@ -71,7 +71,7 @@ impl NodeOps<RawMutex> for SimpleFile {
     }
 }
 
-impl FileNodeOps<RawMutex> for SimpleFile {
+impl FileNodeOps<RawMutex> for VirtFile {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
         let data = self.ops.read_all()?;
         if offset >= data.len() as u64 {
@@ -99,7 +99,7 @@ impl FileNodeOps<RawMutex> for SimpleFile {
     }
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
-        let mut data = self.ops.read_all()?.to_vec();
+        let mut data = self.ops.read_all()?.into_owned();
         data.extend_from_slice(buf);
         self.ops.write_all(&data)?;
         Ok((buf.len(), data.len() as u64))
@@ -110,11 +110,11 @@ impl FileNodeOps<RawMutex> for SimpleFile {
         match len.cmp(&(data.len() as u64)) {
             Ordering::Less => self.ops.write_all(&data[..len as usize]),
             Ordering::Greater => {
-                let mut data = data.to_vec();
-                data.resize(len as usize, 0);
-                self.ops.write_all(&data)
+                let mut new_data = data.into_owned();
+                new_data.resize(len as usize, 0);
+                self.ops.write_all(&new_data)
             }
-            _ => Ok(()),
+            Ordering::Equal => Ok(()),
         }
     }
 
@@ -123,11 +123,12 @@ impl FileNodeOps<RawMutex> for SimpleFile {
     }
 }
 
-pub trait DeviceOps: Send + Sync {
+pub trait VirtDeviceOps: Send + Sync {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize>;
 }
-impl<F> DeviceOps for F
+
+impl<F> VirtDeviceOps for F
 where
     F: Fn(&mut [u8], u64) -> VfsResult<usize> + Send + Sync + 'static,
 {
@@ -140,18 +141,18 @@ where
     }
 }
 
-pub struct Device {
-    node: DynamicNode,
-    ops: Arc<dyn DeviceOps>,
+pub struct VirtDevice {
+    node: VirtNode,
+    ops: Arc<dyn VirtDeviceOps>,
 }
-impl Device {
+impl VirtDevice {
     pub fn new(
-        fs: Arc<DynamicFs>,
+        fs: Arc<VirtFs>,
         node_type: NodeType,
         device_id: DeviceId,
-        ops: impl DeviceOps + 'static,
+        ops: impl VirtDeviceOps + 'static,
     ) -> Arc<Self> {
-        let node = DynamicNode::new(fs, node_type, NodePermission::default());
+        let node = VirtNode::new(fs, node_type, NodePermission::default());
         node.metadata.lock().rdev = device_id;
         Arc::new(Self {
             node,
@@ -161,7 +162,7 @@ impl Device {
 }
 
 #[inherit_methods(from = "self.node")]
-impl NodeOps<RawMutex> for Device {
+impl NodeOps<RawMutex> for VirtDevice {
     fn inode(&self) -> u64;
     fn metadata(&self) -> VfsResult<Metadata>;
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
@@ -176,7 +177,7 @@ impl NodeOps<RawMutex> for Device {
     }
 }
 
-impl FileNodeOps<RawMutex> for Device {
+impl FileNodeOps<RawMutex> for VirtDevice {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
         self.ops.read_at(buf, offset)
     }
@@ -190,10 +191,10 @@ impl FileNodeOps<RawMutex> for Device {
     }
 
     fn set_len(&self, _len: u64) -> VfsResult<()> {
-        Err(VfsError::EBADF)
+        Err(VfsError::ENOTTY)
     }
 
     fn set_symlink(&self, _target: &str) -> VfsResult<()> {
-        Err(VfsError::EBADF)
+        Err(VfsError::ENOTTY)
     }
 }

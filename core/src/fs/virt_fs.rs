@@ -5,43 +5,32 @@ use axfs_ng_vfs::{
     DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, Filesystem,
     FilesystemOps, Metadata, MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, StatFs,
     VfsError, VfsResult, WeakDirEntry,
-    path::{DOT, DOTDOT, MAX_NAME_LEN},
+    path::{DOT, DOTDOT},
 };
 use axsync::{Mutex, RawMutex};
 use inherit_methods_macro::inherit_methods;
 use slab::Slab;
 
+use super::dummy_stat;
+
+/// Type alias for directory maker function
 pub type DirMaker =
     Arc<dyn Fn(WeakDirEntry<RawMutex>) -> Arc<dyn DirNodeOps<RawMutex>> + Send + Sync>;
 
-pub fn dummy_stat_fs(fs_type: u32) -> StatFs {
-    StatFs {
-        fs_type,
-        block_size: 512,
-        blocks: 100,
-        blocks_free: 100,
-        blocks_available: 100,
-
-        file_count: 0,
-        free_file_count: 0,
-
-        name_length: MAX_NAME_LEN as _,
-        fragment_size: 0,
-        mount_flags: 0,
-    }
-}
-
-pub struct DynamicFs {
+/// Virtual filesystem implementation
+pub struct VirtFs {
     name: String,
     fs_type: u32,
     inodes: Mutex<Slab<()>>,
     root: Mutex<Option<DirEntry<RawMutex>>>,
 }
-impl DynamicFs {
+
+impl VirtFs {
+    /// Create a new virtual filesystem with a custom root builder
     pub fn new_with(
         name: String,
         fs_type: u32,
-        root: impl FnOnce(Arc<DynamicFs>) -> DirMaker,
+        root_builder: impl FnOnce(Arc<VirtFs>) -> DirMaker,
     ) -> Filesystem<RawMutex> {
         let fs = Arc::new(Self {
             name,
@@ -49,26 +38,33 @@ impl DynamicFs {
             inodes: Mutex::default(),
             root: Mutex::default(),
         });
-        let root = root(fs.clone());
+
+        let root_maker = root_builder(fs.clone());
         fs.set_root(DirEntry::new_dir(
-            |this| DirNode::new(root(this)),
+            |this| DirNode::new(root_maker(this)),
             Reference::root(),
         ));
+
         Filesystem::new(fs)
     }
 
+    /// Set the root directory entry
     pub fn set_root(&self, root: DirEntry<RawMutex>) {
         *self.root.lock() = Some(root);
     }
 
+    /// Allocate a new inode number
     pub fn alloc_inode(&self) -> u64 {
         self.inodes.lock().insert(()) as u64 + 1
     }
+
+    /// Release an inode number
     pub fn release_inode(&self, ino: u64) {
         self.inodes.lock().remove(ino as usize - 1);
     }
 }
-impl FilesystemOps<RawMutex> for DynamicFs {
+
+impl FilesystemOps<RawMutex> for VirtFs {
     fn name(&self) -> &str {
         &self.name
     }
@@ -78,32 +74,38 @@ impl FilesystemOps<RawMutex> for DynamicFs {
     }
 
     fn stat(&self) -> VfsResult<StatFs> {
-        Ok(dummy_stat_fs(self.fs_type))
+        Ok(dummy_stat(self.fs_type))
     }
 }
 
-pub enum DynNodeOps {
+/// Node operations for virtual filesystem entries
+pub enum VirtNodeOps {
     Dir(DirMaker),
     File(Arc<dyn FileNodeOps<RawMutex>>),
 }
-impl From<DirMaker> for DynNodeOps {
+
+impl From<DirMaker> for VirtNodeOps {
     fn from(maker: DirMaker) -> Self {
         Self::Dir(maker)
     }
 }
-impl<T: FileNodeOps<RawMutex> + 'static> From<Arc<T>> for DynNodeOps {
+
+impl<T: FileNodeOps<RawMutex> + 'static> From<Arc<T>> for VirtNodeOps {
     fn from(ops: Arc<T>) -> Self {
         Self::File(ops)
     }
 }
 
-pub struct DynamicNode {
-    fs: Arc<DynamicFs>,
+/// Virtual filesystem node
+pub struct VirtNode {
+    fs: Arc<VirtFs>,
     ino: u64,
     pub(crate) metadata: Mutex<Metadata>,
 }
-impl DynamicNode {
-    pub fn new(fs: Arc<DynamicFs>, node_type: NodeType, mode: NodePermission) -> Self {
+
+impl VirtNode {
+    /// Create a new virtual node
+    pub fn new(fs: Arc<VirtFs>, node_type: NodeType, mode: NodePermission) -> Self {
         let ino = fs.alloc_inode();
         let metadata = Metadata {
             device: 0,
@@ -114,13 +116,14 @@ impl DynamicNode {
             uid: 0,
             gid: 0,
             size: 0,
-            block_size: 0,
+            block_size: 4096,
             blocks: 0,
             rdev: DeviceId::default(),
             atime: Duration::default(),
             mtime: Duration::default(),
             ctime: Duration::default(),
         };
+
         Self {
             fs,
             ino,
@@ -129,67 +132,13 @@ impl DynamicNode {
     }
 }
 
-pub struct DynamicDir {
-    node: DynamicNode,
-    this: WeakDirEntry<RawMutex>,
-    children: Arc<BTreeMap<String, DynNodeOps>>,
-}
-impl DynamicDir {
-    fn new(
-        node: DynamicNode,
-        children: Arc<BTreeMap<String, DynNodeOps>>,
-        this: WeakDirEntry<RawMutex>,
-    ) -> Arc<DynamicDir> {
-        Arc::new(Self {
-            node,
-            this,
-            children,
-        })
-    }
-
-    pub fn builder(fs: Arc<DynamicFs>) -> DynamicDirBuilder {
-        DynamicDirBuilder::new(fs)
-    }
-}
-impl Drop for DynamicNode {
+impl Drop for VirtNode {
     fn drop(&mut self) {
         self.fs.release_inode(self.ino);
     }
 }
 
-pub struct DynamicDirBuilder {
-    fs: Arc<DynamicFs>,
-    children: BTreeMap<String, DynNodeOps>,
-}
-impl DynamicDirBuilder {
-    pub fn new(fs: Arc<DynamicFs>) -> Self {
-        Self {
-            fs,
-            children: BTreeMap::new(),
-        }
-    }
-
-    pub fn add(&mut self, name: impl Into<String>, ops: impl Into<DynNodeOps>) {
-        self.children.insert(name.into(), ops.into());
-    }
-
-    pub fn build(self) -> DirMaker {
-        let children = Arc::new(self.children);
-        Arc::new(move |this| {
-            DynamicDir::new(
-                DynamicNode::new(
-                    self.fs.clone(),
-                    NodeType::Directory,
-                    NodePermission::from_bits_truncate(0o755),
-                ),
-                children.clone(),
-                this,
-            )
-        })
-    }
-}
-
-impl NodeOps<RawMutex> for DynamicNode {
+impl NodeOps<RawMutex> for VirtNode {
     fn inode(&self) -> u64 {
         self.ino
     }
@@ -206,6 +155,7 @@ impl NodeOps<RawMutex> for DynamicNode {
 
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()> {
         let mut metadata = self.metadata.lock();
+
         if let Some(mode) = update.mode {
             metadata.mode = mode;
         }
@@ -219,6 +169,7 @@ impl NodeOps<RawMutex> for DynamicNode {
         if let Some(mtime) = update.mtime {
             metadata.mtime = mtime;
         }
+
         Ok(())
     }
 
@@ -235,8 +186,35 @@ impl NodeOps<RawMutex> for DynamicNode {
     }
 }
 
+/// Virtual directory node
+pub struct VirtDir {
+    node: VirtNode,
+    this: WeakDirEntry<RawMutex>,
+    children: Arc<BTreeMap<String, VirtNodeOps>>,
+}
+
+impl VirtDir {
+    /// Create a new virtual directory
+    fn new(
+        node: VirtNode,
+        children: Arc<BTreeMap<String, VirtNodeOps>>,
+        this: WeakDirEntry<RawMutex>,
+    ) -> Arc<VirtDir> {
+        Arc::new(Self {
+            node,
+            this,
+            children,
+        })
+    }
+
+    /// Create a new directory builder
+    pub fn builder(fs: Arc<VirtFs>) -> VirtDirBuilder {
+        VirtDirBuilder::new(fs)
+    }
+}
+
 #[inherit_methods(from = "self.node")]
-impl NodeOps<RawMutex> for DynamicDir {
+impl NodeOps<RawMutex> for VirtDir {
     fn inode(&self) -> u64;
     fn metadata(&self) -> VfsResult<Metadata>;
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
@@ -247,27 +225,27 @@ impl NodeOps<RawMutex> for DynamicDir {
     }
 }
 
-impl DirNodeOps<RawMutex> for DynamicDir {
+impl DirNodeOps<RawMutex> for VirtDir {
     fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
-        let children = [DOT, DOTDOT]
-            .into_iter()
-            .chain(self.children.keys().map(|it| it.as_str()));
-
         let this_entry = self.this.upgrade().unwrap();
         let this_dir = this_entry.as_dir()?;
 
+        let entries = [DOT, DOTDOT]
+            .into_iter()
+            .chain(self.children.keys().map(String::as_str))
+            .enumerate()
+            .skip(offset as usize);
+
         let mut count = 0;
-        for (i, name) in children.enumerate().skip(offset as usize) {
+        for (i, name) in entries {
             let metadata = match name {
-                DOT => this_entry.metadata(),
+                DOT => this_entry.metadata()?,
                 DOTDOT => this_entry
                     .parent()
-                    .map_or_else(|| this_entry.metadata(), |parent| parent.metadata()),
-                _ => {
-                    let entry = this_dir.lookup(name)?;
-                    entry.metadata()
-                } // DOTDOT => self.
-            }?;
+                    .map_or_else(|| this_entry.metadata(), |parent| parent.metadata())?,
+                _ => this_dir.lookup(name)?.metadata()?,
+            };
+
             if !sink.accept(name, metadata.inode, metadata.node_type, i as u64 + 1) {
                 break;
             }
@@ -280,11 +258,12 @@ impl DirNodeOps<RawMutex> for DynamicDir {
     fn lookup(&self, name: &str) -> VfsResult<DirEntry<RawMutex>> {
         let ops = self.children.get(name).ok_or(VfsError::ENOENT)?;
         let reference = Reference::new(self.this.upgrade(), name.to_owned());
+
         Ok(match ops {
-            DynNodeOps::Dir(maker) => {
+            VirtNodeOps::Dir(maker) => {
                 DirEntry::new_dir(|this| DirNode::new(maker(this)), reference)
             }
-            DynNodeOps::File(ops) => {
+            VirtNodeOps::File(ops) => {
                 let node_type = ops.metadata()?.node_type;
                 DirEntry::new_file(FileNode::new(ops.clone()), node_type, reference)
             }
@@ -297,15 +276,15 @@ impl DirNodeOps<RawMutex> for DynamicDir {
         _node_type: NodeType,
         _permission: NodePermission,
     ) -> VfsResult<DirEntry<RawMutex>> {
-        Err(VfsError::EPERM)
+        Err(VfsError::EROFS) // Read-only filesystem
     }
 
     fn link(&self, _name: &str, _node: &DirEntry<RawMutex>) -> VfsResult<DirEntry<RawMutex>> {
-        Err(VfsError::EPERM)
+        Err(VfsError::EROFS)
     }
 
     fn unlink(&self, _name: &str) -> VfsResult<()> {
-        Err(VfsError::EPERM)
+        Err(VfsError::EROFS)
     }
 
     fn rename(
@@ -314,6 +293,46 @@ impl DirNodeOps<RawMutex> for DynamicDir {
         _dst_dir: &DirNode<RawMutex>,
         _dst_name: &str,
     ) -> VfsResult<()> {
-        Err(VfsError::EPERM)
+        Err(VfsError::EROFS)
+    }
+}
+
+/// Builder for virtual directories
+pub struct VirtDirBuilder {
+    fs: Arc<VirtFs>,
+    children: BTreeMap<String, VirtNodeOps>,
+}
+
+impl VirtDirBuilder {
+    /// Create a new directory builder
+    pub fn new(fs: Arc<VirtFs>) -> Self {
+        Self {
+            fs,
+            children: BTreeMap::new(),
+        }
+    }
+
+    /// Add a child entry to the directory
+    pub fn add(&mut self, name: impl Into<String>, ops: impl Into<VirtNodeOps>) -> &mut Self {
+        self.children.insert(name.into(), ops.into());
+        self
+    }
+
+    /// Build the directory maker
+    pub fn build(self) -> DirMaker {
+        let children = Arc::new(self.children);
+        let fs = self.fs;
+
+        Arc::new(move |this| {
+            VirtDir::new(
+                VirtNode::new(
+                    fs.clone(),
+                    NodeType::Directory,
+                    NodePermission::from_bits_truncate(0o755),
+                ),
+                children.clone(),
+                this,
+            )
+        })
     }
 }
