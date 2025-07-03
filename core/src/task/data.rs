@@ -13,7 +13,6 @@ use alloc::{
     vec::Vec,
 };
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FsFile;
 use axhal::{
     arch::UspaceContext,
     irq::with_irqs_disabled,
@@ -318,21 +317,6 @@ impl ProcessData {
         self.vma_mapping.read().find_region_by_addr(vaddr).cloned()
     }
 
-    /// Get the file associated with the given virtual address
-    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<FsFile<RawMutex>>>> {
-        self.vma_mapping.read().get_file_by_addr(vaddr)
-    }
-
-    /// Get all regions that overlap with the given address range
-    pub fn find_overlapping_mmap_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
-        self.vma_mapping
-            .read()
-            .find_overlapping_regions(vaddr_range)
-            .into_iter()
-            .cloned()
-            .collect()
-    }
-
     /// Remove all regions that overlap with the given address range
     pub fn remove_overlapping_mmap_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
         self.vma_mapping
@@ -348,6 +332,11 @@ impl ProcessData {
     /// Clear all mmap mappings
     pub fn clear_mmap_regions(&self) {
         self.vma_mapping.write().clear()
+    }
+
+    /// Populate file-backed pages in the address space
+    pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
+        self.vma_mapping.read().populate_file_pages(vaddr, len)
     }
 }
 

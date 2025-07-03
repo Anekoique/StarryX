@@ -33,9 +33,9 @@ ln -v -s /lib /usr/lib64
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
-/musl/runtest.exe -w entry-dynamic.exe argv
+# /musl/runtest.exe -w entry-dynamic.exe fscanf
 # /musl/ltp_testcode.sh
-# ./libctest_testcode.sh
+./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh

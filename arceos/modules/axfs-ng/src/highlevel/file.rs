@@ -309,6 +309,11 @@ impl<M: RawMutex> FsFile<M> {
         self.access(FileFlags::READ)?.sync(data_only)
     }
 
+    /// Get the file size.
+    pub fn len(&self) -> VfsResult<u64> {
+        self.access(FileFlags::READ)?.len()
+    }
+
     /// Truncates or extends the underlying file, updating the size of this file to become `size`.
     pub fn set_len(&self, size: u64) -> VfsResult<()> {
         self.access(FileFlags::WRITE)?.set_len(size)

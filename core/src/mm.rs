@@ -4,6 +4,7 @@ use core::ffi::CStr;
 
 use alloc::{
     borrow::ToOwned,
+    collections::BTreeSet,
     string::{String, ToString},
     sync::Arc,
     vec,
@@ -14,9 +15,12 @@ use axfs_ng::{FS_CONTEXT, FsFile};
 use axhal::{mem::virt_to_phys, paging::MappingFlags};
 use axmm::{AddrSpace, kernel_aspace};
 use axsync::{Mutex, RawMutex};
+use axtask::current;
 use kernel_elf_parser::{AuxvEntry, ELFParser, app_stack_region};
-use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
+use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PageIter4K, VirtAddr, VirtAddrRange};
 use xmas_elf::{ElfFile, program::SegmentData};
+
+use crate::task::TaskExt;
 
 /// Creates a new empty user address space.
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
@@ -238,50 +242,50 @@ pub struct MmapRegion {
     /// Virtual address range of the mapping
     pub vaddr_range: VirtAddrRange,
     /// Associated file descriptor (None for anonymous mappings)
-    pub vm_file: Option<Arc<Mutex<FsFile<RawMutex>>>>,
+    pub vm_file: Arc<Mutex<FsFile<RawMutex>>>,
     /// Offset in the file
     pub file_offset: isize,
-    /// Protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
-    pub prot_flags: u32,
-    /// Mapping flags (MAP_SHARED, MAP_PRIVATE, etc.)
-    pub map_flags: u32,
+    /// Track which pages have been populated from file
+    pub populated_pages: Arc<Mutex<BTreeSet<usize>>>,
 }
 
 /// Mmap region information
 impl MmapRegion {
-    /// Check if the region has a file
-    pub fn has_file(&self) -> Option<MmapRegion> {
-        if self.vm_file.is_some() {
-            Some(self.clone())
-        } else {
-            None
+    /// Create a new MmapRegion
+    pub fn new(
+        vaddr_range: VirtAddrRange,
+        vm_file: Arc<Mutex<FsFile<RawMutex>>>,
+        file_offset: isize,
+    ) -> Self {
+        Self {
+            vaddr_range,
+            vm_file,
+            file_offset,
+            populated_pages: Arc::new(Mutex::new(BTreeSet::new())),
         }
-    }
-
-    /// Check if the region is a file and the address is in the file
-    pub fn check_file(&self, vaddr: VirtAddr) -> LinuxResult<&MmapRegion> {
-        let file = self.vm_file.as_ref().unwrap();
-        let file = file.lock();
-        let page_offset = vaddr.align_down_4k() - self.vaddr_range.start;
-        let file_offset = self.file_offset + page_offset as isize;
-        let file_size = file.inner().len()? as isize;
-        if file_offset < 0 || file_offset > file_size {
-            return Err(LinuxError::EINVAL);
-        }
-        Ok(self)
     }
 
     /// Get the buffer of the region by address
-    pub fn get_buf_by_addr(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
-        let Some(file) = self.vm_file.as_ref() else {
-            return Err(LinuxError::EINVAL);
-        };
-        let mut file = file.lock();
-        let page_offset = vaddr.align_down_4k() - self.vaddr_range.start;
+    pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
+        let page_addr = vaddr.align_down_4k();
+
+        // Check if this page has already been populated
+        if self.populated_pages.lock().contains(&page_addr.as_usize()) {
+            return Err(LinuxError::EEXIST); // Page already populated
+        }
+
+        let page_offset = page_addr - self.vaddr_range.start;
         let file_offset = self.file_offset + page_offset as isize;
+        if file_offset < 0 || file_offset > self.vm_file.lock().len()? as isize {
+            return Err(LinuxError::EINVAL);
+        }
+
         let mut buf = vec![0u8; PAGE_SIZE_4K];
-        debug!("Reading from file: {:#x?}, {:#x?}", file_offset, buf.len());
-        file.read_at(&mut buf, file_offset as u64)?;
+        self.vm_file.lock().read_at(&mut buf, file_offset as u64)?;
+
+        // Mark this page as populated
+        self.populated_pages.lock().insert(page_addr.as_usize());
+
         Ok(buf)
     }
 }
@@ -364,36 +368,6 @@ impl VmaMapping {
         None
     }
 
-    /// Get the file of the region by address
-    pub fn get_file_by_addr(&self, vaddr: VirtAddr) -> Option<Arc<Mutex<FsFile<RawMutex>>>> {
-        let region = self.find_region_by_addr(vaddr)?;
-        region.vm_file.clone()
-    }
-
-    /// Get all regions that overlap with the given address range
-    pub fn find_overlapping_regions(&self, vaddr_range: VirtAddrRange) -> Vec<&MmapRegion> {
-        let start = vaddr_range.start.as_usize();
-        let end = vaddr_range.end.as_usize();
-        let mut overlapping = Vec::new();
-
-        for region in &self.regions {
-            let region_start = region.vaddr_range.start.as_usize();
-            let region_end = region.vaddr_range.end.as_usize();
-
-            // Check for overlap: !(end <= region_start || start >= region_end)
-            if end > region_start && start < region_end {
-                overlapping.push(region);
-            }
-
-            // Early termination since regions are sorted
-            if region_start >= end {
-                break;
-            }
-        }
-
-        overlapping
-    }
-
     /// Remove all regions that overlap with the given address range
     /// Returns the removed regions
     pub fn remove_overlapping_regions(&mut self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
@@ -418,9 +392,7 @@ impl VmaMapping {
                     overlap_end - overlap_start,
                 );
                 // Adjust file offset for the overlapping part
-                if region.vm_file.is_some() {
-                    overlapping_region.file_offset += (overlap_start - region_start) as isize;
-                }
+                overlapping_region.file_offset += (overlap_start - region_start) as isize;
                 removed.push(overlapping_region);
 
                 // Split the region if needed
@@ -441,15 +413,13 @@ impl VmaMapping {
                     let offset_adjustment = end - region_start;
                     after_region.vaddr_range =
                         VirtAddrRange::from_start_size(VirtAddr::from(end), region_end - end);
-                    if after_region.vm_file.is_some() {
-                        after_region.file_offset += offset_adjustment as isize;
-                    }
+                    after_region.file_offset += offset_adjustment as isize;
                     new_regions.push(after_region);
                 }
 
-                false // Remove the original region
+                false
             } else {
-                true // Keep this region (no overlap)
+                true
             }
         });
 
@@ -465,6 +435,41 @@ impl VmaMapping {
     /// Get all mapping regions (for debugging/inspection)
     pub fn get_all_regions(&self) -> &[MmapRegion] {
         &self.regions
+    }
+
+    /// Populate file-backed pages in the address space
+    pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
+        let start_addr = vaddr.align_down_4k();
+        let end_addr = (vaddr + len).align_up_4k();
+        let aspace = TaskExt::from_task(&current()).process_data().aspace.lock();
+
+        for page_addr in PageIter4K::new(start_addr, end_addr).unwrap() {
+            if let Some(region) = self.find_region_by_addr(page_addr) {
+                // Skip if this page has already been populated in this region
+                if region
+                    .populated_pages
+                    .lock()
+                    .contains(&page_addr.as_usize())
+                {
+                    continue;
+                }
+
+                // File-backed page, read from file and write to aspace
+                match region.get_buf(page_addr) {
+                    Ok(page_data) => {
+                        debug!("Populating page: {:#x}", page_addr);
+                        aspace.write(page_addr, &page_data)?;
+                    }
+                    Err(LinuxError::EEXIST) => {
+                        // Page already populated, skip
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Clear all mappings

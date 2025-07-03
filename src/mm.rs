@@ -42,18 +42,10 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         }
     }
 
-    // First check if we can find a region, return false if not found
-
     let buf = curr_ext
         .process_data()
         .find_mmap_region_by_addr(vaddr)
-        .and_then(|region| region.has_file())
-        .map(|region| {
-            region
-                .check_file(vaddr)
-                .and_then(|region| region.get_buf_by_addr(vaddr))
-                .map_err(|_| send_sigsegv())
-        });
+        .map(|region| region.get_buf(vaddr).map_err(|_| send_sigsegv()));
 
     if !curr_ext
         .process_data()

@@ -77,22 +77,19 @@ pub fn sys_mmap(
             .ok_or(LinuxError::ENOMEM)?
     };
 
-    // FIXME: real lazy alloc
-    let populate = if fd == -1 {
-        false
-    } else {
-        !map_flags.contains(MmapFlags::ANONYMOUS)
-    };
-    // let mut populate = map_flags.contains(MmapFlags::POPULATE);
-    // FIXME: Force populate for the application's TEXT segment to prove
-    // that lazy allocation is not the source of the error.
+    // let mut populate = if fd == -1 {
+    //     false
+    // } else {
+    //     !map_flags.contains(MmapFlags::ANONYMOUS)
+    // };
+    let populate = map_flags.contains(MmapFlags::POPULATE);
     // if fd != -1
-    //     && (permission_flags.contains(MmapProt::EXEC) || length == 0xa000 || length == 0xb000)
+    //     && length == 0x52000
     // {
     //     warn!("Forcing POPULATE=true for application TEXT segment");
     //     populate = true;
     // }
-
+    //
     aspace.map_alloc(
         start_addr,
         aligned_length,
@@ -112,26 +109,20 @@ pub fn sys_mmap(
         let mut buf = vec![0u8; len];
         file.read_at(&mut buf, offset as u64)?;
         aspace.write(start_addr, &buf)?;
+    } else if !map_flags.contains(MmapFlags::ANONYMOUS) {
+        // Create and add VMA mapping region
+        let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);
+        let mmap_region = MmapRegion::new(
+            vaddr_range,
+            // FIXME: anonymous || shared should use shm file
+            File::from_fd(fd)?.clone_inner(),
+            if offset < 0 { 0 } else { offset },
+        );
+
+        let _ = process_data
+            .add_mmap_region(mmap_region)
+            .map_err(|e| warn!("Failed to add VMA region: {}", e));
     }
-
-    // Create and add VMA mapping region
-    let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);
-    let mmap_region = MmapRegion {
-        vaddr_range,
-        // FIXME: anonymous || shared should use shm file
-        vm_file: if fd == -1 || map_flags.contains(MmapFlags::ANONYMOUS) {
-            None
-        } else {
-            Some(File::from_fd(fd)?.clone_inner())
-        },
-        file_offset: if offset < 0 { 0 } else { offset },
-        prot_flags: prot,
-        map_flags: flags,
-    };
-
-    let _ = process_data
-        .add_mmap_region(mmap_region)
-        .map_err(|e| warn!("Failed to add VMA region: {}", e));
 
     Ok(start_addr.as_usize() as _)
 }
@@ -185,7 +176,8 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
     let length = memory_addr::align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
     aspace.protect(start_addr, length, permission_flags.into())?;
-
+    drop(aspace);
+    process_data.populate_file_pages(start_addr, length)?;
     Ok(0)
 }
 
