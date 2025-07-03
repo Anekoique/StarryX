@@ -10,10 +10,11 @@ use page_table_entry::MappingFlags;
 use starry_core::task::TaskExt;
 
 use crate::{
-    ipc::{
-        IPC_MANAGER, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, ShmAtFlags, ShmGetFlags, ShmInfo,
-        ShmSegment,
+    ctypes::{
+        IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT,
+        ipc::{ShmAtFlags, ShmGetFlags},
     },
+    ipc::{IPC_MANAGER, ShmInfo, ShmSegment},
     ptr::{UserPtr, nullable},
     with_ipc_manager,
 };

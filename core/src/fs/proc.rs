@@ -98,7 +98,7 @@ pub fn init_procfs() -> Filesystem<RawMutex> {
 
 /// Create a virtual file that reads data dynamically
 fn create_dynamic_file(fs: Arc<VirtFs>, content_fn: fn() -> String) -> Arc<VirtFile> {
-    VirtFile::new(fs, move || content_fn())
+    VirtFile::new(fs, content_fn)
 }
 
 /// Create a static virtual file

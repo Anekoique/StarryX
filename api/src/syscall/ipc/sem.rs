@@ -8,10 +8,8 @@ use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::__kernel_time_t,
-    ipc::{
-        IPC_MANAGER, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, SEMMSL, SEMOPM, SemBuf, SemInfo,
-        SemOpFlags,
-    },
+    ctypes::{IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, SEMMSL, SEMOPM, ipc::SemOpFlags},
+    ipc::{IPC_MANAGER, SemBuf, SemInfo},
     ptr::{UserConstPtr, UserPtr, nullable},
     time::monotonic_time_nanos,
     with_ipc_manager,
@@ -276,7 +274,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 }
 
                 let val = arg as i16;
-                if val < 0 || val as usize > crate::ipc::SEMVMX {
+                if val < 0 || val as usize > crate::ctypes::SEMVMX {
                     return Err(LinuxError::ERANGE);
                 }
 
@@ -357,7 +355,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
                 let mut semset = semset_arc.lock();
                 for (i, sem) in semset.semaphores.iter_mut().enumerate() {
                     let val = *buf_ptr.offset(i).get_as_ref()?;
-                    if val < 0 || val as usize > crate::ipc::SEMVMX {
+                    if val < 0 || val as usize > crate::ctypes::SEMVMX {
                         return Err(LinuxError::ERANGE);
                     }
                     sem.semval = val;

@@ -5,51 +5,18 @@ use axerrno::{LinuxError, LinuxResult};
 use axmm::SharedPages;
 use axprocess::Pid;
 use axsync::Mutex;
-use bitflags::bitflags;
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use page_table_entry::MappingFlags;
 
 use super::{IpcPerm, IpcidGenerator};
 use crate::{
     collections::{BTreeMap, BiBTreeMap},
-    ctypes::{__kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, c_ushort},
+    ctypes::{
+        __kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, SHMALL, SHMMAX, SHMMIN,
+        SHMMNI, c_ushort,
+    },
     time::monotonic_time_nanos,
 };
-
-/// Minimum shared memory segment size
-pub const SHMMIN: usize = 1;
-/// Maximum number of shared memory identifiers
-pub const SHMMNI: usize = 4096;
-/// Maximum shared memory segment size
-pub const SHMMAX: usize = usize::MAX - (1 << 24);
-/// Maximum shared memory pages system-wide
-pub const SHMALL: usize = usize::MAX - (1 << 24);
-/// Maximum shared memory segments per process
-pub const SHMSEG: usize = SHMMNI;
-
-bitflags! {
-    /// Shared memory get flags
-    pub struct ShmGetFlags: u32 {
-        /// Read permission
-        const SHM_R = 0o400;
-        /// Write permission
-        const SHM_W = 0o200;
-    }
-}
-
-bitflags! {
-    /// Shared memory attach flags
-    pub struct ShmAtFlags: u32 {
-        /// Attach for read-only access
-        const SHM_RDONLY = 0o10000;
-        /// Round address to SHMLBA boundary
-        const SHM_RND = 0o20000;
-        /// Remap existing mapping
-        const SHM_REMAP = 0o40000;
-        /// Allow execution of shared memory
-        const SHM_EXEC = 0o100000;
-    }
-}
 
 /// Shared memory segment information structure
 #[repr(C)]

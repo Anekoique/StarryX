@@ -5,8 +5,8 @@ use memory_addr::{VirtAddr, VirtAddrRange};
 use starry_core::{mm::MmapRegion, task::TaskExt};
 
 use crate::{
+    ctypes::mm::{MmapFlags, MmapProt},
     fs::{File, FileLike},
-    mm::{MmapFlags, MmapProt},
 };
 
 /// Map files or devices into memory.

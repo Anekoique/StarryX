@@ -11,8 +11,9 @@ use starry_core::fs::RTC0_DEVICE_ID;
 
 use crate::{
     ctypes::{
-        __kernel_old_time_t, AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, RTC_RD_TIME, UTIME_NOW,
-        UTIME_OMIT, linux_dirent64, rtc_time, timespec, timeval,
+        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, RTC_RD_TIME, UTIME_NOW, UTIME_OMIT, linux_dirent64,
+        sys::{rtc_time, utimbuf},
+        timespec, timeval,
     },
     fs::{Directory, FileLike, get_file_like, with_fs, with_location},
     ptr::{UserConstPtr, UserPtr, nullable},
@@ -447,12 +448,6 @@ pub fn sys_fchmodat(
         })
     })
     .map(|_| 0)
-}
-
-#[allow(non_camel_case_types)]
-pub struct utimbuf {
-    actime: __kernel_old_time_t,
-    modtime: __kernel_old_time_t,
 }
 
 fn update_times(

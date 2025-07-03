@@ -1,5 +1,12 @@
-use crate::ctypes::*;
 use bitflags::bitflags;
+
+use super::{
+    __WALL, __WCLONE, __WNOTHREAD, CLONE_CHILD_CLEARTID, CLONE_CHILD_SETTID, CLONE_FILES, CLONE_FS,
+    CLONE_IO, CLONE_NEWCGROUP, CLONE_NEWIPC, CLONE_NEWNET, CLONE_NEWNS, CLONE_NEWPID,
+    CLONE_NEWUSER, CLONE_NEWUTS, CLONE_PARENT, CLONE_PARENT_SETTID, CLONE_PTRACE, CLONE_SETTLS,
+    CLONE_SIGHAND, CLONE_SYSVSEM, CLONE_THREAD, CLONE_UNTRACED, CLONE_VFORK, CLONE_VM, WCONTINUED,
+    WEXITED, WNOHANG, WNOWAIT, WUNTRACED,
+};
 
 bitflags! {
     /// Options for use with [`sys_clone`].
@@ -62,9 +69,7 @@ bitflags! {
         /// The new process shares an I/O context with the calling process.
         const IO = CLONE_IO;
     }
-}
 
-bitflags! {
     #[derive(Debug, Clone, Copy, Default)]
     pub struct WaitOptions: u32 {
         /// Do not block when there are no processes wishing to report status.

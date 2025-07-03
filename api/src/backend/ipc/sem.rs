@@ -5,35 +5,15 @@ use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
 use axsync::Mutex;
 use axtask::WaitQueue;
-use bitflags::bitflags;
 
 use super::{IpcPerm, IpcidGenerator};
 use crate::{
     collections::BTreeMap,
-    ctypes::{__kernel_mode_t, __kernel_pid_t, __kernel_time_t, c_long, c_ushort},
+    ctypes::{
+        __kernel_mode_t, __kernel_pid_t, __kernel_time_t, SEMMNI, SEMMNS, SEMVMX, c_long, c_ushort,
+    },
     time::monotonic_time_nanos,
 };
-
-// Semaphore limits (based on Linux defaults)
-pub const SEMMSL: usize = 250; // max semaphores per semid
-pub const SEMMNS: usize = 32000; // max semaphores system wide
-pub const SEMOPM: usize = 32; // max operations per semop call
-pub const SEMMNI: usize = 128; // max semaphore identifiers
-pub const SEMVMX: usize = 32767; // semaphore maximum value
-
-bitflags! {
-    pub struct SemGetFlags: u32 {
-        const SEM_R = 0o400;
-        const SEM_A = 0o200; // alter permission
-    }
-}
-
-bitflags! {
-    pub struct SemOpFlags: u16 {
-        const IPC_NOWAIT = 0o4000;
-        const SEM_UNDO = 0o10000;
-    }
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

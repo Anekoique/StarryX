@@ -4,14 +4,13 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{OpenOptions, OpenResult};
+use axfs_ng::OpenResult;
 use axsync::RawMutex;
 
 use crate::{
     ctypes::{
         __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
-        FD_CLOEXEC, O_APPEND, O_CLOEXEC, O_CREAT, O_DIRECTORY, O_EXCL, O_NONBLOCK, O_PATH,
-        O_RDONLY, O_TRUNC, O_WRONLY,
+        FD_CLOEXEC, O_NONBLOCK, fs::flags_to_options,
     },
     fs::{
         Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like, with_fs,
@@ -19,42 +18,6 @@ use crate::{
     ptr::UserConstPtr,
     sys_getegid, sys_geteuid,
 };
-
-const O_EXEC: u32 = O_PATH;
-
-/// Convert open flags to [`OpenOptions`].
-fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32)) -> OpenOptions {
-    let flags = flags as u32;
-    let mut options = OpenOptions::new();
-    options.mode(mode).user(uid, gid);
-    match flags & 0b11 {
-        O_RDONLY => options.read(true),
-        O_WRONLY => options.write(true),
-        _ => options.read(true).write(true),
-    };
-    if flags & O_APPEND != 0 {
-        options.append(true);
-    }
-    if flags & O_TRUNC != 0 {
-        options.truncate(true);
-    }
-    if flags & O_CREAT != 0 {
-        options.create(true);
-    }
-    if flags & O_EXEC != 0 {
-        options.execute(true);
-    }
-    if flags & O_EXCL != 0 {
-        options.create_new(true);
-    }
-    if flags & O_DIRECTORY != 0 {
-        options.directory(true);
-    }
-    if flags & O_CLOEXEC != 0 {
-        options.cloexec(true);
-    }
-    options
-}
 
 fn add_to_fd(result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
     match result {

@@ -7,11 +7,12 @@ use axtask::current;
 use starry_core::task::TaskExt;
 
 use crate::{
-    ctypes::{__kernel_mode_t, c_long},
-    ipc::{
-        IPC_CREAT, IPC_EXCL, IPC_INFO, IPC_MANAGER, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT,
-        Message, MsgQueue, MsgRcvFlags, MsgSndFlags, MsgidDs,
+    ctypes::{
+        __kernel_mode_t, IPC_CREAT, IPC_EXCL, IPC_INFO, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT,
+        c_long,
+        ipc::{MsgRcvFlags, MsgSndFlags},
     },
+    ipc::{IPC_MANAGER, Message, MsgQueue, MsgidDs},
     ptr::UserPtr,
     with_ipc_manager,
 };

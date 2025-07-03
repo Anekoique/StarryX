@@ -5,8 +5,8 @@ use axtask::current;
 use starry_core::task::{ProcessData, TaskExt};
 
 use crate::{
+    ctypes::task::WaitOptions,
     ptr::{UserPtr, nullable},
-    task::WaitOptions,
 };
 
 #[derive(Debug, Clone, Copy)]

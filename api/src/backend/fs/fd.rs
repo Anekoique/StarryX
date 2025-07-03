@@ -63,17 +63,13 @@ impl FdTable {
     }
 
     /// Add a file-like object and return its fd
-    pub fn add(&self, file: Arc<dyn FileLike>) -> Result<usize, ()> {
-        self.inner.write().add(file).map_err(|_| ())
+    pub fn add(&self, file: Arc<dyn FileLike>) -> Result<usize, LinuxError> {
+        self.inner.write().add(file).map_err(|_| LinuxError::EMFILE)
     }
 
     /// Add a file-like object at a specific fd
-    pub fn add_at(&self, fd: usize, file: Arc<dyn FileLike>) -> Result<(), ()> {
-        self.inner
-            .write()
-            .add_at(fd, file)
-            .map(|_| ())
-            .map_err(|_| ())
+    pub fn add_at(&self, fd: usize, file: Arc<dyn FileLike>) -> Result<usize, Arc<dyn FileLike>> {
+        self.inner.write().add_at(fd, file)
     }
 
     /// Remove a file-like object by fd
@@ -113,7 +109,7 @@ impl FdTable {
     }
 
     /// Add a file-like object with flags
-    pub fn add_with_flags(&self, file: Arc<dyn FileLike>, cloexec: bool) -> Result<usize, ()> {
+    pub fn add_with_flags(&self, file: Arc<dyn FileLike>, cloexec: bool) -> Result<usize, LinuxError> {
         let fd = self.add(file)?;
         self.flags.write().set(fd, cloexec);
         Ok(fd)
@@ -125,13 +121,13 @@ impl FdTable {
         fd: usize,
         file: Arc<dyn FileLike>,
         cloexec: bool,
-    ) -> Result<(), ()> {
+    ) -> Result<(), LinuxError> {
         let result = self
             .inner
             .write()
             .add_at(fd, file)
             .map(|_| ())
-            .map_err(|_| ());
+            .map_err(|_| LinuxError::EBADF);
         if result.is_ok() {
             self.flags.write().set(fd, cloexec);
         }
@@ -167,8 +163,7 @@ pub fn add_file_like(f: Arc<dyn FileLike>, cloexec: bool) -> LinuxResult<c_int> 
     }
 
     Ok(FD_TABLE
-        .add_with_flags(f, cloexec)
-        .map_err(|_| LinuxError::EMFILE)? as c_int)
+        .add_with_flags(f, cloexec)? as c_int)
 }
 
 /// Close a file by `fd`.
@@ -185,8 +180,14 @@ pub fn close_file_like(fd: c_int) -> LinuxResult {
 #[ctor_bare::register_ctor]
 fn init_stdio() {
     let fd_table = FdTable::new();
-    let _ = fd_table.add_at(0, Arc::new(stdio::stdin()) as _); // stdin
-    let _ = fd_table.add_at(1, Arc::new(stdio::stdout()) as _); // stdout
-    let _ = fd_table.add_at(2, Arc::new(stdio::stdout()) as _); // stderr
+    fd_table
+        .add_at(0, Arc::new(stdio::stdin()) as _)
+        .unwrap_or_else(|_| panic!()); // stdin
+    fd_table
+        .add_at(1, Arc::new(stdio::stdout()) as _)
+        .unwrap_or_else(|_| panic!()); // stdout
+    fd_table
+        .add_at(2, Arc::new(stdio::stdout()) as _)
+        .unwrap_or_else(|_| panic!()); // stderr
     FD_TABLE.init_new(fd_table);
 }

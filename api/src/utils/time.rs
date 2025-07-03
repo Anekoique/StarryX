@@ -8,18 +8,6 @@ pub use crate::ctypes::{
     timespec, timeval,
 };
 
-#[repr(C)]
-pub struct Tms {
-    /// Process user mode execution time in microseconds
-    pub tms_utime: usize,
-    /// Process kernel mode execution time in microseconds
-    pub tms_stime: usize,
-    /// Sum of child processes' user mode execution time in microseconds
-    pub tms_cutime: usize,
-    /// Sum of child processes' kernel mode execution time in microseconds
-    pub tms_cstime: usize,
-}
-
 pub trait TimeValueLike {
     fn from_time_value(tv: TimeValue) -> Self;
 

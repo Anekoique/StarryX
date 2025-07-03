@@ -5,10 +5,10 @@ use starry_core::task::{TaskExt, time_stat_output};
 use crate::{
     ctypes::{
         __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, ITIMER_PROF, ITIMER_REAL,
-        ITIMER_VIRTUAL, itimerval, sigevent, timespec, timeval,
+        ITIMER_VIRTUAL, itimerval, sigevent, sys::Tms, timespec, timeval,
     },
     ptr::{UserConstPtr, UserPtr, nullable},
-    time::{TimeValueLike, Tms, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
+    time::{TimeValueLike, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
 
 /// Get current time from a clock.

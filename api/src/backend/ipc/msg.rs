@@ -2,42 +2,17 @@ use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
 use axsync::Mutex;
-use bitflags::bitflags;
 
 use super::{IpcPerm, IpcidGenerator};
 use crate::{
     collections::BTreeMap,
-    ctypes::{__kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, c_long, c_ushort},
+    ctypes::ipc::MsgRcvFlags,
+    ctypes::{
+        __kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, MSGMAX, MSGMNB, MSGMNI,
+        MSGPOOL, MSGTQL, c_long, c_ushort,
+    },
     time::monotonic_time_nanos,
 };
-
-// Message queue limits
-pub const MSGMAX: usize = 8192; // Maximum message size
-pub const MSGMNB: usize = 16384; // Maximum bytes in queue
-pub const MSGMNI: usize = 32000; // Maximum number of message queues
-pub const MSGTQL: usize = 1024; // Maximum messages in all queues
-pub const MSGPOOL: usize = MSGMNI * MSGMNB; // Total pool size
-
-bitflags! {
-    pub struct MsgGetFlags: u32 {
-        const MSG_R = 0o400;
-        const MSG_W = 0o200;
-    }
-}
-
-bitflags! {
-    pub struct MsgRcvFlags: u32 {
-        const IPC_NOWAIT = 0o4000;
-        const MSG_EXCEPT = 0o20000;
-        const MSG_NOERROR = 0o10000;
-    }
-}
-
-bitflags! {
-    pub struct MsgSndFlags: u32 {
-        const IPC_NOWAIT = 0o4000;
-    }
-}
 
 #[repr(C)]
 #[derive(Clone, Copy)]

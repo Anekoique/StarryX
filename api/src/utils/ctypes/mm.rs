@@ -1,14 +1,30 @@
 use axhal::paging::MappingFlags;
 
-use crate::ctypes::{
+use super::{
     MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_POPULATE, MAP_PRIVATE, MAP_SHARED, MAP_STACK,
     PROT_EXEC, PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
 };
 
 bitflags::bitflags! {
-    /// `PROT_*` flags for use with [`sys_mmap`].
-    ///
-    /// For `PROT_NONE`, use `ProtFlags::empty()`.
+    /// flags for sys_mmap
+    #[derive(Debug)]
+    pub struct MmapFlags: u32 {
+        /// Share changes
+        const SHARED = MAP_SHARED;
+        /// Changes private; copy pages on write.
+        const PRIVATE = MAP_PRIVATE;
+        /// Map address must be exactly as requested, no matter whether it is available.
+        const FIXED = MAP_FIXED;
+        /// Don't use a file.
+        const ANONYMOUS = MAP_ANONYMOUS;
+        /// Don't check for reservations.
+        const NORESERVE = MAP_NORESERVE;
+        /// Allocation is for a stack.
+        const STACK = MAP_STACK;
+        /// Populate (prefault) memory pages
+        const POPULATE = MAP_POPULATE;
+    }
+
     #[derive(Debug)]
     pub struct MmapProt: u32 {
         /// Page can be read.
@@ -37,28 +53,5 @@ impl From<MmapProt> for MappingFlags {
             flags |= MappingFlags::EXECUTE;
         }
         flags
-    }
-}
-
-bitflags::bitflags! {
-    /// flags for sys_mmap
-    ///
-    /// See <https://github.com/bminor/glibc/blob/master/bits/mman.h>
-    #[derive(Debug)]
-    pub struct MmapFlags: u32 {
-        /// Share changes
-        const SHARED = MAP_SHARED;
-        /// Changes private; copy pages on write.
-        const PRIVATE = MAP_PRIVATE;
-        /// Map address must be exactly as requested, no matter whether it is available.
-        const FIXED = MAP_FIXED;
-        /// Don't use a file.
-        const ANONYMOUS = MAP_ANONYMOUS;
-        /// Don't check for reservations.
-        const NORESERVE = MAP_NORESERVE;
-        /// Allocation is for a stack.
-        const STACK = MAP_STACK;
-        /// Populate (prefault) memory pages
-        const POPULATE = MAP_POPULATE;
     }
 }

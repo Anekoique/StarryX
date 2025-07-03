@@ -5,26 +5,11 @@ use core::sync::atomic::{AtomicI32, Ordering};
 use axns::{ResArc, def_resource};
 use axsync::Mutex;
 
-use super::msg::{MSGMAX, MSGMNB, MSGMNI, MsgManager};
-use super::sem::{SEMMNI, SEMMNS, SEMMSL, SEMOPM, SEMVMX, SemManager};
-use super::shm::{SHMALL, SHMMAX, SHMMNI, ShmManager};
-use crate::utils::ctypes::{
-    __kernel_gid_t, __kernel_key_t, __kernel_mode_t, __kernel_uid_t, c_long, c_ushort,
+use super::{msg::MsgManager, sem::SemManager, shm::ShmManager};
+use crate::ctypes::{
+    __kernel_gid_t, __kernel_key_t, __kernel_mode_t, __kernel_uid_t, MSGMAX, MSGMNB, MSGMNI,
+    SEMMNI, SEMMNS, SEMMSL, SEMOPM, SEMVMX, SHMALL, SHMMAX, SHMMNI, c_long, c_ushort,
 };
-
-/// IPC private key constant
-pub const IPC_PRIVATE: i32 = 0;
-
-/// IPC control flags
-pub const IPC_CREAT: u32 = 0o1000;
-pub const IPC_EXCL: u32 = 0o2000;
-pub const IPC_NOWAIT: u32 = 0o4000;
-
-/// IPC control commands
-pub const IPC_RMID: u32 = 0;
-pub const IPC_SET: u32 = 1;
-pub const IPC_STAT: u32 = 2;
-pub const IPC_INFO: u32 = 3;
 
 /// IPC permission structure as defined by POSIX
 #[repr(C)]

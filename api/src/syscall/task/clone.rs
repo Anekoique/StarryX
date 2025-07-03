@@ -12,7 +12,12 @@ use starry_core::{
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
 
-use crate::{ctypes::SIGCHLD, fs::FD_TABLE, ipc::IPC_MANAGER, ptr::UserPtr, task::CloneFlags};
+use crate::{
+    ctypes::{SIGCHLD, task::CloneFlags},
+    fs::FD_TABLE,
+    ipc::IPC_MANAGER,
+    ptr::UserPtr,
+};
 
 /// Create a child process or thread.
 ///
