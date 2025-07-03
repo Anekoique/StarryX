@@ -71,7 +71,7 @@ pub fn sys_sched_getaffinity(
                 mask_slice[i] = 0;
             }
         }
-        Ok(len as isize)
+        Ok(0)
     })
     .ok_or(LinuxError::ESRCH)?
 }

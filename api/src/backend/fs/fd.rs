@@ -109,7 +109,11 @@ impl FdTable {
     }
 
     /// Add a file-like object with flags
-    pub fn add_with_flags(&self, file: Arc<dyn FileLike>, cloexec: bool) -> Result<usize, LinuxError> {
+    pub fn add_with_flags(
+        &self,
+        file: Arc<dyn FileLike>,
+        cloexec: bool,
+    ) -> Result<usize, LinuxError> {
         let fd = self.add(file)?;
         self.flags.write().set(fd, cloexec);
         Ok(fd)
@@ -162,8 +166,7 @@ pub fn add_file_like(f: Arc<dyn FileLike>, cloexec: bool) -> LinuxResult<c_int> 
         return Err(LinuxError::EMFILE);
     }
 
-    Ok(FD_TABLE
-        .add_with_flags(f, cloexec)? as c_int)
+    Ok(FD_TABLE.add_with_flags(f, cloexec)? as c_int)
 }
 
 /// Close a file by `fd`.

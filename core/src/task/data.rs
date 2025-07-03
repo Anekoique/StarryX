@@ -33,9 +33,9 @@ use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
 use crate::{
-    futex::FutexTable,
     mm::{MmapRegion, VmaMapping},
     resources::Rlimits,
+    task::FutexTable,
     time::TimeStat,
 };
 

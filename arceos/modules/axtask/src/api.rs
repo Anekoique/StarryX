@@ -248,7 +248,7 @@ pub fn get_task_by_id(task_id: TaskId) -> Option<AxTaskRef> {
 /// `None` if the task doesn't exist or has been dropped.
 pub fn with_task<R>(id: TaskId, f: impl FnOnce(&AxTaskRef) -> R) -> Option<R> {
     if id.as_u64() == 0 {
-        Some(f(&current().as_task_ref()))
+        Some(f(current().as_task_ref()))
     } else {
         get_task_by_id(id).map(|task| f(&task))
     }
