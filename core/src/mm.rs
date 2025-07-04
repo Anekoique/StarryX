@@ -237,7 +237,6 @@ pub fn is_accessing_user_memory() -> bool {
 }
 
 /// Memory mapping region information for mmap
-#[derive(Clone)]
 pub struct MmapRegion {
     /// Virtual address range of the mapping
     pub vaddr_range: VirtAddrRange,
@@ -475,5 +474,23 @@ impl VmaMapping {
     /// Clear all mappings
     pub fn clear(&mut self) {
         self.regions.clear();
+    }
+}
+
+// Manual Clone implementation to ensure populated_pages is not shared
+impl Clone for MmapRegion {
+    fn clone(&self) -> Self {
+        // Deep clone the populated_pages set
+        let populated_pages_clone = {
+            let pages = self.populated_pages.lock();
+            Arc::new(Mutex::new(pages.clone()))
+        };
+
+        Self {
+            vaddr_range: self.vaddr_range,
+            vm_file: self.vm_file.clone(), // File can be shared
+            file_offset: self.file_offset,
+            populated_pages: populated_pages_clone, // Deep clone
+        }
     }
 }

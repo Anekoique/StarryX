@@ -33,6 +33,7 @@ ln -v -s /lib /usr/lib64
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
+# /glibc/runtest.exe -w entry-dynamic.exe dlopen
 ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
@@ -43,12 +44,12 @@ cd /musl
 # ./unixbench_testcode.sh
 
 cd /glibc
-# ./cyclictest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
+# ./cyclictest_testcode.sh
 # ./unixbench_testcode.sh
 # ./cyclictest_testcode.sh

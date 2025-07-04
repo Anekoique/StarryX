@@ -38,14 +38,15 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         let rlimit = &curr_ext.process_data().rlimits.read()[RLIMIT_STACK];
         let size = axconfig::plat::USER_STACK_TOP - vaddr.as_usize();
         if size as u64 > rlimit.current {
+            debug!("Stack extension, check rlimit");
             send_sigsegv();
         }
     }
 
-    let buf = curr_ext
-        .process_data()
-        .find_mmap_region_by_addr(vaddr)
-        .map(|region| region.get_buf(vaddr).map_err(|_| send_sigsegv()));
+    let buf = match curr_ext.process_data().populate_page_from_file(vaddr) {
+        Ok(data) => Some(data),
+        Err(_) => None,
+    };
 
     if !curr_ext
         .process_data()
@@ -66,7 +67,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
     }
 
     // Write buffer to address space if we have one
-    if let Some(Ok(data)) = buf {
+    if let Some(data) = buf {
         let _ = curr_ext
             .process_data()
             .aspace

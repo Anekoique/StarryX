@@ -312,11 +312,6 @@ impl ProcessData {
         self.vma_mapping.write().remove_region(vaddr_range)
     }
 
-    /// Find the memory mapping region that contains the given virtual address
-    pub fn find_mmap_region_by_addr(&self, vaddr: VirtAddr) -> Option<MmapRegion> {
-        self.vma_mapping.read().find_region_by_addr(vaddr).cloned()
-    }
-
     /// Remove all regions that overlap with the given address range
     pub fn remove_overlapping_mmap_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
         self.vma_mapping
@@ -337,6 +332,17 @@ impl ProcessData {
     /// Populate file-backed pages in the address space
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
         self.vma_mapping.read().populate_file_pages(vaddr, len)
+    }
+
+    /// Populate a page from file for the given virtual address
+    /// Returns the page data if successful
+    pub fn populate_page_from_file(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
+        let vma_mapping = self.vma_mapping.read();
+        if let Some(region) = vma_mapping.find_region_by_addr(vaddr) {
+            region.get_buf(vaddr)
+        } else {
+            Err(LinuxError::EFAULT)
+        }
     }
 }
 
