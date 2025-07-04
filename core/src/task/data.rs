@@ -303,29 +303,19 @@ impl ProcessData {
     }
 
     /// Add a new memory mapping region
-    pub fn add_mmap_region(&self, region: MmapRegion) -> Result<(), &'static str> {
+    pub fn add_region(&self, region: MmapRegion) -> Result<(), &'static str> {
         self.vma_mapping.write().add_region(region)
     }
 
-    /// Remove a memory mapping region by virtual address range
-    pub fn remove_mmap_region(&self, vaddr_range: VirtAddrRange) -> Option<MmapRegion> {
-        self.vma_mapping.write().remove_region(vaddr_range)
-    }
-
     /// Remove all regions that overlap with the given address range
-    pub fn remove_overlapping_mmap_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
+    pub fn remove_overlapping_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
         self.vma_mapping
             .write()
             .remove_overlapping_regions(vaddr_range)
     }
 
-    /// Get all mapping regions (for debugging/inspection)
-    pub fn get_all_mmap_regions(&self) -> Vec<MmapRegion> {
-        self.vma_mapping.read().get_all_regions().to_vec()
-    }
-
     /// Clear all mmap mappings
-    pub fn clear_mmap_regions(&self) {
+    pub fn clear_regions(&self) {
         self.vma_mapping.write().clear()
     }
 
@@ -336,13 +326,8 @@ impl ProcessData {
 
     /// Populate a page from file for the given virtual address
     /// Returns the page data if successful
-    pub fn populate_page_from_file(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
-        let vma_mapping = self.vma_mapping.read();
-        if let Some(region) = vma_mapping.find_region_by_addr(vaddr) {
-            region.get_buf(vaddr)
-        } else {
-            Err(LinuxError::EFAULT)
-        }
+    pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
+        self.vma_mapping.read().get_buf(vaddr)
     }
 }
 

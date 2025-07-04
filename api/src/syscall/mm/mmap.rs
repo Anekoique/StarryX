@@ -54,7 +54,7 @@ pub fn sys_mmap(
 
         // Remove any existing VMA mappings in the range before unmapping
         let vaddr_range = VirtAddrRange::from_start_size(dst_addr, aligned_length);
-        let removed_regions = process_data.remove_overlapping_mmap_regions(vaddr_range);
+        let removed_regions = process_data.remove_overlapping_regions(vaddr_range);
         debug!(
             "Removed {} overlapping VMA regions for MAP_FIXED",
             removed_regions.len()
@@ -120,7 +120,7 @@ pub fn sys_mmap(
         );
 
         let _ = process_data
-            .add_mmap_region(mmap_region)
+            .add_region(mmap_region)
             .map_err(|e| warn!("Failed to add VMA region: {}", e));
     }
 
@@ -140,7 +140,7 @@ pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
 
     // Remove VMA mapping regions before unmapping
     let vaddr_range = VirtAddrRange::from_start_size(start_addr, length);
-    let removed_regions = process_data.remove_overlapping_mmap_regions(vaddr_range);
+    let removed_regions = process_data.remove_overlapping_regions(vaddr_range);
     debug!(
         "Removed {} VMA regions during munmap",
         removed_regions.len()

@@ -43,11 +43,6 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         }
     }
 
-    let buf = match curr_ext.process_data().populate_page_from_file(vaddr) {
-        Ok(data) => Some(data),
-        Err(_) => None,
-    };
-
     if !curr_ext
         .process_data()
         .aspace
@@ -66,14 +61,13 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         );
     }
 
-    // Write buffer to address space if we have one
-    if let Some(data) = buf {
-        let _ = curr_ext
+    curr_ext.process_data().get_buf(vaddr).ok().map(|data| {
+        curr_ext
             .process_data()
             .aspace
             .lock()
-            .write(vaddr.align_down_4k(), &data);
-    }
+            .write(vaddr.align_down_4k(), &data)
+    });
 
     true
 }

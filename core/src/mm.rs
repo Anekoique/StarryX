@@ -245,10 +245,9 @@ pub struct MmapRegion {
     /// Offset in the file
     pub file_offset: isize,
     /// Track which pages have been populated from file
-    pub populated_pages: Arc<Mutex<BTreeSet<usize>>>,
+    pub populated_pages: Mutex<BTreeSet<VirtAddr>>,
 }
 
-/// Mmap region information
 impl MmapRegion {
     /// Create a new MmapRegion
     pub fn new(
@@ -260,32 +259,105 @@ impl MmapRegion {
             vaddr_range,
             vm_file,
             file_offset,
-            populated_pages: Arc::new(Mutex::new(BTreeSet::new())),
+            populated_pages: Mutex::new(BTreeSet::new()),
         }
     }
 
-    /// Get the buffer of the region by address
+    /// Check if the region contains the given address
+    pub fn contains(&self, vaddr: VirtAddr) -> bool {
+        self.vaddr_range.contains(vaddr)
+    }
+
+    /// Check if the region overlaps with the given range
+    pub fn overlaps(&self, range: &VirtAddrRange) -> bool {
+        self.vaddr_range.overlaps(*range)
+    }
+
+    /// Split the region at the given range, returning the parts that don't overlap
+    /// Returns (before_part, after_part)
+    pub fn split_at_range(&self, range: &VirtAddrRange) -> (Option<Self>, Option<Self>) {
+        let self_start = self.vaddr_range.start;
+        let self_end = self.vaddr_range.end;
+        let split_start = range.start;
+        let split_end = range.end;
+
+        let before = if self_start < split_start {
+            Some(Self {
+                vaddr_range: VirtAddrRange::from_start_size(self_start, split_start - self_start),
+                vm_file: self.vm_file.clone(),
+                file_offset: self.file_offset,
+                populated_pages: Mutex::new(BTreeSet::new()),
+            })
+        } else {
+            None
+        };
+
+        let after = if split_end < self_end {
+            Some(Self {
+                vaddr_range: VirtAddrRange::from_start_size(split_end, self_end - split_end),
+                vm_file: self.vm_file.clone(),
+                file_offset: self.file_offset + (split_end - self_start) as isize,
+                populated_pages: Mutex::new(BTreeSet::new()),
+            })
+        } else {
+            None
+        };
+
+        (before, after)
+    }
+
+    /// Get the overlapping part with the given range
+    pub fn get_overlap(&self, range: &VirtAddrRange) -> Option<Self> {
+        if !self.overlaps(range) {
+            return None;
+        }
+        let overlap_start = self.vaddr_range.start.max(range.start);
+        let overlap_end = self.vaddr_range.end.min(range.end);
+
+        Some(Self {
+            vaddr_range: VirtAddrRange::from_start_size(overlap_start, overlap_end - overlap_start),
+            vm_file: self.vm_file.clone(),
+            file_offset: self.file_offset + (overlap_start - self.vaddr_range.start) as isize,
+            populated_pages: Mutex::new(BTreeSet::new()),
+        })
+    }
+
+    /// Populate a page from the file
     pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
         let page_addr = vaddr.align_down_4k();
 
         // Check if this page has already been populated
-        if self.populated_pages.lock().contains(&page_addr.as_usize()) {
-            return Err(LinuxError::EEXIST); // Page already populated
+        if self.populated_pages.lock().contains(&page_addr) {
+            return Err(LinuxError::EEXIST);
         }
 
         let page_offset = page_addr - self.vaddr_range.start;
         let file_offset = self.file_offset + page_offset as isize;
-        if file_offset < 0 || file_offset > self.vm_file.lock().len()? as isize {
+        if file_offset < 0 || file_offset >= self.vm_file.lock().len()? as isize {
             return Err(LinuxError::EINVAL);
         }
 
         let mut buf = vec![0u8; PAGE_SIZE_4K];
         self.vm_file.lock().read_at(&mut buf, file_offset as u64)?;
-
-        // Mark this page as populated
-        self.populated_pages.lock().insert(page_addr.as_usize());
+        self.populated_pages.lock().insert(page_addr);
 
         Ok(buf)
+    }
+}
+
+impl Clone for MmapRegion {
+    fn clone(&self) -> Self {
+        let populated_pages_clone = {
+            let pages = self.populated_pages.lock();
+            Mutex::new(pages.clone())
+        };
+
+        Self {
+            vaddr_range: self.vaddr_range,
+            vm_file: self.vm_file.clone(),
+            file_offset: self.file_offset,
+            populated_pages: populated_pages_clone,
+        }
     }
 }
 
@@ -308,132 +380,76 @@ impl VmaMapping {
     /// Add a new memory mapping region
     /// Returns error if the region overlaps with existing mappings
     pub fn add_region(&mut self, region: MmapRegion) -> Result<(), &'static str> {
-        let start = region.vaddr_range.start.as_usize();
-        let end = region.vaddr_range.end.as_usize();
-
-        // Check for overlaps with existing regions
-        for existing in &self.regions {
-            let existing_start = existing.vaddr_range.start.as_usize();
-            let existing_end = existing.vaddr_range.end.as_usize();
-
-            if !(end <= existing_start || start >= existing_end) {
-                return Err("Region overlaps with existing mapping");
-            }
+        // Check for overlaps
+        if self.regions.iter().any(|r| r.overlaps(&region.vaddr_range)) {
+            return Err("Region overlaps with existing mapping");
         }
 
         // Find insertion position to maintain sorted order
-        let insert_pos = self
+        let pos = self
             .regions
-            .binary_search_by_key(&start, |r| r.vaddr_range.start.as_usize())
+            .binary_search_by_key(&region.vaddr_range.start, |r| r.vaddr_range.start)
             .unwrap_or_else(|e| e);
 
-        self.regions.insert(insert_pos, region);
+        self.regions.insert(pos, region);
         Ok(())
-    }
-
-    /// Remove a memory mapping region by virtual address range
-    pub fn remove_region(&mut self, vaddr_range: VirtAddrRange) -> Option<MmapRegion> {
-        let start = vaddr_range.start.as_usize();
-
-        if let Some(pos) = self.regions.iter().position(|r| {
-            r.vaddr_range.start.as_usize() == start && r.vaddr_range.size() == vaddr_range.size()
-        }) {
-            Some(self.regions.remove(pos))
-        } else {
-            None
-        }
     }
 
     /// Find the memory mapping region that contains the given virtual address
     /// Returns None if no mapping found
     pub fn find_region_by_addr(&self, vaddr: VirtAddr) -> Option<&MmapRegion> {
-        let addr = vaddr.as_usize();
-
-        // Linear search through sorted regions (similar complexity to find_area)
-        for region in &self.regions {
-            let start = region.vaddr_range.start.as_usize();
-            let end = region.vaddr_range.end.as_usize();
-
-            if addr >= start && addr < end {
-                return Some(region);
+        // Binary search for efficiency
+        let idx = self.regions.binary_search_by(|r| {
+            if vaddr < r.vaddr_range.start {
+                core::cmp::Ordering::Greater
+            } else if vaddr >= r.vaddr_range.end {
+                core::cmp::Ordering::Less
+            } else {
+                core::cmp::Ordering::Equal
             }
+        });
 
-            // Since regions are sorted, we can break early if we've passed the target
-            if start > addr {
-                break;
-            }
-        }
-
-        None
+        idx.ok().map(|i| &self.regions[i])
     }
 
     /// Remove all regions that overlap with the given address range
     /// Returns the removed regions
     pub fn remove_overlapping_regions(&mut self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
-        let start = vaddr_range.start.as_usize();
-        let end = vaddr_range.end.as_usize();
         let mut removed = Vec::new();
-        let mut new_regions = Vec::new();
+        let mut retained = Vec::new();
 
-        self.regions.retain(|region| {
-            let region_start = region.vaddr_range.start.as_usize();
-            let region_end = region.vaddr_range.end.as_usize();
-
-            // Check for overlap
-            if end > region_start && start < region_end {
-                // There is overlap, record the overlapping part
-                let overlap_start = start.max(region_start);
-                let overlap_end = end.min(region_end);
-
-                let mut overlapping_region = region.clone();
-                overlapping_region.vaddr_range = VirtAddrRange::from_start_size(
-                    VirtAddr::from(overlap_start),
-                    overlap_end - overlap_start,
-                );
-                // Adjust file offset for the overlapping part
-                overlapping_region.file_offset += (overlap_start - region_start) as isize;
-                removed.push(overlapping_region);
-
-                // Split the region if needed
-                // Keep the part before the overlap
-                if region_start < start {
-                    let mut before_region = region.clone();
-                    before_region.vaddr_range = VirtAddrRange::from_start_size(
-                        VirtAddr::from(region_start),
-                        start - region_start,
-                    );
-                    new_regions.push(before_region);
+        for region in self.regions.drain(..) {
+            if region.overlaps(&vaddr_range) {
+                // Save the overlapping part
+                if let Some(overlap) = region.get_overlap(&vaddr_range) {
+                    removed.push(overlap);
                 }
 
-                // Keep the part after the overlap
-                if end < region_end {
-                    let mut after_region = region.clone();
-                    // Adjust file offset for the after part
-                    let offset_adjustment = end - region_start;
-                    after_region.vaddr_range =
-                        VirtAddrRange::from_start_size(VirtAddr::from(end), region_end - end);
-                    after_region.file_offset += offset_adjustment as isize;
-                    new_regions.push(after_region);
+                // Keep the non-overlapping parts
+                let (before, after) = region.split_at_range(&vaddr_range);
+                if let Some(before) = before {
+                    retained.push(before);
                 }
-
-                false
+                if let Some(after) = after {
+                    retained.push(after);
+                }
             } else {
-                true
+                retained.push(region);
             }
-        });
+        }
 
-        // Add the new split regions
-        self.regions.extend(new_regions);
-
-        // Keep regions sorted by start address
-        self.regions.sort_by_key(|r| r.vaddr_range.start.as_usize());
+        // Restore retained regions in sorted order
+        self.regions = retained;
+        self.regions.sort_by_key(|r| r.vaddr_range.start);
 
         removed
     }
 
-    /// Get all mapping regions (for debugging/inspection)
-    pub fn get_all_regions(&self) -> &[MmapRegion] {
-        &self.regions
+    /// Populate a page from file for the given virtual address
+    pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
+        self.find_region_by_addr(vaddr)
+            .ok_or(LinuxError::EFAULT)
+            .and_then(|region| region.get_buf(vaddr))
     }
 
     /// Populate file-backed pages in the address space
@@ -445,11 +461,7 @@ impl VmaMapping {
         for page_addr in PageIter4K::new(start_addr, end_addr).unwrap() {
             if let Some(region) = self.find_region_by_addr(page_addr) {
                 // Skip if this page has already been populated in this region
-                if region
-                    .populated_pages
-                    .lock()
-                    .contains(&page_addr.as_usize())
-                {
+                if region.populated_pages.lock().contains(&page_addr) {
                     continue;
                 }
 
@@ -474,23 +486,5 @@ impl VmaMapping {
     /// Clear all mappings
     pub fn clear(&mut self) {
         self.regions.clear();
-    }
-}
-
-// Manual Clone implementation to ensure populated_pages is not shared
-impl Clone for MmapRegion {
-    fn clone(&self) -> Self {
-        // Deep clone the populated_pages set
-        let populated_pages_clone = {
-            let pages = self.populated_pages.lock();
-            Arc::new(Mutex::new(pages.clone()))
-        };
-
-        Self {
-            vaddr_range: self.vaddr_range,
-            vm_file: self.vm_file.clone(), // File can be shared
-            file_offset: self.file_offset,
-            populated_pages: populated_pages_clone, // Deep clone
-        }
     }
 }
