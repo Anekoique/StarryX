@@ -303,7 +303,7 @@ impl ProcessData {
     }
 
     /// Add a new memory mapping region
-    pub fn add_region(&self, region: MmapRegion) -> Result<(), &'static str> {
+    pub fn add_region(&self, region: MmapRegion) -> LinuxResult<()> {
         self.vma_mapping.write().add_region(region)
     }
 
@@ -322,12 +322,6 @@ impl ProcessData {
     /// Populate file-backed pages in the address space
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
         self.vma_mapping.read().populate_file_pages(vaddr, len)
-    }
-
-    /// Populate a page from file for the given virtual address
-    /// Returns the page data if successful
-    pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
-        self.vma_mapping.read().get_buf(vaddr)
     }
 }
 

@@ -259,6 +259,8 @@ pub struct MmapRegion {
     pub file_offset: isize,
     /// Track which pages have been populated from file
     pub populated_pages: Mutex<BTreeSet<VirtAddr>>,
+    /// The page alignment
+    pub page_align: PageSize,
 }
 
 impl MmapRegion {
@@ -267,12 +269,14 @@ impl MmapRegion {
         vaddr_range: VirtAddrRange,
         vm_file: Arc<Mutex<FsFile<RawMutex>>>,
         file_offset: isize,
+        page_align: PageSize,
     ) -> Self {
         Self {
             vaddr_range,
             vm_file,
             file_offset,
             populated_pages: Mutex::new(BTreeSet::new()),
+            page_align,
         }
     }
 
@@ -300,6 +304,7 @@ impl MmapRegion {
                 vm_file: self.vm_file.clone(),
                 file_offset: self.file_offset,
                 populated_pages: Mutex::new(BTreeSet::new()),
+                page_align: self.page_align,
             })
         } else {
             None
@@ -311,6 +316,7 @@ impl MmapRegion {
                 vm_file: self.vm_file.clone(),
                 file_offset: self.file_offset + (split_end - self_start) as isize,
                 populated_pages: Mutex::new(BTreeSet::new()),
+                page_align: self.page_align,
             })
         } else {
             None
@@ -332,12 +338,13 @@ impl MmapRegion {
             vm_file: self.vm_file.clone(),
             file_offset: self.file_offset + (overlap_start - self.vaddr_range.start) as isize,
             populated_pages: Mutex::new(BTreeSet::new()),
+            page_align: self.page_align,
         })
     }
 
     /// Populate a page from the file
     pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
-        let page_addr = vaddr.align_down_4k();
+        let page_addr = vaddr.align_down(self.page_align);
 
         // Check if this page has already been populated
         if self.populated_pages.lock().contains(&page_addr) {
@@ -350,7 +357,8 @@ impl MmapRegion {
             return Err(LinuxError::EINVAL);
         }
 
-        let mut buf = vec![0u8; PAGE_SIZE_4K];
+        let buf_size = core::cmp::min(self.page_align as usize, self.vaddr_range.end - page_addr);
+        let mut buf = vec![0u8; buf_size];
         self.vm_file.lock().read_at(&mut buf, file_offset as u64)?;
         self.populated_pages.lock().insert(page_addr);
 
@@ -370,6 +378,7 @@ impl Clone for MmapRegion {
             vm_file: self.vm_file.clone(),
             file_offset: self.file_offset,
             populated_pages: populated_pages_clone,
+            page_align: self.page_align,
         }
     }
 }
@@ -392,10 +401,10 @@ impl VmaMapping {
 
     /// Add a new memory mapping region
     /// Returns error if the region overlaps with existing mappings
-    pub fn add_region(&mut self, region: MmapRegion) -> Result<(), &'static str> {
+    pub fn add_region(&mut self, region: MmapRegion) -> LinuxResult<()> {
         // Check for overlaps
         if self.regions.iter().any(|r| r.overlaps(&region.vaddr_range)) {
-            return Err("Region overlaps with existing mapping");
+            return Err(LinuxError::EFAULT);
         }
 
         // Find insertion position to maintain sorted order
@@ -482,10 +491,9 @@ impl VmaMapping {
                 match region.get_buf(page_addr) {
                     Ok(page_data) => {
                         debug!("Populating page: {:#x}", page_addr);
-                        aspace.write(page_addr, &page_data, PageSize::Size4K)?;
+                        aspace.write(page_addr, &page_data, region.page_align)?;
                     }
                     Err(LinuxError::EEXIST) => {
-                        // Page already populated, skip
                         continue;
                     }
                     Err(e) => return Err(e),

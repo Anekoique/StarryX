@@ -110,17 +110,12 @@ pub fn sys_mmap(
         aspace.write(start_addr, &buf, page_size)?;
     } else if !map_flags.contains(MmapFlags::ANONYMOUS) {
         // Create and add VMA mapping region
-        let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);
-        let mmap_region = MmapRegion::new(
-            vaddr_range,
-            // FIXME: anonymous || shared should use shm file
+        process_data.add_region(MmapRegion::new(
+            VirtAddrRange::from_start_size(start_addr, aligned_length),
             File::from_fd(fd)?.clone_inner(),
             if offset < 0 { 0 } else { offset },
-        );
-
-        let _ = process_data
-            .add_region(mmap_region)
-            .map_err(|e| warn!("Failed to add VMA region: {}", e));
+            page_size,
+        ))?;
     }
 
     Ok(start_addr.as_usize() as _)

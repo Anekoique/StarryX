@@ -4,10 +4,7 @@ use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::{MappingFlags, PageSize};
 use axtask::current;
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
-use starry_core::{
-    mm::{access_user_memory, is_accessing_user_memory},
-    task::TaskExt,
-};
+use starry_core::{mm::access_user_memory, task::TaskExt};
 
 fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> LinuxResult<()> {
     let align = layout.align();
@@ -53,7 +50,6 @@ fn check_null_terminated<T: PartialEq + Default>(
 
     access_user_memory(|| {
         loop {
-            debug!("is_accessing_user_memory: {}", is_accessing_user_memory());
             // SAFETY: This won't overflow the address space since we'll check
             // it below.
             let ptr = unsafe { start.add(len) };

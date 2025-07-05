@@ -1,6 +1,6 @@
 use axhal::{
-    mem::{MemoryAddr, VirtAddr},
-    paging::{MappingFlags, PageSize},
+    mem::{MemoryAddr, PAGE_SIZE_4K, VirtAddr},
+    paging::MappingFlags,
     trap::{PAGE_FAULT, register_trap_handler},
 };
 use axsignal::{SignalInfo, Signo};
@@ -61,13 +61,11 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         );
     }
 
-    curr_ext.process_data().get_buf(vaddr).ok().map(|data| {
-        curr_ext
-            .process_data()
-            .aspace
-            .lock()
-            .write(vaddr.align_down_4k(), &data, PageSize::Size4K)
-    });
+    curr_ext
+        .process_data()
+        .populate_file_pages(vaddr.align_down_4k(), PAGE_SIZE_4K)
+        .map_err(|_| send_sigsegv())
+        .ok();
 
     true
 }
