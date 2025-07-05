@@ -1,8 +1,8 @@
 use axhal::paging::MappingFlags;
 
 use super::{
-    MAP_ANONYMOUS, MAP_FIXED, MAP_NORESERVE, MAP_POPULATE, MAP_PRIVATE, MAP_SHARED, MAP_STACK,
-    PROT_EXEC, PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
+    MAP_ANONYMOUS, MAP_FIXED, MAP_HUGE_1GB, MAP_HUGETLB, MAP_NORESERVE, MAP_POPULATE, MAP_PRIVATE,
+    MAP_SHARED, MAP_STACK, PROT_EXEC, PROT_GROWSDOWN, PROT_GROWSUP, PROT_READ, PROT_WRITE,
 };
 
 bitflags::bitflags! {
@@ -23,6 +23,10 @@ bitflags::bitflags! {
         const STACK = MAP_STACK;
         /// Populate (prefault) memory pages
         const POPULATE = MAP_POPULATE;
+        /// Huge page
+        const HUGE = MAP_HUGETLB;
+        /// Huge page 1G
+        const HUGE_1G = MAP_HUGETLB | MAP_HUGE_1GB;
     }
 
     #[derive(Debug)]

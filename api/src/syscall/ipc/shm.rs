@@ -2,6 +2,7 @@
 
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
+use axhal::paging::PageSize;
 use axprocess::Pid;
 use axsync::Mutex;
 use axtask::current;
@@ -119,10 +120,15 @@ fn find_mapping_address(
     // Try requested address first
     let start_addr = if requested_addr != 0 {
         aspace
-            .find_free_area(VirtAddr::from(start_aligned), length, range)
-            .or_else(|| aspace.find_free_area(aspace.base(), length, range))
+            .find_free_area(
+                VirtAddr::from(start_aligned),
+                length,
+                range,
+                PageSize::Size4K,
+            )
+            .or_else(|| aspace.find_free_area(aspace.base(), length, range, PageSize::Size4K))
     } else {
-        aspace.find_free_area(aspace.base(), length, range)
+        aspace.find_free_area(aspace.base(), length, range, PageSize::Size4K)
     };
 
     start_addr.ok_or(LinuxError::ENOMEM)
@@ -139,10 +145,16 @@ fn map_shared_memory(
 ) -> LinuxResult<()> {
     if let Some(phys_pages) = segment.phys_pages.clone() {
         // Segment already has physical pages from another process
-        aspace.map_shared(start_addr, length, mapping_flags, Some(phys_pages))?;
+        aspace.map_shared(
+            start_addr,
+            length,
+            mapping_flags,
+            Some(phys_pages),
+            PageSize::Size4K,
+        )?;
     } else {
         // First process to attach - allocate physical pages
-        match aspace.map_shared(start_addr, length, mapping_flags, None) {
+        match aspace.map_shared(start_addr, length, mapping_flags, None, PageSize::Size4K) {
             Ok(pages) => {
                 info!(
                     "Process {} allocated shared memory: addr={:#x}, size={}",

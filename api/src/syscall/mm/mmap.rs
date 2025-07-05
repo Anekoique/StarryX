@@ -1,7 +1,8 @@
 use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
+use axhal::paging::PageSize;
 use axtask::current;
-use memory_addr::{VirtAddr, VirtAddrRange};
+use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
 use starry_core::{mm::MmapRegion, task::TaskExt};
 
 use crate::{
@@ -38,12 +39,19 @@ pub fn sys_mmap(
         addr, length, permission_flags, map_flags, fd, offset
     );
 
-    let start = memory_addr::align_down_4k(addr);
-    let end = memory_addr::align_up_4k(addr + length);
+    let page_size = if map_flags.contains(MmapFlags::HUGE_1G) {
+        PageSize::Size1G
+    } else if map_flags.contains(MmapFlags::HUGE) {
+        PageSize::Size2M
+    } else {
+        PageSize::Size4K
+    };
+    let start = addr.align_down(page_size);
+    let end = (addr + length).align_up(page_size);
     let aligned_length = end - start;
     debug!(
-        "start: {:x?}, end: {:x?}, aligned_length: {:x?}",
-        start, end, aligned_length
+        "start: {:x?}, end: {:x?}, aligned_length: {:x?}, page_size: {:?}",
+        start, end, aligned_length, page_size
     );
 
     let start_addr = if map_flags.contains(MmapFlags::FIXED) {
@@ -68,33 +76,24 @@ pub fn sys_mmap(
                 VirtAddr::from(start),
                 aligned_length,
                 VirtAddrRange::new(aspace.base(), aspace.end()),
+                page_size,
             )
             .or(aspace.find_free_area(
                 aspace.base(),
                 aligned_length,
                 VirtAddrRange::new(aspace.base(), aspace.end()),
+                page_size,
             ))
             .ok_or(LinuxError::ENOMEM)?
     };
 
-    // let mut populate = if fd == -1 {
-    //     false
-    // } else {
-    //     !map_flags.contains(MmapFlags::ANONYMOUS)
-    // };
     let populate = map_flags.contains(MmapFlags::POPULATE);
-    // if fd != -1
-    //     && length == 0x52000
-    // {
-    //     warn!("Forcing POPULATE=true for application TEXT segment");
-    //     populate = true;
-    // }
-    //
     aspace.map_alloc(
         start_addr,
         aligned_length,
         permission_flags.into(),
         populate,
+        page_size,
     )?;
 
     if populate {
@@ -108,7 +107,7 @@ pub fn sys_mmap(
         let len = core::cmp::min(length, file_size - offset);
         let mut buf = vec![0u8; len];
         file.read_at(&mut buf, offset as u64)?;
-        aspace.write(start_addr, &buf)?;
+        aspace.write(start_addr, &buf, page_size)?;
     } else if !map_flags.contains(MmapFlags::ANONYMOUS) {
         // Create and add VMA mapping region
         let vaddr_range = VirtAddrRange::from_start_size(start_addr, aligned_length);
@@ -135,7 +134,7 @@ pub fn sys_mmap(
 pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
     let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
-    let length = memory_addr::align_up_4k(length);
+    let length = align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
 
     // Remove VMA mapping regions before unmapping
@@ -173,7 +172,7 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
 
     let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
-    let length = memory_addr::align_up_4k(length);
+    let length = align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
     aspace.protect(start_addr, length, permission_flags.into())?;
     drop(aspace);

@@ -1,6 +1,9 @@
 //! User address space management.
 
-use core::ffi::CStr;
+use core::{
+    ffi::CStr,
+    sync::atomic::{AtomicBool, Ordering, compiler_fence},
+};
 
 use alloc::{
     borrow::ToOwned,
@@ -12,7 +15,10 @@ use alloc::{
 };
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs_ng::{FS_CONTEXT, FsFile};
-use axhal::{mem::virt_to_phys, paging::MappingFlags};
+use axhal::{
+    mem::virt_to_phys,
+    paging::{MappingFlags, PageSize},
+};
 use axmm::{AddrSpace, kernel_aspace};
 use axsync::{Mutex, RawMutex};
 use axtask::current;
@@ -50,6 +56,7 @@ pub fn map_trampoline(aspace: &mut AddrSpace) -> AxResult {
         signal_trampoline_paddr,
         PAGE_SIZE_4K,
         MappingFlags::READ | MappingFlags::EXECUTE | MappingFlags::USER,
+        PageSize::Size4K,
     )?;
     Ok(())
 }
@@ -89,12 +96,13 @@ fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [AuxvEn
             seg_align_size,
             segement.flags,
             true,
+            PageSize::Size4K,
         )?;
         let seg_data = elf
             .input
             .get(segement.offset..segement.offset + segement.filesz as usize)
             .ok_or(AxError::InvalidData)?;
-        uspace.write(segement.vaddr, seg_data)?;
+        uspace.write(segement.vaddr, seg_data, PageSize::Size4K)?;
         // TDOO: flush the I-cache
     }
 
@@ -200,10 +208,11 @@ pub fn load_user_app(
         ustack_size,
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
         true,
+        PageSize::Size4K,
     )?;
 
     let user_sp = ustack_end - stack_data.len();
-    uspace.write(user_sp, stack_data.as_slice())?;
+    uspace.write(user_sp, stack_data.as_slice(), PageSize::Size4K)?;
 
     let heap_start = VirtAddr::from_usize(axconfig::plat::USER_HEAP_BASE);
     let heap_size = axconfig::plat::USER_HEAP_SIZE;
@@ -212,28 +221,32 @@ pub fn load_user_app(
         heap_size,
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
         true,
+        PageSize::Size4K,
     )?;
 
     Ok((entry, user_sp))
 }
 
 #[percpu::def_percpu]
-static mut ACCESSING_USER_MEM: bool = false;
+static ACCESSING_USER_MEM: AtomicBool = AtomicBool::new(false);
 
 /// Enables scoped access into user memory, allowing page faults to occur inside
 /// kernel.
 pub fn access_user_memory<R>(f: impl FnOnce() -> R) -> R {
+    // Set the flag using atomic operation with proper memory ordering
     ACCESSING_USER_MEM.with_current(|v| {
-        *v = true;
+        v.store(true, Ordering::Release);
+        compiler_fence(Ordering::SeqCst);
         let result = f();
-        *v = false;
+        compiler_fence(Ordering::SeqCst);
+        v.store(false, Ordering::Release);
         result
     })
 }
 
 /// Check if the current thread is accessing user memory.
 pub fn is_accessing_user_memory() -> bool {
-    ACCESSING_USER_MEM.read_current()
+    ACCESSING_USER_MEM.with_current(|v| v.load(Ordering::Acquire))
 }
 
 /// Memory mapping region information for mmap
@@ -469,7 +482,7 @@ impl VmaMapping {
                 match region.get_buf(page_addr) {
                     Ok(page_data) => {
                         debug!("Populating page: {:#x}", page_addr);
-                        aspace.write(page_addr, &page_data)?;
+                        aspace.write(page_addr, &page_data, PageSize::Size4K)?;
                     }
                     Err(LinuxError::EEXIST) => {
                         // Page already populated, skip

@@ -1,44 +1,49 @@
-use core::iter;
-
 use alloc::sync::Arc;
 use axhal::paging::{MappingFlags, PageSize, PageTable};
-use memory_addr::{PAGE_SIZE_4K, PhysAddr, VirtAddr};
+use memory_addr::VirtAddr;
 
-use super::{Backend, SharedPages, alloc::alloc_frame};
+use super::{Backend, PageIterWrapper, SharedPages, alloc::alloc_frame};
 
 impl Backend {
     /// Creates a new allocation mapping backend.
-    pub fn new_shared(page_num: usize, source: Option<Arc<SharedPages>>) -> Self {
+    pub fn new_shared(
+        start: VirtAddr,
+        size: usize,
+        source: Option<Arc<SharedPages>>,
+        align: PageSize,
+    ) -> Option<Self> {
         let pages = if let Some(source) = source {
-            assert_eq!(source.len(), page_num);
+            assert_eq!(source.align, align);
+            assert_eq!(source.len(), size / align as usize);
             source
         } else {
-            Arc::new(SharedPages(
-                iter::repeat_with(|| alloc_frame(true).unwrap())
-                    .take(page_num)
+            Arc::new(SharedPages {
+                phys_pages: PageIterWrapper::new(start, start + size, align)?
+                    .map(|_| alloc_frame(true, align).unwrap())
                     .collect(),
-            ))
+                align,
+            })
         };
-        Self::Shared { pages }
+        Some(Self::Shared { pages })
     }
 
     pub(crate) fn map_shared(
         start: VirtAddr,
-        pages: &[PhysAddr],
+        pages: &SharedPages,
         flags: MappingFlags,
         pt: &mut PageTable,
     ) -> bool {
         debug!(
             "map_shared: [{:#x}, {:#x}) {:?}",
             start,
-            start + pages.len() * PAGE_SIZE_4K,
+            start + pages.len() * pages.align as usize,
             flags,
         );
         // allocate all possible physical frames for populated mapping.
         for (i, frame) in pages.iter().enumerate() {
-            let addr = start + i * PAGE_SIZE_4K;
-            if let Ok(tlb) = pt.map(addr, *frame, PageSize::Size4K, flags) {
-                tlb.ignore(); // TLB flush on map is unnecessary, as there are no outdated mappings.
+            let addr = start + i * pages.align as usize;
+            if let Ok(tlb) = pt.map(addr, *frame, pages.align, flags) {
+                tlb.flush();
             } else {
                 return false;
             }
@@ -46,18 +51,14 @@ impl Backend {
         true
     }
 
-    pub(crate) fn unmap_shared(
-        start: VirtAddr,
-        pages: &Arc<SharedPages>,
-        pt: &mut PageTable,
-    ) -> bool {
+    pub(crate) fn unmap_shared(start: VirtAddr, pages: &SharedPages, pt: &mut PageTable) -> bool {
         debug!(
             "unmap_shared: [{:#x}, {:#x})",
             start,
-            start + pages.len() * PAGE_SIZE_4K
+            start + pages.len() * pages.align as usize
         );
         for i in 0..pages.len() {
-            let addr = start + i * PAGE_SIZE_4K;
+            let addr = start + i * pages.align as usize;
             if let Ok((_, page_size, tlb)) = pt.unmap(addr) {
                 // Deallocate the physical frame if there is a mapping in the
                 // page table.

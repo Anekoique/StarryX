@@ -5,7 +5,7 @@ use axerrno::{LinuxError, LinuxResult};
 use axmm::SharedPages;
 use axprocess::Pid;
 use axsync::Mutex;
-use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
+use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange, align_up_4k};
 use page_table_entry::MappingFlags;
 
 use super::{IpcPerm, IpcidGenerator};
@@ -101,7 +101,7 @@ impl ShmSegment {
     pub fn new(key: i32, shmid: i32, size: usize, mapping_flags: MappingFlags, pid: Pid) -> Self {
         Self {
             shmid,
-            page_num: memory_addr::align_up_4k(size) / PAGE_SIZE_4K,
+            page_num: align_up_4k(size) / PAGE_SIZE_4K,
             va_range: BTreeMap::new(),
             phys_pages: None,
             rmid: false,
@@ -353,7 +353,7 @@ impl ShmManager {
             return Err(LinuxError::EINVAL);
         }
 
-        let page_count = memory_addr::align_up_4k(size) / PAGE_SIZE_4K;
+        let page_count = align_up_4k(size) / PAGE_SIZE_4K;
         if self.total_pages() + page_count > SHMALL {
             return Err(LinuxError::ENOSPC);
         }

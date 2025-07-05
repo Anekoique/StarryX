@@ -1,10 +1,13 @@
 use core::{alloc::Layout, ffi::c_char, mem::transmute, ptr, slice, str};
 
 use axerrno::{LinuxError, LinuxResult};
-use axhal::paging::MappingFlags;
+use axhal::paging::{MappingFlags, PageSize};
 use axtask::current;
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
-use starry_core::{mm::access_user_memory, task::TaskExt};
+use starry_core::{
+    mm::{access_user_memory, is_accessing_user_memory},
+    task::TaskExt,
+};
 
 fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> LinuxResult<()> {
     let align = layout.align();
@@ -23,7 +26,7 @@ fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> 
 
     let page_start = start.align_down_4k();
     let page_end = (start + layout.size()).align_up_4k();
-    aspace.populate_area(page_start, page_end - page_start)?;
+    aspace.populate_area(page_start, page_end - page_start, PageSize::Size4K)?;
     drop(aspace);
     TaskExt::from_task(&current())
         .process_data()
@@ -50,6 +53,7 @@ fn check_null_terminated<T: PartialEq + Default>(
 
     access_user_memory(|| {
         loop {
+            debug!("is_accessing_user_memory: {}", is_accessing_user_memory());
             // SAFETY: This won't overflow the address space since we'll check
             // it below.
             let ptr = unsafe { start.add(len) };
