@@ -1,8 +1,9 @@
 use alloc::sync::Arc;
-use axhal::paging::{MappingFlags, PageSize, PageTable};
+use axhal::paging::{MappingFlags, PageTable};
 use memory_addr::VirtAddr;
 
-use super::{Backend, PageIterWrapper, SharedPages, alloc::alloc_frame};
+use super::{Backend, SharedPages, alloc::alloc_frame};
+use crate::utils::{PageIterWrapper, PageSize};
 
 impl Backend {
     /// Creates a new allocation mapping backend.

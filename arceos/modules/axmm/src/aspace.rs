@@ -4,14 +4,14 @@ use alloc::sync::Arc;
 use axerrno::{AxError, AxResult, ax_err};
 use axhal::mem::phys_to_virt;
 use axhal::paging::{MappingFlags, PageTable, PagingError};
-use memory_addr::{
-    MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned,
-};
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange, is_aligned};
 use memory_set::{MemoryArea, MemorySet};
-use page_table_multiarch::PageSize;
 
-use crate::backend::{Backend, PageIterWrapper, SharedPages};
-use crate::mapping_err_to_ax_err;
+use crate::{
+    backend::{Backend, SharedPages},
+    mapping_err_to_ax_err,
+    utils::{PAGE_SIZE_4K, PageIter4K, PageIterWrapper, PageSize},
+};
 
 /// The virtual memory address space.
 pub struct AddrSpace {

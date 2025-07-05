@@ -4,9 +4,11 @@
 //! supporting address iteration for 4K, 2M, and 1G page sizes.
 //! The design is inspired by the Iterator Wrapper pattern,
 //! using an enum to unify the behavior of iterators for different page sizes.
+use ::alloc::vec::Vec;
+use memory_addr::{PageIter, PhysAddr, VirtAddr};
 
-use memory_addr::{PageIter, PageIter4K, VirtAddr};
-use page_table_multiarch::PageSize;
+pub use axhal::paging::PageSize;
+pub use memory_addr::{PAGE_SIZE_4K, PageIter4K};
 
 /// 2MB page size constant (2,097,152 bytes)
 pub const PAGE_SIZE_2M: usize = 0x20_0000;
@@ -82,6 +84,36 @@ impl Iterator for PageIterWrapper {
             Self::Size4K(iter) => iter.next(),
             Self::Size2M(iter) => iter.next(),
             Self::Size1G(iter) => iter.next(),
+        }
+    }
+}
+
+pub struct FrameGuard {
+    frames: Vec<PhysAddr>,
+    align: PageSize,
+}
+
+impl FrameGuard {
+    pub fn new(align: PageSize) -> Self {
+        Self {
+            frames: Vec::new(),
+            align,
+        }
+    }
+
+    pub fn add(&mut self, frame: PhysAddr) {
+        self.frames.push(frame);
+    }
+
+    pub fn release(self) {
+        core::mem::forget(self);
+    }
+}
+
+impl Drop for FrameGuard {
+    fn drop(&mut self) {
+        for frame in self.frames.drain(..) {
+            crate::backend::alloc::dealloc_frame(frame, self.align);
         }
     }
 }

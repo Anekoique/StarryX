@@ -1,10 +1,10 @@
-use ::alloc::vec::Vec;
 use axalloc::global_allocator;
 use axhal::mem::{phys_to_virt, virt_to_phys};
-use axhal::paging::{MappingFlags, PageSize, PageTable};
-use memory_addr::{PAGE_SIZE_4K, PhysAddr, VirtAddr};
+use axhal::paging::{MappingFlags, PageTable};
+use memory_addr::{PhysAddr, VirtAddr};
 
-use super::{Backend, PageIterWrapper};
+use super::Backend;
+use crate::utils::{FrameGuard, PAGE_SIZE_4K, PageIterWrapper, PageSize};
 
 pub(crate) fn alloc_frame(zeroed: bool, align: PageSize) -> Option<PhysAddr> {
     let page_size: usize = align.into();
@@ -22,36 +22,6 @@ pub(crate) fn dealloc_frame(frame: PhysAddr, align: PageSize) {
     let num_pages = page_size / PAGE_SIZE_4K;
     let vaddr = phys_to_virt(frame);
     global_allocator().dealloc_pages(vaddr.as_usize(), num_pages);
-}
-
-struct FrameGuard {
-    frames: Vec<PhysAddr>,
-    align: PageSize,
-}
-
-impl FrameGuard {
-    fn new(align: PageSize) -> Self {
-        Self {
-            frames: Vec::new(),
-            align,
-        }
-    }
-
-    fn add(&mut self, frame: PhysAddr) {
-        self.frames.push(frame);
-    }
-
-    fn release(self) {
-        core::mem::forget(self);
-    }
-}
-
-impl Drop for FrameGuard {
-    fn drop(&mut self) {
-        for frame in self.frames.drain(..) {
-            dealloc_frame(frame, self.align);
-        }
-    }
 }
 
 impl Backend {

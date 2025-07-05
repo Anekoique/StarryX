@@ -1,8 +1,8 @@
 use axhal::paging::{MappingFlags, PageTable};
 use memory_addr::{PhysAddr, VirtAddr};
-use page_table_multiarch::PageSize;
 
 use super::Backend;
+use crate::utils::PageSize;
 
 impl Backend {
     /// Creates a new linear mapping backend.

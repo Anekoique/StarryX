@@ -1,17 +1,16 @@
 //! Memory mapping backends.
+pub(crate) mod alloc;
+mod linear;
+mod shared;
+
 use core::ops::Deref;
 
 use ::alloc::{sync::Arc, vec::Vec};
 use axhal::paging::{MappingFlags, PageTable};
 use memory_addr::{PhysAddr, VirtAddr};
 use memory_set::MappingBackend;
-pub use page_iter_wrapper::PageIterWrapper;
-use page_table_multiarch::PageSize;
 
-mod alloc;
-mod linear;
-mod page_iter_wrapper;
-mod shared;
+use crate::utils::PageSize;
 
 pub struct SharedPages {
     pub phys_pages: Vec<PhysAddr>,
@@ -74,6 +73,7 @@ impl MappingBackend for Backend {
     type Addr = VirtAddr;
     type Flags = MappingFlags;
     type PageTable = PageTable;
+
     fn map(&self, start: VirtAddr, size: usize, flags: MappingFlags, pt: &mut PageTable) -> bool {
         match self {
             Self::Linear {
