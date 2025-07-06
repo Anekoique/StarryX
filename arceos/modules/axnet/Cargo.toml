@@ -2,7 +2,10 @@
 name = "axnet"
 version.workspace = true
 edition.workspace = true
-authors = ["Yuekai Jia <equation618@gmail.com>", "ChengXiang Qi <kuangjux@outlook.com>"]
+authors = [
+  "Yuekai Jia <equation618@gmail.com>",
+  "ChengXiang Qi <kuangjux@outlook.com>",
+]
 description = "ArceOS network module"
 license.workspace = true
 homepage.workspace = true
@@ -28,16 +31,21 @@ axdriver_net = { git = "https://github.com/arceos-org/axdriver_crates.git", tag 
 
 [dependencies.smoltcp]
 git = "https://github.com/rcore-os/smoltcp.git"
-rev = "8bf9a9a"
+rev = "21a2f82"
 default-features = false
 features = [
-  "alloc", "log",   # no std
+  "alloc",
+  "log",             # no std
   "medium-ethernet",
   "medium-ip",
   "proto-ipv4",
   "proto-ipv6",
-  "proto-igmp",
-  "socket-raw", "socket-icmp", "socket-udp", "socket-tcp", "socket-dns",
+  "socket-raw",
+  "socket-icmp",
+  "socket-udp",
+  "socket-tcp",
+  "socket-dns",
+  "multicast",
   # "fragmentation-buffer-size-65536", "proto-ipv4-fragmentation",
   # "reassembly-buffer-size-65536", "reassembly-buffer-count-32",
   # "assembler-max-segment-count-32",

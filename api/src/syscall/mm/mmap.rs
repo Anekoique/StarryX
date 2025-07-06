@@ -31,6 +31,9 @@ pub fn sys_mmap(
     let mut aspace = process_data.aspace.lock();
     let permission_flags = MmapProt::from_bits_truncate(prot);
     let map_flags = MmapFlags::from_bits_truncate(flags);
+    if map_flags.contains(MmapFlags::PRIVATE) && map_flags.contains(MmapFlags::SHARED) {
+        return Err(LinuxError::EINVAL);
+    }
 
     info!(
         "sys_mmap: addr: {:x?}, length: {:x?}, prot: {:?}, flags: {:?}, fd: {:?}, offset: {:?}",

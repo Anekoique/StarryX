@@ -10,9 +10,9 @@ use axsync::Mutex;
 use axtask::yield_now;
 use smoltcp::iface::SocketHandle;
 use smoltcp::socket::tcp::{self, ConnectError, State};
-use smoltcp::wire::{IpEndpoint, IpListenEndpoint};
+use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint};
 
-use super::addr::{UNSPECIFIED_ENDPOINT, from_core_sockaddr, into_core_sockaddr, is_unspecified};
+use super::addr::UNSPECIFIED_ENDPOINT;
 use super::{LISTEN_TABLE, SOCKET_SET, SocketSetWrapper};
 
 // State transitions:
@@ -84,7 +84,7 @@ impl TcpSocket {
         // 为了通过测例，已经`bind`但未`listen`的socket也可以返回地址
         match self.get_state() {
             STATE_CONNECTED | STATE_LISTENING | STATE_CLOSED => {
-                Ok(into_core_sockaddr(unsafe { self.local_addr.get().read() }))
+                Ok(unsafe { self.local_addr.get().read() }.into())
             }
             _ => Err(AxError::NotConnected),
         }
@@ -95,9 +95,7 @@ impl TcpSocket {
     #[inline]
     pub fn peer_addr(&self) -> AxResult<SocketAddr> {
         match self.get_state() {
-            STATE_CONNECTED | STATE_LISTENING => {
-                Ok(into_core_sockaddr(unsafe { self.peer_addr.get().read() }))
-            }
+            STATE_CONNECTED | STATE_LISTENING => Ok(unsafe { self.peer_addr.get().read() }.into()),
             _ => Err(AxError::NotConnected),
         }
     }
@@ -173,12 +171,15 @@ impl TcpSocket {
 
             // // TODO: check remote addr unreachable
             // let (bound_endpoint, remote_endpoint) = self.get_endpoint_pair(remote_addr)?;
-            let remote_endpoint = from_core_sockaddr(remote_addr);
+            let remote_endpoint: IpEndpoint = remote_addr.into();
             let bound_endpoint = self.bound_endpoint()?;
             info!("bound endpoint: {:?}", bound_endpoint);
             info!("remote endpoint: {:?}", remote_endpoint);
             warn!("Temporarily net bridge used");
-            let iface = if remote_endpoint.addr.as_bytes()[0] == 127 {
+            let iface = if match remote_endpoint.addr {
+                IpAddress::Ipv4(ipv4) => ipv4.octets()[0] == 127,
+                IpAddress::Ipv6(ipv6) => ipv6.octets()[0] == 127,
+            } {
                 super::LOOPBACK.get().unwrap()
             } else {
                 info!("Use eth net");
@@ -252,9 +253,9 @@ impl TcpSocket {
                 if old != UNSPECIFIED_ENDPOINT {
                     return ax_err!(InvalidInput, "socket bind() failed: already bound");
                 }
-                self.local_addr.get().write(from_core_sockaddr(local_addr));
+                self.local_addr.get().write(local_addr.into());
             }
-            let local_endpoint = from_core_sockaddr(local_addr);
+            let local_endpoint: IpEndpoint = local_addr.into();
             let bound_endpoint = self.bound_endpoint()?;
             let handle = unsafe { self.handle.get().read() }
                 .unwrap_or_else(|| SOCKET_SET.add(SocketSetWrapper::new_tcp_socket()));
@@ -606,7 +607,7 @@ impl TcpSocket {
             get_ephemeral_port()?
         };
         assert_ne!(port, 0);
-        let addr = if !is_unspecified(local_addr.addr) {
+        let addr = if !local_addr.addr.is_unspecified() {
             Some(local_addr.addr)
         } else {
             None

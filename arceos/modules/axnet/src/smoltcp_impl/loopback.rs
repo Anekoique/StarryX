@@ -49,11 +49,11 @@ pub(crate) struct TxToken<'a> {
 }
 
 impl smoltcp::phy::RxToken for RxTokenScoop {
-    fn consume<R, F>(mut self, f: F) -> R
+    fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> R,
+        F: FnOnce(&[u8]) -> R,
     {
-        f(&mut self.buffer)
+        f(&self.buffer)
     }
 
     fn preprocess(&self, sockets: &mut SocketSet<'_>) {

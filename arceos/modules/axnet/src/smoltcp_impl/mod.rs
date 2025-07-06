@@ -16,7 +16,7 @@ use axdriver_net::{DevError, NetBufPtr};
 use axhal::time::NANOS_PER_MICROS;
 use axsync::Mutex;
 use lazyinit::LazyInit;
-use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet};
+use smoltcp::iface::{Config, Interface, MulticastError, SocketHandle, SocketSet};
 use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
 use smoltcp::socket::{self, AnySocket, Socket};
 use smoltcp::time::Instant;
@@ -28,11 +28,6 @@ pub use self::dns::dns_query;
 pub use self::tcp::TcpSocket;
 pub use self::udp::UdpSocket;
 pub use self::unix_socket::{UnixAddr, UnixSocket};
-pub use addr::{
-    UNNAMED_UNIX_ADDR, extract_unix_abstract_name, extract_unix_pathname, from_abstract_name,
-    from_path_str, is_unix_addr_unnamed, unix_addr_eq, unix_addr_to_string, unnamed_unix_addr,
-};
-pub use addr::{from_core_sockaddr, into_core_sockaddr};
 
 macro_rules! env_or_default {
     ($key:literal) => {
@@ -285,28 +280,28 @@ impl Device for DeviceWrapper {
 struct AxNetRxToken<'a>(&'a RefCell<AxNetDevice>, NetBufPtr);
 struct AxNetTxToken<'a>(&'a RefCell<AxNetDevice>);
 
-impl<'a> RxToken for AxNetRxToken<'a> {
+impl RxToken for AxNetRxToken<'_> {
     fn preprocess(&self, sockets: &mut SocketSet<'_>) {
         snoop_tcp_packet(self.1.packet(), sockets).ok();
     }
 
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> R,
+        F: FnOnce(&[u8]) -> R,
     {
-        let mut rx_buf = self.1;
+        let rx_buf = self.1;
         trace!(
             "RECV {} bytes: {:02X?}",
             rx_buf.packet_len(),
             rx_buf.packet()
         );
-        let result = f(rx_buf.packet_mut());
+        let result = f(rx_buf.packet());
         self.0.borrow_mut().recycle_rx_buffer(rx_buf).unwrap();
         result
     }
 }
 
-impl<'a> TxToken for AxNetTxToken<'a> {
+impl TxToken for AxNetTxToken<'_> {
     fn consume<R, F>(self, len: usize, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
@@ -358,13 +353,8 @@ pub fn bench_receive() {
 }
 
 /// Add multicast_addr to the loopback device.
-pub fn add_membership(multicast_addr: IpAddress, _interface_addr: IpAddress) {
-    let timestamp = Instant::from_micros_const((0 / NANOS_PER_MICROS) as i64);
-    let _ = LOOPBACK.lock().join_multicast_group(
-        LOOPBACK_DEV.lock().deref_mut(),
-        multicast_addr,
-        timestamp,
-    );
+pub fn add_membership(multicast_addr: IpAddress) -> Result<(), MulticastError> {
+    LOOPBACK.lock().join_multicast_group(multicast_addr)
 }
 
 pub(crate) fn init(_net_dev: AxNetDevice) {
