@@ -30,8 +30,6 @@ pub fn sys_mmap(
     let process_data = TaskExt::from_task(&current()).process_data();
     let mut aspace = process_data.aspace.lock();
     let permission_flags = MmapProt::from_bits_truncate(prot);
-    // TODO: check illegal flags for mmap
-    // An example is the flags contained none of MAP_PRIVATE, MAP_SHARED, or MAP_SHARED_VALIDATE.
     let map_flags = MmapFlags::from_bits_truncate(flags);
 
     info!(
@@ -62,12 +60,7 @@ pub fn sys_mmap(
 
         // Remove any existing VMA mappings in the range before unmapping
         let vaddr_range = VirtAddrRange::from_start_size(dst_addr, aligned_length);
-        let removed_regions = process_data.remove_overlapping_regions(vaddr_range);
-        debug!(
-            "Removed {} overlapping VMA regions for MAP_FIXED",
-            removed_regions.len()
-        );
-
+        process_data.remove_overlapping_regions(vaddr_range);
         aspace.unmap(dst_addr, aligned_length)?;
         dst_addr
     } else {
@@ -134,11 +127,7 @@ pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
 
     // Remove VMA mapping regions before unmapping
     let vaddr_range = VirtAddrRange::from_start_size(start_addr, length);
-    let removed_regions = process_data.remove_overlapping_regions(vaddr_range);
-    debug!(
-        "Removed {} VMA regions during munmap",
-        removed_regions.len()
-    );
+    process_data.remove_overlapping_regions(vaddr_range);
 
     // Re-acquire aspace lock for actual unmapping
     aspace.unmap(start_addr, length)?;

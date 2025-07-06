@@ -1,9 +1,32 @@
-use alloc::sync::Arc;
-use axhal::paging::{MappingFlags, PageTable};
-use memory_addr::VirtAddr;
+use core::ops::Deref;
 
-use super::{Backend, SharedPages, alloc::alloc_frame};
+use alloc::{sync::Arc, vec::Vec};
+use axhal::paging::{MappingFlags, PageTable};
+use memory_addr::{PhysAddr, VirtAddr};
+
+use super::Backend;
 use crate::utils::{PageIterWrapper, PageSize};
+
+pub struct SharedPages {
+    pub phys_pages: Vec<PhysAddr>,
+    pub align: PageSize,
+}
+
+impl Deref for SharedPages {
+    type Target = [PhysAddr];
+
+    fn deref(&self) -> &Self::Target {
+        &self.phys_pages
+    }
+}
+
+impl Drop for SharedPages {
+    fn drop(&mut self) {
+        for frame in &self.phys_pages {
+            super::alloc::dealloc_frame(*frame, self.align);
+        }
+    }
+}
 
 impl Backend {
     /// Creates a new allocation mapping backend.
@@ -20,7 +43,7 @@ impl Backend {
         } else {
             Arc::new(SharedPages {
                 phys_pages: PageIterWrapper::new(start, start + size, align)?
-                    .map(|_| alloc_frame(true, align).unwrap())
+                    .map(|_| super::alloc::alloc_frame(true, align).unwrap())
                     .collect(),
                 align,
             })

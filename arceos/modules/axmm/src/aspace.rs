@@ -8,7 +8,7 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange, is_aligned};
 use memory_set::{MemoryArea, MemorySet};
 
 use crate::{
-    backend::{Backend, SharedPages},
+    backend::{Backend, shared::SharedPages},
     mapping_err_to_ax_err,
     utils::{PAGE_SIZE_4K, PageIter4K, PageIterWrapper, PageSize},
 };

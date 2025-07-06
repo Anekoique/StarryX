@@ -11,7 +11,7 @@ mod backend;
 mod utils;
 
 pub use self::aspace::AddrSpace;
-pub use self::backend::{Backend, SharedPages};
+pub use self::backend::{Backend, shared::SharedPages};
 pub use self::utils::*;
 
 use axerrno::{AxError, AxResult};

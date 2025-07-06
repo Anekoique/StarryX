@@ -1,37 +1,15 @@
 //! Memory mapping backends.
 pub(crate) mod alloc;
 mod linear;
-mod shared;
+pub mod shared;
 
-use core::ops::Deref;
-
-use ::alloc::{sync::Arc, vec::Vec};
+use ::alloc::sync::Arc;
 use axhal::paging::{MappingFlags, PageTable};
-use memory_addr::{PhysAddr, VirtAddr};
+use memory_addr::VirtAddr;
 use memory_set::MappingBackend;
 
+use self::shared::SharedPages;
 use crate::utils::PageSize;
-
-pub struct SharedPages {
-    pub phys_pages: Vec<PhysAddr>,
-    pub align: PageSize,
-}
-
-impl Deref for SharedPages {
-    type Target = [PhysAddr];
-
-    fn deref(&self) -> &Self::Target {
-        &self.phys_pages
-    }
-}
-
-impl Drop for SharedPages {
-    fn drop(&mut self) {
-        for frame in &self.phys_pages {
-            alloc::dealloc_frame(*frame, self.align);
-        }
-    }
-}
 
 /// A unified enum type for different memory mapping backends.
 ///
