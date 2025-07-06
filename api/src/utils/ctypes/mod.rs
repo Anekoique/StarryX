@@ -16,6 +16,7 @@ pub use linux_raw_sys::system::{new_utsname, sysinfo};
 
 // net
 pub const SOCK_CLOEXEC: u32 = O_CLOEXEC;
+pub const SOCK_NONBLOCK: u32 = O_NONBLOCK;
 
 // fs
 pub const O_EXEC: u32 = O_PATH;

@@ -9,7 +9,7 @@ use axerrno::{AxError, AxResult, ax_err};
 use axio::{PollState, Read, Write};
 use axtask::yield_now;
 
-// Unix Socket 地址类型
+// Unix Socket address type
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UnixAddr {
     Unnamed,
@@ -31,14 +31,14 @@ impl UnixAddr {
     }
 }
 
-// Unix Socket 状态
+// Unix Socket state
 const STATE_CLOSED: u8 = 0;
 const STATE_BUSY: u8 = 1;
 const STATE_CONNECTING: u8 = 2;
 const STATE_CONNECTED: u8 = 3;
 const STATE_LISTENING: u8 = 4;
 
-// 消息缓冲区
+// Message buffer
 #[derive(Debug)]
 struct MessageBuffer {
     data: VecDeque<u8>,
@@ -86,7 +86,7 @@ impl MessageBuffer {
     }
 }
 
-// 连接对，用于已连接的 socket
+// Connection pair, used for connected socket
 #[derive(Debug, Clone)]
 struct ConnectionPair {
     send_buf: Arc<Mutex<MessageBuffer>>,
@@ -117,17 +117,17 @@ impl ConnectionPair {
     }
 }
 
-// 全局监听表 - 使用 BTreeMap 替代 HashMap
+// Global listen table - using BTreeMap instead of HashMap
 type ListenTable = Arc<Mutex<BTreeMap<UnixAddr, VecDeque<UnixSocket>>>>;
 static LISTEN_TABLE: spin::Lazy<ListenTable> =
     spin::Lazy::new(|| Arc::new(Mutex::new(BTreeMap::new())));
 
-/// Unix Domain Socket 实现
+/// Unix Domain Socket implementation
 ///
-/// 支持 SOCK_STREAM 类型的 Unix Socket，提供类似 POSIX 的 API：
-/// - `connect` 用于客户端连接
-/// - `bind`, `listen`, `accept` 用于服务端
-/// - `send`, `recv` 用于数据传输
+/// Supports Unix Socket of SOCK_STREAM type, providing similar POSIX API:
+/// - `connect` for client connection
+/// - `bind`, `listen`, `accept` for server
+/// - `send`, `recv` for data transmission
 pub struct UnixSocket {
     state: AtomicU8,
     local_addr: UnsafeCell<UnixAddr>,
@@ -140,7 +140,7 @@ pub struct UnixSocket {
 unsafe impl Sync for UnixSocket {}
 
 impl UnixSocket {
-    /// 创建新的 Unix Socket
+    /// Create a new Unix Socket
     pub const fn new() -> Self {
         Self {
             state: AtomicU8::new(STATE_CLOSED),
@@ -148,11 +148,11 @@ impl UnixSocket {
             peer_addr: UnsafeCell::new(UnixAddr::Unnamed),
             connection: UnsafeCell::new(None),
             nonblock: AtomicBool::new(false),
-            buffer_size: 8192, // 默认缓冲区大小
+            buffer_size: 8192, // Default buffer size
         }
     }
 
-    /// 创建 socket pair
+    /// Create socket pair
     pub fn pair() -> (Self, Self) {
         let (conn1, conn2) = ConnectionPair::new(8192);
 
@@ -177,7 +177,7 @@ impl UnixSocket {
         (socket1, socket2)
     }
 
-    /// 创建已连接的 Unix Socket
+    /// Create a connected Unix Socket
     fn new_connected(
         local_addr: UnixAddr,
         peer_addr: UnixAddr,
@@ -193,7 +193,7 @@ impl UnixSocket {
         }
     }
 
-    /// 获取本地地址
+    /// Get local address
     pub fn local_addr(&self) -> AxResult<UnixAddr> {
         match self.get_state() {
             STATE_CONNECTED | STATE_LISTENING => {
@@ -203,7 +203,7 @@ impl UnixSocket {
         }
     }
 
-    /// 获取对端地址
+    /// Get peer address
     pub fn peer_addr(&self) -> AxResult<UnixAddr> {
         match self.get_state() {
             STATE_CONNECTED => Ok(unsafe { self.peer_addr.get().read() }.clone()),
@@ -211,25 +211,25 @@ impl UnixSocket {
         }
     }
 
-    /// 检查是否为非阻塞模式
+    /// Check if it is non-blocking mode
     pub fn is_nonblocking(&self) -> bool {
         self.nonblock.load(Ordering::Acquire)
     }
 
-    /// 设置非阻塞模式
+    /// Set non-blocking mode
     pub fn set_nonblocking(&self, nonblocking: bool) {
         self.nonblock.store(nonblocking, Ordering::Release);
     }
 
-    /// 设置缓冲区大小
+    /// Set buffer size
     pub fn set_buffer_size(&mut self, size: usize) {
         self.buffer_size = size;
     }
 
-    /// 连接到指定地址
+    /// Connect to a specific address
     pub fn connect(&self, addr: UnixAddr) -> AxResult {
         self.update_state(STATE_CLOSED, STATE_CONNECTING, || {
-            // 检查目标地址是否在监听
+            // Check if the target address is being listened to
             let mut listen_table = LISTEN_TABLE.lock();
             let mut listeners = listen_table.get_mut(&addr);
 
@@ -237,19 +237,19 @@ impl UnixSocket {
                 return ax_err!(ConnectionRefused, "no listener on target address");
             }
 
-            // 创建连接对
+            // Create connection pair
             let (client_conn, server_conn) = ConnectionPair::new(self.buffer_size);
 
-            // 创建服务端 socket
+            // Create server socket
             let server_addr = addr.clone();
-            let client_addr = UnixAddr::Unnamed; // 客户端通常使用未命名地址
+            let client_addr = UnixAddr::Unnamed; // Client usually uses unnamed address
             let server_socket =
                 UnixSocket::new_connected(server_addr, client_addr.clone(), server_conn);
 
-            // 将服务端 socket 加入接受队列
+            // Add server socket to accept queue
             listeners.as_mut().unwrap().push_back(server_socket);
 
-            // 设置客户端连接信息
+            // Set client connection information
             unsafe {
                 self.peer_addr.get().write(addr);
                 self.local_addr.get().write(client_addr);
@@ -264,10 +264,10 @@ impl UnixSocket {
         Ok(())
     }
 
-    /// 绑定到指定地址
+    /// Bind to a specific address
     pub fn bind(&self, addr: UnixAddr) -> AxResult {
         self.update_state(STATE_CLOSED, STATE_CLOSED, || {
-            // 检查地址是否已被使用
+            // Check if the address is already in use
             if matches!(addr, UnixAddr::Pathname(_)) {
                 let listen_table = LISTEN_TABLE.lock();
                 if listen_table.contains_key(&addr) {
@@ -287,7 +287,7 @@ impl UnixSocket {
         .unwrap_or_else(|_| ax_err!(InvalidInput, "socket already bound"))
     }
 
-    /// 开始监听
+    /// Start listening
     pub fn listen(&self) -> AxResult {
         self.update_state(STATE_CLOSED, STATE_LISTENING, || {
             let local_addr = unsafe { self.local_addr.get().read() }.clone();
@@ -299,10 +299,10 @@ impl UnixSocket {
             listen_table.insert(local_addr, VecDeque::new());
             Ok(())
         })
-        .unwrap_or(Ok(())) // 忽略重复监听
+        .unwrap_or(Ok(())) // Ignore repeated listening
     }
 
-    /// 接受连接
+    /// Accept a connection
     pub fn accept(&self) -> AxResult<UnixSocket> {
         if !self.is_listening() {
             return ax_err!(InvalidInput, "socket not listening");
@@ -325,7 +325,7 @@ impl UnixSocket {
         })
     }
 
-    /// 发送数据
+    /// Send data
     pub fn send(&self, buf: &[u8]) -> AxResult<usize> {
         if !self.is_connected() {
             return ax_err!(NotConnected, "socket not connected");
@@ -352,7 +352,7 @@ impl UnixSocket {
         })
     }
 
-    /// 接收数据
+    /// Receive data
     pub fn recv(&self, buf: &mut [u8]) -> AxResult<usize> {
         if !self.is_connected() {
             return ax_err!(NotConnected, "socket not connected");
@@ -379,7 +379,7 @@ impl UnixSocket {
         })
     }
 
-    /// 关闭 socket
+    /// Close socket
     pub fn shutdown(&self) -> AxResult {
         match self.get_state() {
             STATE_CONNECTED => {
@@ -408,7 +408,7 @@ impl UnixSocket {
         Ok(())
     }
 
-    /// 轮询 socket 状态
+    /// Poll socket state
     pub fn poll(&self) -> AxResult<PollState> {
         match self.get_state() {
             STATE_CONNECTED => self.poll_stream(),
@@ -420,7 +420,7 @@ impl UnixSocket {
         }
     }
 
-    // 私有方法
+    // Private methods
     fn get_state(&self) -> u8 {
         self.state.load(Ordering::Acquire)
     }

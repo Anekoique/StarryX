@@ -4,7 +4,7 @@ use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use axio::Read;
-use axnet::{TcpSocket, UdpSocket, UnixAddr, UnixSocket};
+use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
 use crate::{
@@ -90,10 +90,6 @@ impl Socket {
         }
     }
 
-    impl_socket!(pub fn send(&self, buf: &[u8]) -> LinuxResult<usize>);
-    impl_socket!(pub fn poll(&self) -> LinuxResult<PollState>);
-    impl_socket!(pub fn shutdown(&self) -> LinuxResult);
-
     // These methods need special handling for Unix sockets
     pub fn local_addr(&self) -> LinuxResult<SocketAddr> {
         match self {
@@ -139,34 +135,9 @@ impl Socket {
         }
     }
 
-    // Unix socket specific methods
-    pub fn bind_unix(&self, addr: UnixAddr) -> LinuxResult {
-        match self {
-            Socket::Unix(unixsocket) => Ok(unixsocket.lock().bind(addr)?),
-            _ => Err(LinuxError::EOPNOTSUPP),
-        }
-    }
-
-    pub fn connect_unix(&self, addr: UnixAddr) -> LinuxResult {
-        match self {
-            Socket::Unix(unixsocket) => Ok(unixsocket.lock().connect(addr)?),
-            _ => Err(LinuxError::EOPNOTSUPP),
-        }
-    }
-
-    pub fn unix_local_addr(&self) -> LinuxResult<UnixAddr> {
-        match self {
-            Socket::Unix(unixsocket) => Ok(unixsocket.lock().local_addr()?),
-            _ => Err(LinuxError::EOPNOTSUPP),
-        }
-    }
-
-    pub fn unix_peer_addr(&self) -> LinuxResult<UnixAddr> {
-        match self {
-            Socket::Unix(unixsocket) => Ok(unixsocket.lock().peer_addr()?),
-            _ => Err(LinuxError::EOPNOTSUPP),
-        }
-    }
+    impl_socket!(pub fn send(&self, buf: &[u8]) -> LinuxResult<usize>);
+    impl_socket!(pub fn poll(&self) -> LinuxResult<PollState>);
+    impl_socket!(pub fn shutdown(&self) -> LinuxResult);
 }
 
 impl FileLike for Socket {
@@ -197,18 +168,10 @@ impl FileLike for Socket {
 
     fn set_nonblocking(&self, nonblock: bool) -> LinuxResult {
         match self {
-            Socket::Udp(udpsocket) => {
-                udpsocket.lock().set_nonblocking(nonblock);
-                Ok(())
-            }
-            Socket::Tcp(tcpsocket) => {
-                tcpsocket.lock().set_nonblocking(nonblock);
-                Ok(())
-            }
-            Socket::Unix(unixsocket) => {
-                unixsocket.lock().set_nonblocking(nonblock);
-                Ok(())
-            }
+            Socket::Udp(udpsocket) => udpsocket.lock().set_nonblocking(nonblock),
+            Socket::Tcp(tcpsocket) => tcpsocket.lock().set_nonblocking(nonblock),
+            Socket::Unix(unixsocket) => unixsocket.lock().set_nonblocking(nonblock),
         }
+        Ok(())
     }
 }

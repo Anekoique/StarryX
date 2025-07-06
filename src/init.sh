@@ -39,9 +39,9 @@ cd /musl
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
-./lmbench_testcode.sh
-./libcbench_testcode.sh
-# ./unixbench_testcode.sh
+# ./lmbench_testcode.sh
+# ./libcbench_testcode.sh
+./iperf_testcode.sh
 
 cd /glibc
 # ./basic_testcode.sh
@@ -50,6 +50,4 @@ cd /glibc
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
-# ./cyclictest_testcode.sh
-# ./unixbench_testcode.sh
 # ./cyclictest_testcode.sh
