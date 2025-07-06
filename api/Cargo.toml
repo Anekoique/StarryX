@@ -37,7 +37,7 @@ axio = "0.1.1"
 bitmaps = { version = "3.2.1", default-features = false }
 chrono = { version = "0.4.41", default-features = false }
 ctor_bare = "0.2.1"
-flatten_objects = "0.2.3"
+flatten_objects = "0.2.4"
 num_enum = { version = "0.7", default-features = false }
 
 rand = { version = "0.9.1", default-features = false, features = [
