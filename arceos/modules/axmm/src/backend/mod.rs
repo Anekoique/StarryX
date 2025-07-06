@@ -83,7 +83,7 @@ impl MappingBackend for Backend {
             Self::Alloc { populate, align } => {
                 Self::map_alloc(start, size, flags, pt, *populate, *align)
             }
-            Self::Shared { pages } => Self::map_shared(start, &pages, flags, pt),
+            Self::Shared { pages } => Self::map_shared(start, pages, flags, pt),
         }
     }
 
@@ -96,7 +96,7 @@ impl MappingBackend for Backend {
             Self::Alloc { populate, align } => {
                 Self::unmap_alloc(start, size, pt, *populate, *align)
             }
-            Self::Shared { pages } => Self::unmap_shared(start, &pages, pt),
+            Self::Shared { pages } => Self::unmap_shared(start, pages, pt),
         }
     }
 

@@ -25,7 +25,7 @@ axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
 axconfig = { git = "https://github.com/oscomp/arceos.git" }
 axhal = { git = "https://github.com/oscomp/arceos.git", features = ["uspace", "rtc"] }
 axlog = { git = "https://github.com/oscomp/arceos.git" }
-axmm = { git = "https://github.com/oscomp/arceos.git" }
+axmm = { git = "https://github.com/oscomp/arceos.git", features = ["copy-from"] }
 axnet = { git = "https://github.com/oscomp/arceos.git" }
 axns = { git = "https://github.com/oscomp/arceos.git", features = [
     "thread-local",
@@ -51,7 +51,7 @@ linux-raw-sys = { version = "0.9.3", default-features = false, features = [
     "prctl",
     "system",
 ] }
-memory_addr = "0.3"
+memory_addr = "0.4"
 spin = "0.9"
 
 starry-core = { path = "./core" }
@@ -92,7 +92,3 @@ starry-api.workspace = true
 spin.workspace = true
 shlex = { version = "1.3.0", default-features = false }
 syscalls = { git = "https://github.com/jasonwhite/syscalls.git", rev = "92624de", default-features = false }
-
-[patch.crates-io]
-page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "2659e3b" }
-page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "2659e3b" }

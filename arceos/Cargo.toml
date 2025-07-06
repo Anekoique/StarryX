@@ -72,7 +72,3 @@ axfs-ng-vfs = { path = "crates/axfs-ng-vfs" }
 
 [profile.release]
 lto = true
-
-[patch.crates-io]
-page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "2659e3b" }
-page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "2659e3b" }

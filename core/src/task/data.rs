@@ -18,7 +18,7 @@ use axhal::{
     irq::with_irqs_disabled,
     time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
-use axmm::{AddrSpace, kernel_aspace};
+use axmm::AddrSpace;
 use axns::{AxNamespace, AxNamespaceIf};
 use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
 use axsignal::{
@@ -322,18 +322,6 @@ impl ProcessData {
     /// Populate file-backed pages in the address space
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
         self.vma_mapping.read().populate_file_pages(vaddr, len)
-    }
-}
-
-impl Drop for ProcessData {
-    fn drop(&mut self) {
-        if !cfg!(target_arch = "aarch64") && !cfg!(target_arch = "loongarch64") {
-            // See [`crate::new_user_aspace`]
-            let kernel = kernel_aspace().lock();
-            self.aspace
-                .lock()
-                .clear_mappings(VirtAddrRange::from_start_size(kernel.base(), kernel.size()));
-        }
     }
 }
 
