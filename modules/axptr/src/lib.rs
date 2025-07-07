@@ -1,43 +1,21 @@
 //! Utilities for working with user-space pointers.
 #![no_std]
 
+use core::{alloc::Layout, ffi::c_char, mem::transmute, ptr, slice, str};
+
 use axerrno::{LinuxError, LinuxResult};
-use axmm::AddrSpace;
+use axhal::paging::MappingFlags;
+use axtask::current;
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
-use page_table_multiarch::MappingFlags;
+use starry_core::{mm::access_user_memory, task::TaskExt};
 
-use core::{alloc::Layout, ffi::c_char, mem, slice, str};
-
-#[percpu::def_percpu]
-static mut ACCESSING_USER_MEM: bool = false;
-
-/// Check if we are currently accessing user memory.
-///
-/// OS implementation shall allow page faults from kernel when this function
-/// returns true.
-pub fn is_accessing_user_memory() -> bool {
-    ACCESSING_USER_MEM.read_current()
-}
-
-fn access_user_memory<R>(f: impl FnOnce() -> R) -> R {
-    ACCESSING_USER_MEM.with_current(|v| {
-        *v = true;
-        let result = f();
-        *v = false;
-        result
-    })
-}
-
-fn check_region(
-    aspace: &mut AddrSpace,
-    start: VirtAddr,
-    layout: Layout,
-    access_flags: MappingFlags,
-) -> LinuxResult<()> {
+fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> LinuxResult<()> {
     let align = layout.align();
     if start.as_usize() & (align - 1) != 0 {
         return Err(LinuxError::EFAULT);
     }
+
+    let mut aspace = TaskExt::from_task(&current()).process_data().aspace.lock();
 
     if !aspace.check_region_access(
         VirtAddrRange::from_start_size(start, layout.size()),
@@ -48,16 +26,19 @@ fn check_region(
 
     let page_start = start.align_down_4k();
     let page_end = (start + layout.size()).align_up_4k();
-    aspace.populate_area(page_start, page_end - page_start)?;
+    aspace.populate_area(page_start, page_end - page_start, access_flags)?;
+    drop(aspace);
+    TaskExt::from_task(&current())
+        .process_data()
+        .populate_file_pages(page_start, page_end - page_start)?;
 
     Ok(())
 }
 
-fn check_null_terminated<T: Eq + Default>(
-    aspace: &mut AddrSpace,
+fn check_null_terminated<T: PartialEq + Default>(
     start: VirtAddr,
     access_flags: MappingFlags,
-) -> LinuxResult<(*const T, usize)> {
+) -> LinuxResult<usize> {
     let align = Layout::new::<T>().align();
     if start.as_usize() & (align - 1) != 0 {
         return Err(LinuxError::EFAULT);
@@ -83,6 +64,7 @@ fn check_null_terminated<T: Eq + Default>(
                 // TODO: this is inefficient, but we have to do this instead of
                 // querying the page table since the page might has not been
                 // allocated yet.
+                let aspace = TaskExt::from_task(&current()).process_data().aspace.lock();
                 if !aspace.check_region_access(
                     VirtAddrRange::from_start_size(page, PAGE_SIZE_4K),
                     access_flags,
@@ -103,201 +85,155 @@ fn check_null_terminated<T: Eq + Default>(
         Ok(())
     })?;
 
-    Ok((start, len))
+    Ok(len)
 }
 
-// This function is to avoids excessive generic function instances.
-fn check_region_with(
-    mut aspace: impl AddrSpaceProvider,
-    start: VirtAddr,
-    layout: Layout,
-    access_flags: MappingFlags,
-) -> LinuxResult<()> {
-    aspace.with_addr_space(|aspace| check_region(aspace, start, layout, access_flags))
-}
-
-pub trait AddrSpaceProvider {
-    fn with_addr_space<R>(&mut self, f: impl FnOnce(&mut AddrSpace) -> R) -> R;
-}
-impl AddrSpaceProvider for &mut AddrSpace {
-    fn with_addr_space<R>(&mut self, f: impl FnOnce(&mut AddrSpace) -> R) -> R {
-        f(self)
-    }
-}
-
+/// A pointer to user space memory.
 #[repr(transparent)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct UserPtr<T>(*mut T);
+
 impl<T> From<usize> for UserPtr<T> {
     fn from(value: usize) -> Self {
-        UserPtr(value as *mut T)
+        UserPtr(value as *mut _)
+    }
+}
+impl<T> From<*mut T> for UserPtr<T> {
+    fn from(value: *mut T) -> Self {
+        UserPtr(value)
+    }
+}
+
+impl<T> Default for UserPtr<T> {
+    fn default() -> Self {
+        Self(ptr::null_mut())
     }
 }
 
 impl<T> UserPtr<T> {
-    pub const ACCESS_FLAGS: MappingFlags = MappingFlags::READ.union(MappingFlags::WRITE);
+    const ACCESS_FLAGS: MappingFlags = MappingFlags::READ.union(MappingFlags::WRITE);
 
-    /// Get the address of the pointer.
-    pub fn address(&self) -> VirtAddr {
-        VirtAddr::from_mut_ptr_of(self.0)
-    }
-
-    /// Unwrap the pointer into a raw pointer.
-    ///
-    /// This function is unsafe because it assumes that the pointer is valid and
-    /// points to a valid memory region.
-    pub unsafe fn as_ptr(&self) -> *mut T {
-        self.0
-    }
-
-    /// Cast the pointer to a different type.
-    pub fn cast<U>(self) -> UserPtr<U> {
-        UserPtr(self.0 as *mut U)
-    }
-
-    /// Check if the pointer is null.
-    pub fn is_null(&self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Convert the pointer into an `Option`.
-    ///
-    /// This function returns `None` if the pointer is null, and `Some(self)`
-    /// otherwise.
-    pub fn nullable(self) -> Option<Self> {
-        if self.is_null() { None } else { Some(self) }
-    }
-}
-
-impl<T> UserPtr<T> {
-    /// Get the value of the pointer.
-    ///
-    /// This will check the region and populate the page if necessary.
-    pub fn get(&mut self, aspace: impl AddrSpaceProvider) -> LinuxResult<&mut T> {
-        check_region_with(
-            aspace,
-            self.address(),
-            Layout::new::<T>(),
-            Self::ACCESS_FLAGS,
-        )?;
-        Ok(unsafe { &mut *self.0 })
-    }
-
-    /// Get the value of the pointer as a slice.
-    pub fn get_as_slice(
-        &mut self,
-        aspace: impl AddrSpaceProvider,
-        length: usize,
-    ) -> LinuxResult<&mut [T]> {
-        check_region_with(
-            aspace,
-            self.address(),
-            Layout::array::<T>(length).unwrap(),
-            Self::ACCESS_FLAGS,
-        )?;
-        Ok(unsafe { slice::from_raw_parts_mut(self.0, length) })
-    }
-}
-
-impl<T> UserPtr<T> {
-    /// Get the pointer as `&mut [T]`, terminated by a null value, validating
-    /// the memory region.
-    pub fn get_as_null_terminated(
-        &mut self,
-        mut aspace: impl AddrSpaceProvider,
-    ) -> LinuxResult<&mut [T]>
-    where
-        T: Eq + Default,
-    {
-        let (ptr, len) = aspace.with_addr_space(|aspace| {
-            check_null_terminated::<T>(aspace, self.address(), Self::ACCESS_FLAGS)
-        })?;
-        // SAFETY: We've validated the memory region.
-        unsafe { Ok(slice::from_raw_parts_mut(ptr as *mut _, len)) }
-    }
-}
-
-#[repr(transparent)]
-pub struct UserConstPtr<T>(*const T);
-impl<T> From<usize> for UserConstPtr<T> {
-    fn from(value: usize) -> Self {
-        UserConstPtr(value as *const T)
-    }
-}
-
-impl<T> UserConstPtr<T> {
-    pub const ACCESS_FLAGS: MappingFlags = MappingFlags::READ;
-
-    /// See [`UserPtr::address`].
     pub fn address(&self) -> VirtAddr {
         VirtAddr::from_ptr_of(self.0)
     }
 
-    /// See [`UserPtr::as_ptr`].
-    pub unsafe fn as_ptr(&self) -> *const T {
-        self.0
+    pub fn cast<U>(self) -> UserPtr<U> {
+        UserPtr(self.0 as *mut U)
     }
 
-    /// See [`UserPtr::cast`].
-    pub fn cast<U>(self) -> UserConstPtr<U> {
-        UserConstPtr(self.0 as *const U)
+    pub fn offset(self, offset: usize) -> UserPtr<T> {
+        UserPtr(unsafe { self.0.add(offset) })
     }
 
-    /// See [`UserPtr::is_null`].
     pub fn is_null(&self) -> bool {
         self.0.is_null()
     }
 
-    /// See [`UserPtr::nullable`].
-    pub fn nullable(self) -> Option<Self> {
-        if self.is_null() { None } else { Some(self) }
+    pub fn get_as_mut(self) -> LinuxResult<&'static mut T> {
+        check_region(self.address(), Layout::new::<T>(), Self::ACCESS_FLAGS)?;
+        Ok(unsafe { &mut *self.0 })
+    }
+
+    pub fn get_as_mut_slice(self, len: usize) -> LinuxResult<&'static mut [T]> {
+        check_region(
+            self.address(),
+            Layout::array::<T>(len).unwrap(),
+            Self::ACCESS_FLAGS,
+        )?;
+        Ok(unsafe { slice::from_raw_parts_mut(self.0, len) })
+    }
+
+    pub fn get_as_mut_null_terminated(self) -> LinuxResult<&'static mut [T]>
+    where
+        T: PartialEq + Default,
+    {
+        let len = check_null_terminated::<T>(self.address(), Self::ACCESS_FLAGS)?;
+        Ok(unsafe { slice::from_raw_parts_mut(self.0, len) })
+    }
+}
+
+/// An immutable pointer to user space memory.
+#[repr(transparent)]
+#[derive(PartialEq, Clone, Copy)]
+pub struct UserConstPtr<T>(*const T);
+
+impl<T> From<usize> for UserConstPtr<T> {
+    fn from(value: usize) -> Self {
+        UserConstPtr(value as *const _)
+    }
+}
+impl<T> From<*const T> for UserConstPtr<T> {
+    fn from(value: *const T) -> Self {
+        UserConstPtr(value)
+    }
+}
+
+impl<T> Default for UserConstPtr<T> {
+    fn default() -> Self {
+        Self(ptr::null())
     }
 }
 
 impl<T> UserConstPtr<T> {
-    /// See [`UserPtr::get`].
-    pub fn get(&self, aspace: impl AddrSpaceProvider) -> LinuxResult<&T> {
-        check_region_with(
-            aspace,
-            self.address(),
-            Layout::new::<T>(),
-            Self::ACCESS_FLAGS,
-        )?;
+    const ACCESS_FLAGS: MappingFlags = MappingFlags::READ;
+
+    pub fn address(&self) -> VirtAddr {
+        VirtAddr::from_ptr_of(self.0)
+    }
+
+    pub fn cast<U>(self) -> UserConstPtr<U> {
+        UserConstPtr(self.0 as *const U)
+    }
+
+    pub fn offset(self, offset: usize) -> UserConstPtr<T> {
+        UserConstPtr(unsafe { self.0.add(offset) })
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.0.is_null()
+    }
+
+    pub fn get_as_ref(self) -> LinuxResult<&'static T> {
+        check_region(self.address(), Layout::new::<T>(), Self::ACCESS_FLAGS)?;
         Ok(unsafe { &*self.0 })
     }
 
-    /// See [`UserPtr::get_as_slice`].
-    pub fn get_as_slice(&self, aspace: impl AddrSpaceProvider, length: usize) -> LinuxResult<&[T]> {
-        check_region_with(
-            aspace,
+    pub fn get_as_slice(self, len: usize) -> LinuxResult<&'static [T]> {
+        check_region(
             self.address(),
-            Layout::array::<T>(length).unwrap(),
+            Layout::array::<T>(len).unwrap(),
             Self::ACCESS_FLAGS,
         )?;
-        Ok(unsafe { slice::from_raw_parts(self.0, length) })
+        Ok(unsafe { slice::from_raw_parts(self.0, len) })
     }
-}
 
-impl<T> UserConstPtr<T> {
-    /// See [`UserPtr::get_as_null_terminated`].
-    pub fn get_as_null_terminated(&self, mut aspace: impl AddrSpaceProvider) -> LinuxResult<&[T]>
+    pub fn get_as_null_terminated(self) -> LinuxResult<&'static [T]>
     where
-        T: Eq + Default,
+        T: PartialEq + Default,
     {
-        let (ptr, len) = aspace.with_addr_space(|aspace| {
-            check_null_terminated::<T>(aspace, self.address(), Self::ACCESS_FLAGS)
-        })?;
-        // SAFETY: We've validated the memory region.
-        unsafe { Ok(slice::from_raw_parts(ptr as *const _, len)) }
+        let len = check_null_terminated::<T>(self.address(), Self::ACCESS_FLAGS)?;
+        Ok(unsafe { slice::from_raw_parts(self.0, len) })
     }
 }
 
 impl UserConstPtr<c_char> {
     /// Get the pointer as `&str`, validating the memory region.
-    pub fn get_as_str(&self, aspace: impl AddrSpaceProvider) -> LinuxResult<&'static str> {
-        let slice = self.get_as_null_terminated(aspace)?;
+    pub fn get_as_str(self) -> LinuxResult<&'static str> {
+        let slice = self.get_as_null_terminated()?;
         // SAFETY: c_char is u8
-        let slice = unsafe { mem::transmute::<&[c_char], &[u8]>(slice) };
+        let slice = unsafe { transmute::<&[c_char], &[u8]>(slice) };
 
         str::from_utf8(slice).map_err(|_| LinuxError::EILSEQ)
     }
+}
+
+#[macro_export]
+macro_rules! nullable {
+    ($ptr:ident.$func:ident($($arg:expr),*)) => {
+        if $ptr.is_null() {
+            Ok(None)
+        } else {
+            Some($ptr.$func($($arg),*)).transpose()
+        }
+    };
 }
