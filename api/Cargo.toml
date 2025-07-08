@@ -22,6 +22,7 @@ axtask.workspace = true
 
 axprocess.workspace = true
 axsignal.workspace = true
+axuspace.workspace = true
 
 axerrno.workspace = true
 bitflags.workspace = true
@@ -29,6 +30,7 @@ cfg-if.workspace = true
 linkme.workspace = true
 linux-raw-sys = { workspace = true, features = ["ioctl"] }
 memory_addr.workspace = true
+page_table_multiarch.workspace = true
 spin.workspace = true
 
 starry-core.workspace = true
@@ -45,8 +47,7 @@ rand = { version = "0.9.1", default-features = false, features = [
     "small_rng",
 ] }
 lazy_static = { version = "1.5", features = ["spin_no_std"] }
-page_table_multiarch = "0.5"
-page_table_entry = "0.5"
+page_table_entry = "0.5.5"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86 = "0.52"

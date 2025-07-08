@@ -19,11 +19,13 @@ axtask.workspace = true
 
 axprocess.workspace = true
 axsignal.workspace = true
+axuspace.workspace = true
 
 axerrno.workspace = true
 linkme.workspace = true
 linux-raw-sys.workspace = true
 memory_addr.workspace = true
+page_table_multiarch.workspace = true
 spin.workspace = true
 
 crate_interface = "0.1"

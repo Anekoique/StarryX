@@ -27,7 +27,9 @@ use axsignal::{
 };
 use axsync::{Mutex, RawMutex};
 use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
-use memory_addr::{VirtAddr, VirtAddrRange};
+use axuspace::UserSpaceAccess;
+use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
+use page_table_multiarch::MappingFlags;
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
@@ -322,6 +324,30 @@ impl ProcessData {
     /// Populate file-backed pages in the address space
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
         self.vma_mapping.read().populate_file_pages(vaddr, len)
+    }
+}
+
+impl UserSpaceAccess for ProcessData {
+    fn check_region_access(
+        &self,
+        range: VirtAddrRange,
+        access_flags: MappingFlags,
+    ) -> LinuxResult<()> {
+        let aspace = self.aspace.lock();
+        if !aspace.check_region_access(range, access_flags) {
+            return Err(LinuxError::EFAULT);
+        }
+        Ok(())
+    }
+
+    fn populate_region(&self, range: VirtAddrRange, access_flags: MappingFlags) -> LinuxResult<()> {
+        let mut aspace = self.aspace.lock();
+        let page_start = range.start.align_down_4k();
+        let page_end = (range.end).align_up_4k();
+        aspace.populate_area(page_start, page_end - page_start, access_flags)?;
+        drop(aspace);
+        self.populate_file_pages(page_start, page_end - page_start)?;
+        Ok(())
     }
 }
 

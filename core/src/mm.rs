@@ -290,9 +290,12 @@ impl MmapRegion {
         self.vaddr_range.overlaps(*range)
     }
 
-    /// Split the region at the given range, returning the parts that don't overlap
-    /// Returns (before_part, after_part)
-    pub fn split_at_range(&self, range: &VirtAddrRange) -> (Option<Self>, Option<Self>) {
+    /// Split the region at the given range, returning the parts that don't overlap and the part that does.
+    /// Returns (before_part, overlap_part, after_part)
+    pub fn split_at_range(
+        &self,
+        range: &VirtAddrRange,
+    ) -> (Option<Self>, Option<Self>, Option<Self>) {
         let self_start = self.vaddr_range.start;
         let self_end = self.vaddr_range.end;
         let split_start = range.start;
@@ -322,7 +325,24 @@ impl MmapRegion {
             None
         };
 
-        (before, after)
+        let overlap_start = self_start.max(split_start);
+        let overlap_end = self_end.min(split_end);
+        let overlap = if overlap_start < overlap_end {
+            Some(Self {
+                vaddr_range: VirtAddrRange::from_start_size(
+                    overlap_start,
+                    overlap_end - overlap_start,
+                ),
+                vm_file: self.vm_file.clone(),
+                file_offset: self.file_offset + (overlap_start - self_start) as isize,
+                populated_pages: Mutex::new(BTreeSet::new()),
+                page_align: self.page_align,
+            })
+        } else {
+            None
+        };
+
+        (before, overlap, after)
     }
 
     /// Get the overlapping part with the given range
@@ -442,13 +462,11 @@ impl VmaMapping {
 
         for region in self.regions.drain(..) {
             if region.overlaps(&vaddr_range) {
-                // Save the overlapping part
-                if let Some(overlap) = region.get_overlap(&vaddr_range) {
+                // Keep the non-overlapping parts, and save the overlapping part
+                let (before, overlap, after) = region.split_at_range(&vaddr_range);
+                if let Some(overlap) = overlap {
                     removed.push(overlap);
                 }
-
-                // Keep the non-overlapping parts
-                let (before, after) = region.split_at_range(&vaddr_range);
                 if let Some(before) = before {
                     retained.push(before);
                 }

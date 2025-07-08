@@ -23,19 +23,18 @@ axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
 ] }
 
 axconfig = { git = "https://github.com/oscomp/arceos.git" }
-axhal = { git = "https://github.com/oscomp/arceos.git", features = ["uspace", "rtc"] }
+axhal = { git = "https://github.com/oscomp/arceos.git", features = [ "uspace", "rtc" ] }
 axlog = { git = "https://github.com/oscomp/arceos.git" }
-axmm = { git = "https://github.com/oscomp/arceos.git", features = ["copy-from"] }
+axmm = { git = "https://github.com/oscomp/arceos.git", features = [ "copy-from"] }
 axnet = { git = "https://github.com/oscomp/arceos.git" }
-axns = { git = "https://github.com/oscomp/arceos.git", features = [
-    "thread-local",
-] }
+axns = { git = "https://github.com/oscomp/arceos.git", features = [ "thread-local" ] }
 axruntime = { git = "https://github.com/oscomp/arceos.git" }
 axsync = { git = "https://github.com/oscomp/arceos.git" }
 axtask = { git = "https://github.com/oscomp/arceos.git" }
 
-axprocess = { git = "https://github.com/Starry-OS/axprocess.git" }
+axprocess = { path = "./modules/axprocess" }
 axsignal = { path = "./modules/axsignal" }
+axuspace = { path = "./modules/axuspace" }
 
 axfs-ng = { path = "./arceos/modules/axfs-ng" }
 axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
@@ -51,6 +50,7 @@ linux-raw-sys = { version = "0.9.3", default-features = false, features = [
     "prctl",
     "system",
 ] }
+page_table_multiarch = "0.5.5"
 memory_addr = "0.4"
 spin = "0.9"
 
