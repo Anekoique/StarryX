@@ -4,7 +4,7 @@
 //! supporting address iteration for 4K, 2M, and 1G page sizes.
 //! The design is inspired by the Iterator Wrapper pattern,
 //! using an enum to unify the behavior of iterators for different page sizes.
-use ::alloc::vec::Vec;
+use alloc::vec::Vec;
 use memory_addr::{PageIter, PhysAddr, VirtAddr};
 
 pub use axhal::paging::PageSize;

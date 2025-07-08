@@ -375,11 +375,11 @@ dependencies = [
 [[package]]
 name = "axprocess"
 version = "0.1.0"
-source = "git+https://github.com/Starry-OS/axprocess.git#16668091f34fcc7224bbc2544a6012f2d6f3a6a6"
 dependencies = [
+ "ctor",
  "kspin",
  "lazyinit",
- "weak-map 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "weak-map",
 ]
 
 [[package]]
@@ -413,6 +413,7 @@ dependencies = [
  "axhal",
  "axprocess",
  "axtask",
+ "axuspace",
  "bitflags 2.9.1",
  "cfg-if",
  "derive_more",
@@ -448,7 +449,17 @@ dependencies = [
  "percpu",
  "scheduler",
  "timer_list",
- "weak-map 0.1.1 (git+https://github.com/Starry-OS/weak-map.git)",
+ "weak-map",
+]
+
+[[package]]
+name = "axuspace"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "memory_addr",
+ "page_table_multiarch",
+ "percpu",
 ]
 
 [[package]]
@@ -645,6 +656,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
+name = "ctor"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4735f265ba6a1188052ca32d461028a7d1125868be18e287e756019da7607b5"
+dependencies = [
+ "ctor-proc-macro",
+ "dtor",
+]
+
+[[package]]
+name = "ctor-proc-macro"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f211af61d8efdd104f96e57adf5e426ba1bc3ed7a4ead616e15e5881fd79c4d"
+
+[[package]]
 name = "ctor_bare"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -761,6 +788,21 @@ dependencies = [
  "syn 2.0.104",
  "unicode-xid",
 ]
+
+[[package]]
+name = "dtor"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97cbdf2ad6846025e8e25df05171abfb30e3ababa12ee0a0e44b9bbe570633a8"
+dependencies = [
+ "dtor-proc-macro",
+]
+
+[[package]]
+name = "dtor-proc-macro"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7454e41ff9012c00d53cf7f475c5e3afa3b91b7c90568495495e8d9bf47a1055"
 
 [[package]]
 name = "dw_apb_uart"
@@ -1488,6 +1530,7 @@ dependencies = [
  "axsignal",
  "axsync",
  "axtask",
+ "axuspace",
  "bitflags 2.9.1",
  "bitmaps",
  "cfg-if",
@@ -1523,6 +1566,7 @@ dependencies = [
  "axsignal",
  "axsync",
  "axtask",
+ "axuspace",
  "crate_interface",
  "inherit-methods-macro",
  "kernel-elf-parser",
@@ -1530,11 +1574,12 @@ dependencies = [
  "linux-raw-sys",
  "memory_addr",
  "numeric-enum-macro",
+ "page_table_multiarch",
  "percpu",
  "rand",
  "slab",
  "spin 0.9.8",
- "weak-map 0.1.1 (git+https://github.com/Starry-OS/weak-map.git)",
+ "weak-map",
  "xmas-elf",
 ]
 
@@ -1721,13 +1766,7 @@ checksum = "442887c63f2c839b346c192d047a7c87e73d0689c9157b00b53dcc27dd5ea793"
 [[package]]
 name = "weak-map"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209bc3ff6d982801239e57fa3b8b3505d4fc41102d1d162cca38b325297fe77b"
-
-[[package]]
-name = "weak-map"
-version = "0.1.1"
-source = "git+https://github.com/Starry-OS/weak-map.git#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
+source = "git+https://github.com/Starry-OS/weak-map#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
 
 [[package]]
 name = "windows-sys"

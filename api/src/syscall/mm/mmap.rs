@@ -162,8 +162,6 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
     let length = align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
     aspace.protect(start_addr, length, permission_flags.into())?;
-    drop(aspace);
-    process_data.populate_file_pages(start_addr, length)?;
     Ok(0)
 }
 

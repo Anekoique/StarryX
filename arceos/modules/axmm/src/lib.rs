@@ -8,6 +8,8 @@ extern crate alloc;
 
 mod aspace;
 mod backend;
+#[cfg(feature = "cow")]
+mod frame;
 mod utils;
 
 pub use self::aspace::AddrSpace;

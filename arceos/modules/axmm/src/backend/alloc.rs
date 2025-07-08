@@ -4,6 +4,8 @@ use axhal::paging::{MappingFlags, PageTable};
 use memory_addr::{PhysAddr, VirtAddr};
 
 use super::Backend;
+#[cfg(feature = "cow")]
+use crate::frame::frame_table;
 use crate::utils::{FrameGuard, PAGE_SIZE_4K, PageIterWrapper, PageSize};
 
 pub(crate) fn alloc_frame(zeroed: bool, align: PageSize) -> Option<PhysAddr> {
@@ -14,10 +16,16 @@ pub(crate) fn alloc_frame(zeroed: bool, align: PageSize) -> Option<PhysAddr> {
         unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, page_size) };
     }
     let paddr = virt_to_phys(vaddr);
+    #[cfg(feature = "cow")]
+    frame_table().inc_ref(paddr);
     Some(paddr)
 }
 
 pub(crate) fn dealloc_frame(frame: PhysAddr, align: PageSize) {
+    #[cfg(feature = "cow")]
+    if frame_table().dec_ref(frame) > 1 {
+        return;
+    }
     let page_size: usize = align.into();
     let num_pages = page_size / PAGE_SIZE_4K;
     let vaddr = phys_to_virt(frame);
@@ -95,6 +103,10 @@ impl Backend {
         populate: bool,
         align: PageSize,
     ) -> bool {
+        debug!(
+            "handle_page_fault_alloc: vaddr: {:#x}, orig_flags: {:?}, populate: {}, align: {:?}",
+            vaddr, orig_flags, populate, align
+        );
         if populate {
             false // Populated mappings should not trigger page faults.
         } else if let Some(frame) = alloc_frame(true, align) {

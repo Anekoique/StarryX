@@ -34,14 +34,14 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
 # /glibc/runtest.exe -w entry-dynamic.exe argv
-# ./libctest_testcode.sh
+./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
-./iperf_testcode.sh
+# ./iperf_testcode.sh
 
 cd /glibc
 # ./basic_testcode.sh
