@@ -638,7 +638,11 @@ impl AddrSpace {
 
         debug!(
             "handle_cow_fault: vaddr: {:#x}, paddr: {:#x}, flags: {:?}, align: {:?}, ref_count: {}",
-            vaddr, paddr, flags, align, frame_table().ref_count(paddr)
+            vaddr,
+            paddr,
+            flags,
+            align,
+            frame_table().ref_count(paddr)
         );
         match frame_table().ref_count(paddr) {
             0 => unreachable!(),

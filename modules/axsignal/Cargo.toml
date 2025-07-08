@@ -16,6 +16,8 @@ axtask = { git = "https://github.com/oscomp/arceos.git", features = [
 axprocess.workspace = true
 axuspace.workspace = true
 
+page_table_multiarch.workspace = true
+
 cfg-if = "1.0.0"
 linux-raw-sys = { version = "0.9.3", default-features = false, features = [
     "general",

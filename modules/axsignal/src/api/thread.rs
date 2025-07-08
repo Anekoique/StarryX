@@ -2,7 +2,9 @@ use core::{alloc::Layout, time::Duration};
 
 use alloc::sync::Arc;
 use axhal::arch::TrapFrame;
+use axuspace::{UserSpaceAccess, check_region};
 use lock_api::{Mutex, RawMutex};
+use page_table_multiarch::MappingFlags;
 
 use crate::{
     DefaultSignalAction, PendingSignals, SignalAction, SignalActionFlags, SignalDisposition,
@@ -51,8 +53,9 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
             .or_else(|| self.proc.dequeue_signal(mask))
     }
 
-    fn handle_signal(
+    fn handle_signal<A: UserSpaceAccess>(
         &self,
+        uspace: &A,
         tf: &mut TrapFrame,
         restore_blocked: SignalSet,
         sig: &SignalInfo,
@@ -86,6 +89,10 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
                 let frame_ptr = aligned_sp as *mut SignalFrame;
                 // SAFETY: pointer is valid
                 let frame = unsafe { &mut *frame_ptr };
+
+                check_region(uspace, aligned_sp.into(), layout, MappingFlags::WRITE)
+                    .map_err(|_| panic!("Failed to check signal frame"))
+                    .ok();
 
                 *frame = SignalFrame {
                     ucontext: UContext::new(tf, restore_blocked),
@@ -124,8 +131,9 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
     /// Checks pending signals and handle them.
     ///
     /// Returns the signal number and the action the OS should take, if any.
-    pub fn check_signals(
+    pub fn check_signals<A: UserSpaceAccess>(
         &self,
+        uspace: &A,
         tf: &mut TrapFrame,
         restore_blocked: Option<SignalSet>,
     ) -> Option<(SignalInfo, SignalOSAction)> {
@@ -139,7 +147,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         loop {
             let sig = self.dequeue_signal(&mask)?;
             let action = &actions[sig.signo()];
-            if let Some(os_action) = self.handle_signal(tf, restore_blocked, &sig, action) {
+            if let Some(os_action) = self.handle_signal(uspace, tf, restore_blocked, &sig, action) {
                 break Some((sig, os_action));
             }
         }

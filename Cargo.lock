@@ -339,6 +339,7 @@ dependencies = [
  "axerrno",
  "axhal",
  "kspin",
+ "lazy_static",
  "lazyinit",
  "log",
  "memory_addr",
@@ -420,6 +421,7 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "log",
+ "page_table_multiarch",
  "strum_macros",
 ]
 

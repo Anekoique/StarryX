@@ -12,7 +12,11 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
     let Some((sig, os_action)) = TaskExt::from_task(&current())
         .thread_data()
         .signal
-        .check_signals(tf, restore_blocked)
+        .check_signals(
+            TaskExt::from_task(&current()).process_data(),
+            tf,
+            restore_blocked,
+        )
     else {
         return false;
     };
