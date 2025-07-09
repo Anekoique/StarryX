@@ -1,20 +1,15 @@
 use core::ffi::c_char;
 
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{format, string::ToString};
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axhal::arch::TrapFrame;
 use axtask::current;
+use axuspace::{UserConstPtr, UserSpace};
 use starry_core::{
     mm::{load_user_app, map_trampoline},
     task::TaskExt,
 };
-
-use crate::ptr::UserConstPtr;
 
 /// Execute a program.
 ///
@@ -29,18 +24,15 @@ pub fn sys_execve(
     argv: UserConstPtr<UserConstPtr<c_char>>,
     envp: UserConstPtr<UserConstPtr<c_char>>,
 ) -> LinuxResult<isize> {
-    let mut path = path.get_as_str()?.to_string();
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let mut path = uspace.read_str(path)?.to_string();
 
     // Add "./" prefix if path doesn't start with "/" or "./"
     if !path.starts_with('/') && !path.starts_with("./") {
         path = format!("./{}", path);
     }
 
-    let mut args: Vec<String> = argv
-        .get_as_null_terminated()?
-        .iter()
-        .map(|arg| arg.get_as_str().map(|s| s.to_string()))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut args = uspace.read_str_array(argv)?;
 
     // Add "./" prefix to the first arg if it doesn't start with "/" or "./"
     if let Some(first_arg) = args.get_mut(0) {
@@ -49,11 +41,7 @@ pub fn sys_execve(
         }
     }
 
-    let envs = envp
-        .get_as_null_terminated()?
-        .iter()
-        .map(|env| env.get_as_str().map(|s| s.to_string()))
-        .collect::<Result<Vec<_>, _>>()?;
+    let envs = uspace.read_str_array(envp)?;
 
     info!(
         "sys_execve: path: {:?}, args: {:?}, envs: {:?}",

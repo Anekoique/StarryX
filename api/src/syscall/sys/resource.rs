@@ -1,6 +1,8 @@
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
-use starry_core::task::{ProcessData, get_process, time_stat_output};
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::{ProcessData, TaskExt, get_process, time_stat_output};
 
 use crate::{
     ctypes::{
@@ -8,7 +10,6 @@ use crate::{
         RUSAGE_CHILDREN, rlimit, rlimit64, rusage,
     },
     fs::AX_FILE_LIMIT,
-    ptr::{UserConstPtr, UserPtr, nullable},
     time::TimeValueLike,
 };
 
@@ -18,7 +19,8 @@ use crate::{
 /// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
 /// * `rlimit` - Buffer to store resource limits
 pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
-    if let Some(rlimit) = nullable!(rlimit.get_as_mut())? {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Some(rlimit) = nullable!(uspace.raw_ptr(rlimit))? {
         match resource {
             RLIMIT_DATA => {}
             RLIMIT_STACK => {
@@ -43,7 +45,8 @@ pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isiz
 /// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
 /// * `rlimit` - New resource limits to set
 pub fn sys_setrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
-    if let Some(_rlimit) = nullable!(rlimit.get_as_mut())? {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Some(_rlimit) = nullable!(uspace.raw_ptr(rlimit))? {
         match resource {
             RLIMIT_DATA => {}
             RLIMIT_STACK => {}
@@ -77,13 +80,14 @@ pub fn sys_prlimit64(
 
     let proc = get_process(pid)?;
     let proc_data: &ProcessData = proc.data().unwrap();
-    if let Some(old_limit) = nullable!(old_limit.get_as_mut())? {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Some(old_limit) = nullable!(uspace.raw_ptr(old_limit))? {
         let limit = &proc_data.rlimits.read()[resource];
         old_limit.rlim_cur = limit.current;
         old_limit.rlim_max = limit.max;
     }
 
-    if let Some(new_limit) = nullable!(new_limit.get_as_ref())? {
+    if let Some(new_limit) = nullable!(uspace.read(new_limit))? {
         if new_limit.rlim_cur > new_limit.rlim_max {
             return Err(LinuxError::EINVAL);
         }
@@ -112,7 +116,8 @@ pub fn sys_prlimit64(
 /// * `usage` - Buffer to store resource usage statistics
 pub fn sys_getrusage(who: i32, usage: UserPtr<rusage>) -> LinuxResult<isize> {
     const RUSAGE_SELF: i32 = 0;
-    if let Some(usage) = nullable!(usage.get_as_mut())? {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Some(usage) = nullable!(uspace.raw_ptr(usage))? {
         match who {
             RUSAGE_SELF | RUSAGE_CHILDREN => {
                 let (utime_ns, _, _, stime_ns, _, _) = time_stat_output();

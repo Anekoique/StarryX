@@ -5,11 +5,9 @@ use axhal::{
 };
 use axsignal::{SignalInfo, Signo};
 use axtask::current;
+use axuspace::is_accessing_user_memory;
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
-use starry_core::{
-    mm::is_accessing_user_memory,
-    task::{TaskExt, send_signal_process},
-};
+use starry_core::task::{TaskExt, send_signal_process};
 
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {

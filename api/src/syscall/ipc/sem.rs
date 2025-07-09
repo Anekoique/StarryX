@@ -4,13 +4,13 @@ use alloc::vec::Vec;
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
 use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
 use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::__kernel_time_t,
     ctypes::{IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, SEMMSL, SEMOPM, ipc::SemOpFlags},
     ipc::{IPC_MANAGER, SemBuf, SemInfo},
-    ptr::{UserConstPtr, UserPtr, nullable},
     time::monotonic_time_nanos,
     with_ipc_manager,
 };
@@ -79,11 +79,12 @@ pub fn sys_semop(semid: i32, sops: UserConstPtr<SemBuf>, nsops: usize) -> LinuxR
         return Err(LinuxError::EINVAL);
     }
 
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     // Read operations from user space
     let mut operations = Vec::with_capacity(nsops);
     for i in 0..nsops {
-        let sop = sops.offset(i).get_as_ref()?;
-        operations.push(*sop);
+        let sop = uspace.read(sops.offset(i))?;
+        operations.push(sop);
     }
 
     let cur_pid = current_pid();
@@ -219,14 +220,15 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
         IPC_SET => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserConstPtr::<SemInfo>::from(arg);
-                let new_info = buf_ptr.get_as_ref()?;
+                let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+                let new_info = uspace.read(buf_ptr)?;
 
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
 
                 let mut semset = semset_arc.lock();
-                semset.sem_info = *new_info;
+                semset.sem_info = new_info;
                 semset.sem_info.sem_ctime = monotonic_time_nanos() as __kernel_time_t;
                 Ok(0)
             })
@@ -235,15 +237,14 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
         IPC_STAT => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserPtr::<SemInfo>::from(arg);
+                let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
                     .ok_or(LinuxError::EINVAL)?;
 
                 let semset = semset_arc.lock();
-                if let Some(buf) = nullable!(buf_ptr.get_as_mut())? {
-                    *buf = semset.sem_info;
-                }
+                nullable!(uspace.write(buf_ptr, semset.sem_info))?;
                 Ok(0)
             })
         }
@@ -331,6 +332,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
         GETALL => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserPtr::<i16>::from(arg);
+                let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
@@ -338,7 +340,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
 
                 let semset = semset_arc.lock();
                 for (i, sem) in semset.semaphores.iter().enumerate() {
-                    *buf_ptr.offset(i).get_as_mut()? = sem.semval;
+                    uspace.write(buf_ptr.offset(i), sem.semval)?;
                 }
                 Ok(0)
             })
@@ -347,6 +349,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
         SETALL => {
             with_ipc_manager!(sem, sem_manager, {
                 let buf_ptr = UserConstPtr::<i16>::from(arg);
+                let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
                 let semset_arc = sem_manager
                     .get_semset_by_id(semid)
@@ -354,7 +357,7 @@ pub fn sys_semctl(semid: i32, semnum: i32, cmd: u32, arg: usize) -> LinuxResult<
 
                 let mut semset = semset_arc.lock();
                 for (i, sem) in semset.semaphores.iter_mut().enumerate() {
-                    let val = *buf_ptr.offset(i).get_as_ref()?;
+                    let val = uspace.read(buf_ptr.offset(i))?;
                     if val < 0 || val as usize > crate::ctypes::SEMVMX {
                         return Err(LinuxError::ERANGE);
                     }

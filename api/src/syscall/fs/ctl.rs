@@ -6,8 +6,11 @@ use core::{
 use alloc::ffi::CString;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
 use chrono::{Datelike, Timelike};
 use starry_core::fs::RTC0_DEVICE_ID;
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{
@@ -16,7 +19,6 @@ use crate::{
         timespec, timeval,
     },
     fs::{Directory, FileLike, get_file_like, with_fs, with_location},
-    ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
@@ -33,7 +35,8 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
     let stat = f.stat()?;
     if op == RTC_RD_TIME as _ && stat.rdev == RTC0_DEVICE_ID {
         let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
-        *argp.cast::<rtc_time>().get_as_mut()? = rtc_time {
+        let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+        let rtc_data = rtc_time {
             tm_sec: wall.second() as _,
             tm_min: wall.minute() as _,
             tm_hour: wall.hour() as _,
@@ -44,6 +47,7 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
             tm_yday: 0,
             tm_isdst: 0,
         };
+        uspace.write(argp.cast::<rtc_time>(), rtc_data)?;
     }
     Ok(0)
 }
@@ -53,7 +57,8 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
 /// # Arguments
 /// * `path` - Path to the new working directory
 pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = uspace.read_str(path)?;
     debug!("sys_chdir <= path: {}", path);
 
     with_fs(AT_FDCWD, path, |fs| {
@@ -82,7 +87,8 @@ pub fn sys_mkdir(path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
 /// * `path` - Path where to create the directory
 /// * `mode` - Directory permissions
 pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = uspace.read_str(path)?;
     let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
 
     with_fs(dirfd, path, |fs| fs.create_dir(path, mode))
@@ -143,7 +149,8 @@ impl<'a> DirBuffer<'a> {
 /// * `buf` - Buffer to store directory entries
 /// * `len` - Buffer length
 pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
-    let buf = buf.get_as_mut_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = uspace.raw_slice(buf, len)?;
     debug!(
         "sys_getdents64 <= fd: {}, buf: {:p}, len: {}",
         fd,
@@ -182,8 +189,9 @@ pub fn sys_linkat(
     new_path: UserConstPtr<c_char>,
     flags: u32,
 ) -> LinuxResult<isize> {
-    let old_path = nullable!(old_path.get_as_str())?;
-    let new_path = new_path.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let old_path = nullable!(uspace.read_str(old_path))?;
+    let new_path = uspace.read_str(new_path)?;
     debug!(
         "sys_linkat <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
@@ -223,7 +231,8 @@ pub fn sys_link(
 /// * `path` - Path to the file or directory to remove
 /// * `flags` - Flags (0 for file, AT_REMOVEDIR for directory)
 pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = uspace.read_str(path)?;
 
     debug!(
         "sys_unlinkat <= dirfd: {}, path: {:?}, flags: {}",
@@ -262,7 +271,8 @@ pub fn sys_unlink(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
 /// * `buf` - Buffer to store the current working directory path
 /// * `size` - Size of the buffer
 pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
-    let buf = nullable!(buf.get_as_mut_slice(size))?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = nullable!(uspace.raw_slice(buf, size))?;
 
     let Some(buf) = buf else {
         return Ok(0);
@@ -307,8 +317,9 @@ pub fn sys_symlinkat(
     new_dirfd: i32,
     linkpath: UserConstPtr<c_char>,
 ) -> LinuxResult<isize> {
-    let target = target.get_as_str()?;
-    let linkpath = linkpath.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let target = uspace.read_str(target)?;
+    let linkpath = uspace.read_str(linkpath)?;
 
     with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath)).map(|_| 0)
 }
@@ -340,8 +351,9 @@ pub fn sys_readlinkat(
     buf: UserPtr<u8>,
     size: usize,
 ) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
-    let buf = buf.get_as_mut_slice(size)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = uspace.read_str(path)?;
+    let buf = uspace.raw_slice(buf, size)?;
 
     with_fs(dirfd, path, |fs| {
         let entry = fs.resolve_no_follow(path)?;
@@ -398,7 +410,8 @@ pub fn sys_fchownat(
     gid: u32,
     flags: u32,
 ) -> LinuxResult<isize> {
-    let path = nullable!(path.get_as_str())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = nullable!(uspace.read_str(path))?;
 
     with_location(dirfd, path, flags, |location| {
         location.update_metadata(MetadataUpdate {
@@ -440,7 +453,8 @@ pub fn sys_fchmodat(
     mode: u32,
     flags: u32,
 ) -> LinuxResult<isize> {
-    let path = nullable!(path.get_as_str())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = nullable!(uspace.read_str(path))?;
     with_location(dirfd, path, flags, |location| {
         location.update_metadata(MetadataUpdate {
             mode: Some(NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?),
@@ -457,7 +471,8 @@ fn update_times(
     mtime: Option<TimeValue>,
     flags: u32,
 ) -> LinuxResult<()> {
-    let path = nullable!(path.get_as_str())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = nullable!(uspace.read_str(path))?;
     with_location(dirfd, path, flags, |location| {
         location.update_metadata(MetadataUpdate {
             atime,
@@ -474,7 +489,8 @@ fn update_times(
 /// * `path` - Path to the file
 /// * `times` - New access and modification times (NULL for current time)
 pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> LinuxResult<isize> {
-    let times = nullable!(times.get_as_ref())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let times = nullable!(uspace.read(times))?;
     let atime = times.map_or_else(wall_time, |it| TimeValue::from_secs(it.actime as _));
     let mtime = times.map_or_else(wall_time, |it| TimeValue::from_secs(it.modtime as _));
     update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
@@ -487,7 +503,8 @@ pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> Li
 /// * `path` - Path to the file
 /// * `times` - Array of two timeval structures for access and modification times (NULL for current time)
 pub fn sys_utimes(path: UserConstPtr<c_char>, times: UserConstPtr<timeval>) -> LinuxResult<isize> {
-    let times = nullable!(times.get_as_slice(2))?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let times = nullable!(uspace.read_slice(times, 2))?;
     let atime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[0]));
     let mtime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[1]));
     update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
@@ -517,7 +534,8 @@ pub fn sys_utimensat(
             _ => Some(timespec::to_time_value(*time)),
         }
     }
-    let times = nullable!(times.get_as_slice(2))?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let times = nullable!(uspace.read_slice(times, 2))?;
     let (atime, mtime) = match times {
         Some([atime, mtime]) => (utime_to_duration(atime), utime_to_duration(mtime)),
         None => (Some(wall_time()), Some(wall_time())),
@@ -573,8 +591,9 @@ pub fn sys_renameat2(
     new_path: UserConstPtr<c_char>,
     flags: u32,
 ) -> LinuxResult<isize> {
-    let old_path = old_path.get_as_str()?;
-    let new_path = new_path.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let old_path = uspace.read_str(old_path)?;
+    let new_path = uspace.read_str(new_path)?;
     debug!(
         "sys_renameat2 <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags

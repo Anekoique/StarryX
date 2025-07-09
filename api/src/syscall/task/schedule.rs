@@ -1,10 +1,11 @@
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
-use axtask::{AxCpuMask, set_affinity, with_task};
+use axtask::{AxCpuMask, current, set_affinity, with_task};
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{CLOCK_MONOTONIC, CLOCK_REALTIME, SCHED_FIFO, timespec},
-    ptr::{UserConstPtr, UserPtr, nullable},
     utils::time::TimeValueLike,
 };
 
@@ -29,8 +30,9 @@ pub fn sys_sched_setaffinity(
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
     with_task(pid.into(), |task| {
+        let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
         let len = cpuset_size.min(axconfig::SMP.div_ceil(8));
-        let mask_slice = mask.get_as_mut_slice(len)?;
+        let mask_slice = uspace.raw_slice(mask, len)?;
         let mut cpu_mask = AxCpuMask::new();
 
         for i in 0..(len * 8).min(axconfig::SMP) {
@@ -59,8 +61,9 @@ pub fn sys_sched_getaffinity(
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
     with_task(pid.into(), |task| {
+        let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
         let len = cpuset_size.min(axconfig::SMP.div_ceil(8));
-        let mask_slice = mask.get_as_mut_slice(len)?;
+        let mask_slice = uspace.raw_slice(mask, len)?;
         let cpumask = task.cpumask();
         let cpumask_bytes = cpumask.as_bytes();
 
@@ -154,13 +157,14 @@ pub fn sys_sched_getscheduler_min(
 /// * `req` - Time to sleep
 /// * `rem` - Remaining time if interrupted (NULL if not needed)
 pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> LinuxResult<isize> {
-    let req = req.get_as_ref()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let req = uspace.read(req)?;
 
     if req.tv_nsec < 0 || req.tv_nsec > 999_999_999 || req.tv_sec < 0 {
         return Err(LinuxError::EINVAL);
     }
 
-    let dur = timespec::to_time_value(*req);
+    let dur = timespec::to_time_value(req);
     debug!("sys_nanosleep <= {:?}", dur);
 
     let now = axhal::time::monotonic_time();
@@ -171,9 +175,7 @@ pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> Lin
     let actual = after - now;
 
     if let Some(diff) = dur.checked_sub(actual) {
-        if let Some(rem) = nullable!(rem.get_as_mut())? {
-            *rem = timespec::from_time_value(diff);
-        }
+        nullable!(uspace.write(rem, timespec::from_time_value(diff)))?;
         Err(LinuxError::EINTR)
     } else {
         Ok(0)

@@ -6,6 +6,7 @@ use axhal::paging::PageSize;
 use axprocess::Pid;
 use axsync::Mutex;
 use axtask::current;
+use axuspace::{UserPtr, UserSpace, nullable};
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use page_table_entry::MappingFlags;
 use starry_core::task::TaskExt;
@@ -16,7 +17,6 @@ use crate::{
         ipc::{ShmAtFlags, ShmGetFlags},
     },
     ipc::{IPC_MANAGER, ShmInfo, ShmSegment},
-    ptr::{UserPtr, nullable},
     with_ipc_manager,
 };
 
@@ -264,20 +264,19 @@ pub fn sys_shmctl(shmid: i32, cmd: u32, buf: UserPtr<ShmInfo>) -> LinuxResult<is
     })?;
 
     let mut segment = segment.lock();
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
     match cmd {
         IPC_SET => {
             // Update segment information
             if !buf.is_null() {
-                segment.shmid_ds = *buf.get_as_mut()?;
+                segment.shmid_ds = uspace.read(buf)?;
                 segment.shmid_ds.update_change_time();
             }
         }
         IPC_STAT => {
             // Get segment information
-            if let Some(shmid_ds) = nullable!(buf.get_as_mut())? {
-                *shmid_ds = segment.shmid_ds;
-            }
+            nullable!(uspace.write(buf, segment.shmid_ds))?;
         }
         IPC_RMID => {
             // Mark segment for removal

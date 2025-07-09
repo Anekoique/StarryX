@@ -4,6 +4,9 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{Location, NodePermission};
 use axsync::RawMutex;
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{
@@ -11,7 +14,6 @@ use crate::{
         statfs, statx,
     },
     fs::{get_file_like, metadata_to_kstat, with_file, with_location},
-    ptr::{UserConstPtr, UserPtr, nullable},
 };
 
 /// Get file metadata by path and write into statbuf.
@@ -54,27 +56,30 @@ pub fn sys_fstatat(
     statbuf: UserPtr<stat>,
     flags: u32,
 ) -> LinuxResult<isize> {
-    let path = nullable!(path.get_as_str())?;
-    let statbuf = statbuf.get_as_mut()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = nullable!(uspace.read_str(path))?;
 
     debug!(
         "sys_fstatat <= dirfd: {}, path: {:?}, flags: {}",
         dirfd, path, flags
     );
 
-    *statbuf = with_location(dirfd, path, flags, |location| {
-        location
-            .metadata()
-            .map(|metadata| metadata_to_kstat(&metadata))
-    })
-    .or_else(|err| {
-        if err == LinuxError::EBADF {
-            get_file_like(dirfd)?.stat().map_err(|_| err)
-        } else {
-            Err(err)
-        }
-    })?
-    .into();
+    uspace.write(
+        statbuf,
+        with_location(dirfd, path, flags, |location| {
+            location
+                .metadata()
+                .map(|metadata| metadata_to_kstat(&metadata))
+        })
+        .or_else(|err| {
+            if err == LinuxError::EBADF {
+                get_file_like(dirfd)?.stat().map_err(|_| err)
+            } else {
+                Err(err)
+            }
+        })?
+        .into(),
+    )?;
 
     Ok(0)
 }
@@ -94,26 +99,29 @@ pub fn sys_statx(
     _mask: u32,
     statxbuf: UserPtr<statx>,
 ) -> LinuxResult<isize> {
-    let path = nullable!(path.get_as_str())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = nullable!(uspace.read_str(path))?;
     debug!(
         "sys_statx <= dirfd: {}, path: {:?}, flags: {}",
         dirfd, path, flags
     );
 
-    let statxbuf = statxbuf.get_as_mut()?;
-    *statxbuf = with_location(dirfd, path, flags, |location| {
-        location
-            .metadata()
-            .map(|metadata| metadata_to_kstat(&metadata))
-    })
-    .or_else(|err| {
-        if err == LinuxError::EBADF {
-            get_file_like(dirfd)?.stat().map_err(|_| err)
-        } else {
-            Err(err)
-        }
-    })?
-    .into();
+    uspace.write(
+        statxbuf,
+        with_location(dirfd, path, flags, |location| {
+            location
+                .metadata()
+                .map(|metadata| metadata_to_kstat(&metadata))
+        })
+        .or_else(|err| {
+            if err == LinuxError::EBADF {
+                get_file_like(dirfd)?.stat().map_err(|_| err)
+            } else {
+                Err(err)
+            }
+        })?
+        .into(),
+    )?;
 
     Ok(0)
 }
@@ -140,7 +148,8 @@ pub fn sys_faccessat2(
     mode: u32,
     flags: u32,
 ) -> LinuxResult<isize> {
-    let path = nullable!(path.get_as_str())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = nullable!(uspace.read_str(path))?;
 
     if mode == 0 {
         return Ok(0);
@@ -181,7 +190,8 @@ pub fn sys_faccessat2(
 
 fn statfs(loc: &Location<RawMutex>, buf: UserPtr<statfs>) -> LinuxResult<()> {
     let stat = loc.filesystem().stat()?;
-    let dest = buf.get_as_mut()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let dest = uspace.raw_ptr(buf)?;
     dest.f_type = stat.fs_type as _;
     dest.f_bsize = stat.block_size as _;
     dest.f_blocks = stat.blocks as _;
@@ -205,10 +215,11 @@ fn statfs(loc: &Location<RawMutex>, buf: UserPtr<statfs>) -> LinuxResult<()> {
 /// * `path` - Path to a file in the filesystem
 /// * `buf` - Buffer to write filesystem statistics
 pub fn sys_statfs(path: UserConstPtr<c_char>, buf: UserPtr<statfs>) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     statfs(
         &FS_CONTEXT
             .lock()
-            .resolve(path.get_as_str()?)?
+            .resolve(uspace.read_str(path)?)?
             .mountpoint()
             .root_location(),
         buf,

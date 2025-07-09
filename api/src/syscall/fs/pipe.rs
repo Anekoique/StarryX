@@ -1,11 +1,13 @@
 use core::ffi::c_int;
 
 use axerrno::LinuxResult;
+use axtask::current;
+use axuspace::{UserPtr, UserSpace};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::O_CLOEXEC,
     fs::{FileLike, Pipe, close_file_like},
-    ptr::UserPtr,
 };
 
 /// Create a pipe with optional flags.
@@ -18,7 +20,8 @@ pub fn sys_pipe2(fds: UserPtr<[c_int; 2]>, flags: i32) -> LinuxResult<isize> {
         warn!("sys_pipe2: unsupported flags: {}", flags);
     }
 
-    let fds = fds.get_as_mut()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let fds = uspace.raw_ptr(fds)?;
 
     let (read_end, write_end) = Pipe::new();
     let read_fd = read_end.add_to_fd_table(flags as u32 & O_CLOEXEC != 0)?;

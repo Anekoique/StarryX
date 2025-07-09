@@ -4,11 +4,13 @@ use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 use axio::{Seek, SeekFrom};
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{__kernel_off_t, iovec},
     fs::{File, FileLike, get_file_like, with_file},
-    ptr::{UserConstPtr, UserPtr, nullable},
 };
 
 /// Read data from the file indicated by `fd`.
@@ -18,7 +20,8 @@ use crate::{
 /// * `buf` - Buffer to read data into
 /// * `len` - Length of data to read
 pub fn sys_read(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
-    let buf = buf.get_as_mut_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = uspace.raw_slice(buf, len)?;
     debug!(
         "sys_read <= fd: {}, buf: {:p}, len: {}",
         fd,
@@ -37,11 +40,12 @@ fn readv_impl(
         return Err(LinuxError::EINVAL);
     }
 
-    let iovs = iov.get_as_mut_slice(iocnt)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let iovs = uspace.raw_slice(iov, iocnt)?;
     let mut total = 0;
 
     for iov in iovs.iter().filter(|iov| iov.iov_len > 0) {
-        let buf = UserPtr::<u8>::from(iov.iov_base as usize).get_as_mut_slice(iov.iov_len as _)?;
+        let buf = uspace.raw_slice(UserPtr::<u8>::from(iov.iov_base as usize), iov.iov_len as _)?;
 
         let read = f(buf)?;
         total += read;
@@ -59,15 +63,19 @@ fn writev_impl(
     iocnt: usize,
     mut f: impl FnMut(&[u8]) -> LinuxResult<usize>,
 ) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     if !(0..=1024).contains(&iocnt) {
         return Err(LinuxError::EINVAL);
     }
 
-    let iovs = iov.get_as_slice(iocnt)?;
+    let iovs = uspace.read_slice(iov, iocnt)?;
     let mut total = 0;
 
     for iov in iovs.iter().filter(|iov| iov.iov_len > 0) {
-        let buf = UserConstPtr::<u8>::from(iov.iov_base as usize).get_as_slice(iov.iov_len as _)?;
+        let buf = uspace.read_slice(
+            UserConstPtr::<u8>::from(iov.iov_base as usize),
+            iov.iov_len as _,
+        )?;
 
         let written = f(buf)?;
         total += written;
@@ -98,7 +106,8 @@ pub fn sys_readv(fd: i32, iov: UserPtr<iovec>, iocnt: usize) -> LinuxResult<isiz
 /// * `buf` - Buffer containing data to write
 /// * `len` - Length of data to write
 pub fn sys_write(fd: i32, buf: UserConstPtr<u8>, len: usize) -> LinuxResult<isize> {
-    let buf = buf.get_as_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = uspace.read_slice(buf, len)?;
     debug!(
         "sys_write <= fd: {}, buf: {:p}, len: {}",
         fd,
@@ -181,7 +190,8 @@ pub fn sys_pread64(
     len: usize,
     offset: __kernel_off_t,
 ) -> LinuxResult<isize> {
-    let buf = buf.get_as_mut_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = uspace.raw_slice(buf, len)?;
     with_file(fd, |file| file.read_at(buf, offset as _)).map(|read| read as isize)
 }
 
@@ -198,7 +208,8 @@ pub fn sys_pwrite64(
     len: usize,
     offset: __kernel_off_t,
 ) -> LinuxResult<isize> {
-    let buf = buf.get_as_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = uspace.read_slice(buf, len)?;
     with_file(fd, |file| file.write_at(buf, offset as _)).map(|written| written as isize)
 }
 
@@ -327,14 +338,15 @@ pub fn sys_sendfile(
     );
 
     let dest = get_file_like(out_fd)?;
-    let offset = nullable!(offset.get_as_mut())?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let offset = nullable!(uspace.read(offset))?;
 
     match offset {
-        Some(offset) => with_file(in_fd, |src_file| {
+        Some(mut offset) => with_file(in_fd, |src_file| {
             do_sendfile(
                 |buf| {
-                    let bytes_read = src_file.read_at(buf, *offset)?;
-                    *offset += bytes_read as u64;
+                    let bytes_read = src_file.read_at(buf, offset)?;
+                    offset += bytes_read as u64;
                     Ok(bytes_read)
                 },
                 dest.as_ref(),

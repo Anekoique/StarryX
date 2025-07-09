@@ -27,7 +27,7 @@ use axsignal::{
 };
 use axsync::{Mutex, RawMutex};
 use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
-use axuspace::UserSpaceAccess;
+use axuspace::{UserSpaceAccess, check_region};
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 use spin::{Once, RwLock};
@@ -49,7 +49,16 @@ pub fn new_user_task(
     TaskInner::new(
         move || {
             let curr = axtask::current();
+
             if let Some(tid) = set_child_tid {
+                check_region(
+                    &TaskExt::from_task(&curr).process_data(),
+                    VirtAddr::from_ptr_of(tid),
+                    Layout::new::<u32>(),
+                    MappingFlags::WRITE,
+                )
+                .map_err(|_| panic!("failed to check region"))
+                .ok();
                 *tid = curr.id().as_u64() as Pid;
             }
 
@@ -327,7 +336,7 @@ impl ProcessData {
     }
 }
 
-impl UserSpaceAccess for ProcessData {
+impl UserSpaceAccess for &ProcessData {
     fn check_region_access(
         &self,
         range: VirtAddrRange,

@@ -3,14 +3,17 @@ use core::sync::atomic::Ordering;
 use axprocess::Pid;
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
-use starry_core::task::{ProcessData, send_signal_process, send_signal_thread};
+use axuspace::{UserPtr, UserSpace, nullable};
+use starry_core::{
+    task::TaskExt,
+    task::{ProcessData, send_signal_process, send_signal_thread},
+};
 
 use crate::{
     ctypes::{SI_KERNEL, robust_list_head},
     exit_robust_list,
     fs::FD_TABLE,
     ipc::IPC_MANAGER,
-    ptr::{UserPtr, nullable},
 };
 
 pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
@@ -21,7 +24,8 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
     info!("{:?} exit with code: {}", thread, exit_code);
 
     let clear_child_tid = UserPtr::<Pid>::from(curr_ext.thread_data().clear_child_tid());
-    if let Ok(clear_tid) = clear_child_tid.get_as_mut() {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Ok(clear_tid) = uspace.raw_ptr(clear_child_tid) {
         *clear_tid = 0;
 
         let guard = curr_ext
@@ -38,7 +42,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
         .robust_list_head
         .load(Ordering::SeqCst)
         .into();
-    if let Ok(Some(head)) = nullable!(head.get_as_mut()) {
+    if let Ok(Some(head)) = nullable!(uspace.raw_ptr(head)) {
         if let Err(err) = exit_robust_list(head) {
             warn!("exit robust list failed: {:?}", err);
         }

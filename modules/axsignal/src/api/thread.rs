@@ -186,8 +186,18 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
     }
 
     /// Restores the signal frame. Called by `sigreutrn`.
-    pub fn restore(&self, tf: &mut TrapFrame) {
+    pub fn restore<A: UserSpaceAccess>(&self, uspace: &A, tf: &mut TrapFrame) {
+        check_region(
+            uspace,
+            tf.sp().into(),
+            Layout::new::<SignalFrame>(),
+            MappingFlags::WRITE,
+        )
+        .map_err(|_| panic!("Failed to check signal frame"))
+        .ok();
+
         let frame_ptr = tf.sp() as *const SignalFrame;
+
         // SAFETY: pointer is valid
         let frame = unsafe { &*frame_ptr };
 
@@ -219,7 +229,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
 
     /// Gets the signal stack.
     pub fn stack(&self) -> SignalStack {
-        self.stack.lock().clone()
+        *self.stack.lock()
     }
 
     /// Applies a function to the signal stack.

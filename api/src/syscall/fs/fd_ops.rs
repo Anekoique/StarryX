@@ -6,6 +6,9 @@ use core::{
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::OpenResult;
 use axsync::RawMutex;
+use axtask::current;
+use axuspace::{UserConstPtr, UserSpace};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{
@@ -15,7 +18,6 @@ use crate::{
     fs::{
         Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like, with_fs,
     },
-    ptr::UserConstPtr,
     sys_getegid, sys_geteuid,
 };
 
@@ -39,7 +41,8 @@ pub fn sys_openat(
     flags: i32,
     mode: __kernel_mode_t,
 ) -> LinuxResult<isize> {
-    let path = path.get_as_str()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let path = uspace.read_str(path)?;
     debug!(
         "sys_openat <= {} {:?} {:#o} {:#o}",
         dirfd, path, flags, mode

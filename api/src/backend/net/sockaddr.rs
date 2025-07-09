@@ -1,17 +1,17 @@
 //! Wrapper for [`sockaddr`]. Using trait to convert between [`SocketAddr`] and [`sockaddr`] types.
-
-use axerrno::{LinuxError, LinuxResult};
 use core::{
     mem::{MaybeUninit, size_of},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
-use crate::{
-    ctypes::{
-        __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
-        sockaddr_in6, socklen_t,
-    },
-    ptr::{UserConstPtr, UserPtr},
+use axerrno::{LinuxError, LinuxResult};
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace};
+use starry_core::task::TaskExt;
+
+use crate::ctypes::{
+    __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
+    sockaddr_in6, socklen_t,
 };
 
 /// Trait to extend [`SocketAddr`] and its variants with methods for reading from and writing to user space.
@@ -42,15 +42,15 @@ fn copy_sockaddr_from_user(
     addr: UserConstPtr<sockaddr>,
     addrlen: socklen_t,
 ) -> LinuxResult<MaybeUninit<sockaddr>> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let mut storage = MaybeUninit::<sockaddr>::uninit();
-    let sock_addr = addr.get_as_ref()?;
-    unsafe {
-        core::ptr::copy_nonoverlapping(
-            sock_addr as *const sockaddr as *const u8,
-            storage.as_mut_ptr() as *mut u8,
-            addrlen as usize,
-        )
+
+    let storage_bytes = unsafe {
+        core::slice::from_raw_parts_mut(storage.as_mut_ptr() as *mut u8, addrlen as usize)
     };
+
+    uspace.read_slice_to(addr.cast::<u8>(), storage_bytes)?;
+
     Ok(storage)
 }
 
@@ -68,7 +68,8 @@ impl SocketAddrExt for SocketAddr {
         {
             return Err(LinuxError::EINVAL);
         }
-        let src_addr = addr.get_as_ref()?;
+        let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+        let src_addr = uspace.read(addr)?;
         let family = unsafe {
             src_addr
                 .__storage
@@ -144,7 +145,8 @@ impl SocketAddrExt for SocketAddrV4 {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
         }
-        let dst_addr = addr.get_as_mut()?;
+        let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+        let dst_addr = uspace.raw_ptr(addr)?;
         let len = size_of::<sockaddr_in>() as socklen_t;
         let sockin_addr = sockaddr_in {
             sin_family: AF_INET as _,
@@ -200,7 +202,8 @@ impl SocketAddrExt for SocketAddrV6 {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
         }
-        let dst_addr = addr.get_as_mut()?;
+        let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+        let dst_addr = uspace.raw_ptr(addr)?;
         let len = size_of::<sockaddr_in6>() as socklen_t;
         let sockin_addr = sockaddr_in6 {
             sin6_family: AF_INET6 as _,

@@ -4,6 +4,7 @@ use alloc::{sync::Arc, vec};
 use axerrno::{LinuxError, LinuxResult};
 use axsync::Mutex;
 use axtask::current;
+use axuspace::{UserPtr, UserSpace};
 use starry_core::task::TaskExt;
 
 use crate::{
@@ -13,7 +14,6 @@ use crate::{
         ipc::{MsgRcvFlags, MsgSndFlags},
     },
     ipc::{IPC_MANAGER, Message, MsgQueue, MsgidDs},
-    ptr::UserPtr,
     with_ipc_manager,
 };
 
@@ -112,10 +112,11 @@ pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> L
     }
 
     let current_pid = current_pid();
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
     // Read message from user space
     let mtype_ptr = msgp.cast::<c_long>();
-    let mtype = *mtype_ptr.get_as_mut()?;
+    let mtype = uspace.read(mtype_ptr)?;
 
     if mtype <= 0 {
         return Err(LinuxError::EINVAL);
@@ -123,9 +124,7 @@ pub fn sys_msgsnd(msqid: i32, msgp: UserPtr<u8>, msgsz: usize, msgflg: i32) -> L
 
     let mtext_ptr = msgp.offset(core::mem::size_of::<c_long>());
     let mut mtext = vec![0u8; msgsz];
-    unsafe {
-        core::ptr::copy_nonoverlapping(mtext_ptr.get_as_mut()?, mtext.as_mut_ptr(), msgsz);
-    }
+    uspace.read_slice_to(mtext_ptr, &mut mtext)?;
 
     let msg = Message::new(mtype, mtext, current_pid);
 
@@ -183,6 +182,7 @@ pub fn sys_msgrcv(
         msqid, msgsz, msgtyp, msgflg
     );
     let current_pid = current_pid();
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
     IPC_MANAGER.with_msg(|msg_manager| {
         let queue_arc = msg_manager
@@ -210,17 +210,11 @@ pub fn sys_msgrcv(
                 }
 
                 // Copy message to user space (simplified)
-                unsafe {
-                    let mtype_ptr = msgp.cast::<c_long>();
-                    *mtype_ptr.get_as_mut()? = msg.mtype;
-                    let copy_size = core::cmp::min(msg.size(), msgsz);
-                    let text_ptr = msgp.offset(core::mem::size_of::<c_long>());
-                    core::ptr::copy_nonoverlapping(
-                        msg.mtext.as_ptr(),
-                        text_ptr.get_as_mut()?,
-                        copy_size,
-                    );
-                }
+                let mtype_ptr = msgp.cast::<c_long>();
+                uspace.write(mtype_ptr, msg.mtype)?;
+                let copy_size = core::cmp::min(msg.size(), msgsz);
+                let text_ptr = msgp.offset(core::mem::size_of::<c_long>());
+                uspace.write_slice(text_ptr, &msg.mtext[..copy_size])?;
 
                 Ok(msg.mtext.len() as isize)
             }
@@ -244,6 +238,8 @@ pub fn sys_msgrcv(
 /// * `cmd` - Control command (IPC_STAT, IPC_SET, IPC_RMID, etc.)
 /// * `buf` - Buffer for queue information
 pub fn sys_msgctl(msqid: i32, cmd: i32, buf: UserPtr<MsgidDs>) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+
     match cmd as u32 {
         IPC_STAT => {
             with_ipc_manager!(msg, msg_manager, {
@@ -262,7 +258,7 @@ pub fn sys_msgctl(msqid: i32, cmd: i32, buf: UserPtr<MsgidDs>) -> LinuxResult<is
                 }
 
                 if !buf.is_null() {
-                    *buf.get_as_mut()? = queue.get_queue_info();
+                    uspace.write(buf, queue.get_queue_info())?;
                 }
 
                 Ok(0)
@@ -282,7 +278,7 @@ pub fn sys_msgctl(msqid: i32, cmd: i32, buf: UserPtr<MsgidDs>) -> LinuxResult<is
 
                 // TODO: uid? Check permissions (owner or superuser)
                 if !buf.is_null() {
-                    let new_info = *buf.get_as_mut()?;
+                    let new_info = uspace.read(buf)?;
                     // Update modifiable fields
                     queue.msqid_ds.msg_perm.uid = new_info.msg_perm.uid;
                     queue.msqid_ds.msg_perm.gid = new_info.msg_perm.gid;

@@ -2,6 +2,7 @@ use core::sync::atomic::Ordering;
 
 use axerrno::{LinuxError, LinuxResult};
 use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
 use starry_core::task::{TaskExt, ThreadData, get_thread};
 
 use crate::{
@@ -9,7 +10,6 @@ use crate::{
         FUTEX_CMD_MASK, FUTEX_CMP_REQUEUE, FUTEX_REQUEUE, FUTEX_WAIT, FUTEX_WAKE,
         ROBUST_LIST_LIMIT, robust_list, robust_list_head, timespec,
     },
-    ptr::{UserConstPtr, UserPtr, nullable},
     utils::time::TimeValueLike,
 };
 
@@ -32,19 +32,20 @@ pub fn sys_futex(
 ) -> LinuxResult<isize> {
     info!("futex {:?} {} {}", uaddr.address(), futex_op, value);
 
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let futex_table = &TaskExt::from_task(&current()).process_data().futex_table;
 
     let addr = uaddr.address().as_usize();
     let command = futex_op & (FUTEX_CMD_MASK as u32);
     match command {
         FUTEX_WAIT => {
-            if *uaddr.get_as_ref()? != value {
+            if uspace.read(uaddr)? != value {
                 return Err(LinuxError::EAGAIN);
             }
             let futex = futex_table.get_or_insert(addr);
 
-            if let Some(timeout) = nullable!(timeout.get_as_ref())? {
-                futex.wq.wait_timeout(timespec::to_time_value(*timeout));
+            if let Some(timeout) = nullable!(uspace.read(timeout))? {
+                futex.wq.wait_timeout(timespec::to_time_value(timeout));
             } else {
                 futex.wq.wait();
             }
@@ -69,7 +70,7 @@ pub fn sys_futex(
             Ok(count)
         }
         FUTEX_REQUEUE | FUTEX_CMP_REQUEUE => {
-            if command == FUTEX_CMP_REQUEUE && *uaddr.get_as_ref()? != value3 {
+            if command == FUTEX_CMP_REQUEUE && uspace.read(uaddr)? != value3 {
                 return Err(LinuxError::EAGAIN);
             }
             let value2 = timeout.address().as_usize() as u32;
@@ -111,13 +112,16 @@ pub fn sys_get_robust_list(
     } else {
         get_thread(tid)?
     };
-    *head.get_as_mut()? = thr
-        .data::<ThreadData>()
-        .unwrap()
-        .robust_list_head
-        .load(Ordering::SeqCst)
-        .into();
-    *size.get_as_mut()? = size_of::<robust_list_head>();
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(
+        head,
+        thr.data::<ThreadData>()
+            .unwrap()
+            .robust_list_head
+            .load(Ordering::SeqCst)
+            .into(),
+    )?;
+    uspace.write(size, size_of::<robust_list_head>())?;
 
     Ok(0)
 }
@@ -160,13 +164,15 @@ fn handle_futex_death(entry: *mut robust_list, offset: i64) -> LinuxResult<()> {
 
 pub fn exit_robust_list(head: &mut robust_list_head) -> LinuxResult<()> {
     let mut limit = ROBUST_LIST_LIMIT;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
 
     let mut entry = head.list.next;
     let offset = head.futex_offset;
     let pending = head.list_op_pending;
 
     while entry != &mut head.list as *mut _ {
-        let next_entry = UserPtr::from(entry).get_as_mut()?.next;
+        let entry_ptr = UserPtr::from(entry);
+        let next_entry = uspace.read(entry_ptr)?.next;
         if entry != pending {
             handle_futex_death(entry, offset)?;
         }

@@ -1,9 +1,11 @@
 use axerrno::LinuxResult;
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{POLLERR, POLLIN, POLLNVAL, POLLOUT, pollfd, sigset_t, timespec},
     fs::get_file_like,
-    ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, TimeValueLike, wall_time},
 };
 
@@ -62,7 +64,8 @@ fn do_poll(fds: &mut [pollfd], timeout: Option<TimeValue>) -> LinuxResult<isize>
 /// * `nfds` - Number of file descriptors in the array
 /// * `timeout` - Timeout in milliseconds (-1 for infinite)
 pub fn sys_poll(fds: UserPtr<pollfd>, nfds: u32, timeout: i32) -> LinuxResult<isize> {
-    let fds = fds.get_as_mut_slice(nfds as usize)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let fds = uspace.raw_slice(fds, nfds as usize)?;
     let timeout = if timeout < 0 {
         None
     } else {
@@ -84,8 +87,9 @@ pub fn sys_ppoll(
     timeout: UserConstPtr<timespec>,
     _sigmask: UserConstPtr<sigset_t>,
 ) -> LinuxResult<isize> {
-    let fds = fds.get_as_mut_slice(nfds as usize)?;
-    let timeout = nullable!(timeout.get_as_ref())?.map(|ts| timespec::to_time_value(*ts));
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let fds = uspace.raw_slice(fds, nfds as usize)?;
+    let timeout = nullable!(uspace.read(timeout))?.map(timespec::to_time_value);
     // TODO: handle signal
     do_poll(fds, timeout)
 }

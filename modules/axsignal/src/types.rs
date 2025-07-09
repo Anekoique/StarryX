@@ -320,7 +320,7 @@ unsafe impl Sync for SignalInfo {}
 /// to execute on a separate stack, which is useful for handling signals
 /// like SIGSEGV that might be caused by stack overflow.
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct SignalStack {
     /// Stack pointer (base address of the stack)
     pub sp: usize,

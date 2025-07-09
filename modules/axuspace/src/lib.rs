@@ -1,3 +1,6 @@
+//! User space memory access utilities for kernel-level operations.
+//! Provides safe abstractions for reading/writing user memory with proper validation.
+
 #![no_std]
 extern crate alloc;
 

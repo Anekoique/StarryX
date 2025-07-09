@@ -1,12 +1,14 @@
 use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{
         EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT, epoll_event,
     },
     fs::{EpollInstance, add_file_like, get_file_like},
-    ptr::{UserConstPtr, UserPtr},
     time::{TimeValue, wall_time},
 };
 
@@ -33,6 +35,7 @@ pub fn sys_epoll_ctl(
     fd: i32,
     event: UserConstPtr<epoll_event>,
 ) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let epoll = get_file_like(epfd)?;
     let epoll = epoll
         .into_any()
@@ -44,7 +47,7 @@ pub fn sys_epoll_ctl(
             if events.contains_key(&fd) {
                 return Err(LinuxError::EEXIST);
             }
-            let ev = *event.get_as_ref()?;
+            let ev = uspace.read(event)?;
             events.insert(fd, ev);
         }
         EPOLL_CTL_DEL => {
@@ -56,7 +59,7 @@ pub fn sys_epoll_ctl(
             if !events.contains_key(&fd) {
                 return Err(LinuxError::ENOENT);
             }
-            let ev = *event.get_as_ref()?;
+            let ev = uspace.read(event)?;
             events.insert(fd, ev);
         }
         _ => return Err(LinuxError::EINVAL),
@@ -77,6 +80,7 @@ pub fn sys_epoll_wait(
     maxevents: i32,
     timeout: i32,
 ) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let epoll = get_file_like(epfd)?;
     let epoll = epoll
         .into_any()
@@ -123,6 +127,6 @@ pub fn sys_epoll_wait(
         axtask::yield_now();
     }
     let n = ready.len().min(maxevents as usize);
-    events.get_as_mut_slice(n)?.copy_from_slice(&ready[..n]);
+    uspace.write_slice(events, &ready[..n])?;
     Ok(n as isize)
 }

@@ -6,6 +6,7 @@ use axprocess::Pid;
 use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
+use axuspace::{UserPtr, UserSpace};
 use spin::RwLock;
 use starry_core::{
     mm::copy_from_kernel,
@@ -16,7 +17,6 @@ use crate::{
     ctypes::{SIGCHLD, task::CloneFlags},
     fs::FD_TABLE,
     ipc::IPC_MANAGER,
-    ptr::UserPtr,
 };
 
 /// Create a child process or thread.
@@ -63,8 +63,9 @@ pub fn sys_clone(
     }
     new_uctx.set_retval(0);
 
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let set_child_tid = if flags.contains(CloneFlags::CHILD_SETTID) {
-        Some(UserPtr::<u32>::from(child_tid).get_as_mut()?)
+        Some(uspace.raw_ptr(UserPtr::<u32>::from(child_tid))?)
     } else {
         None
     };
@@ -75,7 +76,7 @@ pub fn sys_clone(
 
     let tid = new_task.id().as_u64() as Pid;
     if flags.contains(CloneFlags::PARENT_SETTID) {
-        *UserPtr::<Pid>::from(parent_tid).get_as_mut()? = tid;
+        uspace.write(UserPtr::<Pid>::from(parent_tid), tid)?;
     }
 
     let process = if flags.contains(CloneFlags::THREAD) {

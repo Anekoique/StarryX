@@ -1,5 +1,6 @@
 use axerrno::{LinuxError, LinuxResult};
 use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
 use starry_core::task::{TaskExt, time_stat_output};
 
 use crate::{
@@ -7,7 +8,6 @@ use crate::{
         __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, ITIMER_PROF, ITIMER_REAL,
         ITIMER_VIRTUAL, itimerval, sigevent, sys::Tms, timespec, timeval,
     },
-    ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValueLike, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
 
@@ -31,8 +31,9 @@ pub fn sys_clock_gettime(
             return Err(LinuxError::EINVAL);
         }
     };
-    *tp.get_as_mut()? = timespec::from_time_value(now);
-    debug!("sys_clock_gettime: {:?}", tp.get_as_mut()?);
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(tp, timespec::from_time_value(now))?;
+    debug!("sys_clock_gettime: {:?}", tp);
     Ok(0)
 }
 
@@ -65,7 +66,8 @@ pub fn sys_clock_getres(
         );
         return Err(LinuxError::EINVAL);
     };
-    *res.get_as_mut()? = timespec::from_nanos(1);
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(res, timespec::from_nanos(1))?;
     Ok(0)
 }
 
@@ -74,7 +76,8 @@ pub fn sys_clock_getres(
 /// # Arguments
 /// * `ts` - Buffer to store the current time
 pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
-    *ts.get_as_mut()? = timeval::from_time_value(wall_time());
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(ts, timeval::from_time_value(wall_time()))?;
     Ok(0)
 }
 
@@ -84,12 +87,13 @@ pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
 /// * `tms` - Buffer to store process time information
 pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
     let (_, _, utime_us, _, _, stime_us) = time_stat_output();
-    *tms.get_as_mut()? = Tms {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(tms, Tms {
         tms_utime: utime_us,
         tms_stime: stime_us,
         tms_cutime: utime_us,
         tms_cstime: stime_us,
-    };
+    })?;
     Ok(nanos_to_ticks(monotonic_time_nanos()) as _)
 }
 
@@ -99,7 +103,8 @@ pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
 /// * `which` - Timer type (ITIMER_REAL, ITIMER_VIRTUAL, ITIMER_PROF)
 /// * `value` - Buffer to store timer value
 pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize> {
-    if let Some(value) = nullable!(value.get_as_mut())? {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Some(value) = nullable!(uspace.raw_ptr(value))? {
         match which {
             ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
                 let (_, interval_ns, remained_ns) =
@@ -135,7 +140,8 @@ pub fn sys_setitimer(
         sys_getitimer(which, old_value)?;
     }
 
-    if let Some(new_value) = nullable!(new_value.get_as_mut())? {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    if let Some(new_value) = nullable!(uspace.raw_ptr(new_value))? {
         match which {
             ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
                 let interval_ns = new_value.it_interval.to_nanos();

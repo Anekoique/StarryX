@@ -3,6 +3,9 @@ use core::net::SocketAddr;
 use axerrno::{LinuxError, LinuxResult};
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{
@@ -11,7 +14,6 @@ use crate::{
     },
     fs::FileLike,
     net::{Socket, SocketAddrExt},
-    ptr::{UserConstPtr, UserPtr, nullable},
 };
 
 /// Create a socket.
@@ -107,7 +109,9 @@ pub fn sys_getsockname(
     let local_addr = socket.local_addr()?;
     debug!("sys_getsockname <= fd: {}, addr: {:?}", fd, local_addr);
 
-    *addrlen.get_as_mut()? = local_addr.write_to_user(addr)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(addrlen, local_addr.write_to_user(addr)?)?;
+
     Ok(0)
 }
 
@@ -126,7 +130,8 @@ pub fn sys_getpeername(
     let peer_addr = socket.peer_addr()?;
     debug!("sys_getpeername <= fd: {}, addr: {:?}", fd, peer_addr);
 
-    *addrlen.get_as_mut()? = peer_addr.write_to_user(addr)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(addrlen, peer_addr.write_to_user(addr)?)?;
 
     Ok(0)
 }
@@ -168,11 +173,10 @@ pub fn sys_accept(
     let fd = socket.add_to_fd_table(false).map(|fd| fd as isize)?;
     debug!("sys_accept => fd: {}, addr: {:?}", fd, remote_addr);
 
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     if !addr.is_null() {
         let len = remote_addr.write_to_user(addr)?;
-        if let Some(addrlen) = nullable!(addrlen.get_as_mut())? {
-            *addrlen = len;
-        }
+        nullable!(uspace.write(addrlen, len))?;
     }
 
     Ok(fd)
@@ -206,7 +210,8 @@ pub fn sys_sendto(
         fd, len, flags, addr
     );
 
-    let bytes = buf.get_as_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let bytes = uspace.read_slice(buf, len)?;
     let socket = Socket::from_fd(fd)?;
 
     let sent = if let Some(addr) = addr {
@@ -238,15 +243,14 @@ pub fn sys_recvfrom(
     debug!("sys_recvfrom <= fd: {}, len: {}, flags: {}", fd, len, flags);
 
     let socket = Socket::from_fd(fd)?;
-    let buf = buf.get_as_mut_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buf = uspace.raw_slice(buf, len)?;
     let (recv, remote_addr) = socket.recvfrom(buf)?;
 
     if let Some(remote_addr) = remote_addr {
         if !addr.is_null() {
             let len = remote_addr.write_to_user(addr)?;
-            if let Some(addrlen) = nullable!(addrlen.get_as_mut())? {
-                *addrlen = len;
-            }
+            nullable!(uspace.write(addrlen, len))?;
         }
     }
 
@@ -301,7 +305,8 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
         .add_to_fd_table(sock_flags & SOCK_CLOEXEC != 0)
         .map_err(|_| LinuxError::EMFILE)?;
 
-    let sv_slice = sv.get_as_mut_slice(2)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let sv_slice = uspace.raw_slice(sv, 2)?;
     sv_slice[0] = fd1;
     sv_slice[1] = fd2;
 

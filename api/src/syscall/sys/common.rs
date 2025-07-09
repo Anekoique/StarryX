@@ -1,13 +1,15 @@
 use core::ffi::c_char;
 
 use axerrno::{LinuxError, LinuxResult};
+use axtask::current;
+use axuspace::{UserPtr, UserSpace};
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
+use starry_core::task::TaskExt;
 use starry_core::task::processes;
 
 use crate::{
     ctypes::{AT_FDCWD, GRND_NONBLOCK, GRND_RANDOM, new_utsname, sysinfo},
     fs::with_fs,
-    ptr::UserPtr,
     time::wall_time_nanos,
 };
 
@@ -67,7 +69,8 @@ const UTSNAME: new_utsname = new_utsname {
 /// # Arguments
 /// * `name` - Buffer to store system information
 pub fn sys_uname(name: UserPtr<new_utsname>) -> LinuxResult<isize> {
-    *name.get_as_mut()? = UTSNAME;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    uspace.write(name, UTSNAME)?;
     Ok(0)
 }
 
@@ -76,7 +79,8 @@ pub fn sys_uname(name: UserPtr<new_utsname>) -> LinuxResult<isize> {
 /// # Arguments
 /// * `info` - Buffer to store system information
 pub fn sys_sysinfo(info: UserPtr<sysinfo>) -> LinuxResult<isize> {
-    let info = info.get_as_mut()?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let info = uspace.raw_ptr(info)?;
     info.uptime = 0;
     info.loads = [0, 0, 0];
     info.totalram = 0;
@@ -113,7 +117,8 @@ pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<is
         return Err(LinuxError::EINVAL);
     }
 
-    let buffer = buf.get_as_mut_slice(len)?;
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
+    let buffer = uspace.raw_slice(buf, len)?;
     let device_path = if flags & GRND_RANDOM != 0 {
         "/dev/random"
     } else {

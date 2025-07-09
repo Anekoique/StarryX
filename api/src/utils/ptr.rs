@@ -224,13 +224,13 @@ impl UserConstPtr<c_char> {
     }
 }
 
-macro_rules! nullable {
-    ($ptr:ident.$func:ident($($arg:expr),*)) => {
-        if $ptr.is_null() {
-            Ok(None)
-        } else {
-            Some($ptr.$func($($arg),*)).transpose()
-        }
-    };
-}
-pub(crate) use nullable;
+// macro_rules! nullable {
+//     ($ptr:ident.$func:ident($($arg:expr),*)) => {
+//         if $ptr.is_null() {
+//             Ok(None)
+//         } else {
+//             Some($ptr.$func($($arg),*)).transpose()
+//         }
+//     };
+// }
+// pub(crate) use nullable;

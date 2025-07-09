@@ -1,8 +1,7 @@
 use core::ffi::{c_char, c_void};
 
 use axerrno::LinuxResult;
-
-use crate::ptr::UserConstPtr;
+use axuspace::UserConstPtr;
 
 /// Mount a filesystem.
 ///

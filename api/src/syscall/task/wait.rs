@@ -2,12 +2,10 @@ use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::{Pid, Process};
 use axtask::current;
+use axuspace::{UserPtr, UserSpace, nullable};
 use starry_core::task::{ProcessData, TaskExt};
 
-use crate::{
-    ctypes::task::WaitOptions,
-    ptr::{UserPtr, nullable},
-};
+use crate::ctypes::task::WaitOptions;
 
 #[derive(Debug, Clone, Copy)]
 enum WaitPid {
@@ -40,6 +38,7 @@ pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxRe
     info!("sys_wait4 <= pid: {:?}, options: {:?}", pid, options);
 
     let proc_data = TaskExt::from_task(&current()).process_data();
+    let uspace = UserSpace::new(proc_data);
     let process = TaskExt::from_task(&current()).thread.process();
 
     let pid = if pid == -1 {
@@ -66,15 +65,12 @@ pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxRe
         return Err(LinuxError::ECHILD);
     }
 
-    let exit_code = nullable!(exit_code_ptr.get_as_mut())?;
     loop {
         if let Some(child) = children.iter().find(|child| child.is_zombie()) {
             if !options.contains(WaitOptions::WNOWAIT) {
                 child.free();
             }
-            if let Some(exit_code) = exit_code {
-                *exit_code = child.exit_code();
-            }
+            nullable!(uspace.write(exit_code_ptr, child.exit_code()))?;
             return Ok(child.pid() as _);
         } else if options.contains(WaitOptions::WNOHANG) {
             return Ok(0);

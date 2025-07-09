@@ -1,11 +1,13 @@
 use axerrno::LinuxResult;
 use axio::PollState;
 use axsignal::SignalSet;
+use axtask::current;
+use axuspace::{UserConstPtr, UserPtr, UserSpace, nullable};
+use starry_core::task::TaskExt;
 
 use crate::{
     ctypes::{timespec, timeval},
     fs::FD_TABLE,
-    ptr::{UserConstPtr, UserPtr, nullable},
     time::{TimeValue, TimeValueLike, wall_time},
 };
 
@@ -16,10 +18,11 @@ fn do_select(
     except_fds: UserPtr<u8>,
     timeout: Option<TimeValue>,
 ) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let num_words = nfds.div_ceil(8) as usize;
-    let mut read_fds = nullable!(read_fds.get_as_mut_slice(num_words))?;
-    let mut write_fds = nullable!(write_fds.get_as_mut_slice(num_words))?;
-    let mut except_fds = nullable!(except_fds.get_as_mut_slice(num_words))?;
+    let mut read_fds = nullable!(uspace.raw_slice(read_fds, num_words))?;
+    let mut write_fds = nullable!(uspace.raw_slice(write_fds, num_words))?;
+    let mut except_fds = nullable!(uspace.raw_slice(except_fds, num_words))?;
     if let Some(fds) = read_fds.as_mut() {
         fds.fill(0);
     }
@@ -92,12 +95,13 @@ pub fn sys_select(
     except_fds: UserPtr<u8>,
     timeout: UserConstPtr<timeval>,
 ) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     do_select(
         nfds,
         read_fds,
         write_fds,
         except_fds,
-        nullable!(timeout.get_as_ref())?.map(|it| timeval::to_time_value(*it)),
+        nullable!(uspace.read(timeout))?.map(timeval::to_time_value),
     )
 }
 
@@ -118,11 +122,12 @@ pub fn sys_pselect6(
     timeout: UserConstPtr<timespec>,
     _sigmask: UserConstPtr<SignalSet>,
 ) -> LinuxResult<isize> {
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     do_select(
         nfds,
         read_fds,
         write_fds,
         except_fds,
-        nullable!(timeout.get_as_ref())?.map(|it| timespec::to_time_value(*it)),
+        nullable!(uspace.read(timeout))?.map(timespec::to_time_value),
     )
 }

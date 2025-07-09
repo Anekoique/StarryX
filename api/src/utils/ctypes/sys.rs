@@ -27,6 +27,7 @@ pub struct Tms {
 }
 
 #[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy)]
 pub struct utimbuf {
     pub actime: __kernel_old_time_t,
     pub modtime: __kernel_old_time_t,
