@@ -1,5 +1,6 @@
 ./busybox mkdir -v /bin
 ./busybox ln -v -s /musl/busybox /bin/busybox
+cd /bin
 export PATH=/bin
 busybox ln -v -s busybox ln
 ln -v -s busybox cp
