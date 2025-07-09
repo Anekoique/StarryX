@@ -25,7 +25,7 @@ axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
 axconfig = { git = "https://github.com/oscomp/arceos.git" }
 axhal = { git = "https://github.com/oscomp/arceos.git", features = [ "uspace", "rtc" ] }
 axlog = { git = "https://github.com/oscomp/arceos.git" }
-axmm = { git = "https://github.com/oscomp/arceos.git", features = [ "copy-from"] }
+axmm = { git = "https://github.com/oscomp/arceos.git", features = [ "cow", "copy-from" ] }
 axnet = { git = "https://github.com/oscomp/arceos.git" }
 axns = { git = "https://github.com/oscomp/arceos.git", features = [ "thread-local" ] }
 axruntime = { git = "https://github.com/oscomp/arceos.git" }

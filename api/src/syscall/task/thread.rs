@@ -96,14 +96,15 @@ pub fn sys_arch_prctl(
     code: i32,
     addr: usize,
 ) -> LinuxResult<isize> {
-    use crate::ptr::UserPtr;
+    use axuspace::{UserPtr, UserSpace};
 
+    let uspace = UserSpace::new(TaskExt::from_task(&current()).process_data());
     let code = ArchPrctlCode::try_from(code).map_err(|_| axerrno::LinuxError::EINVAL)?;
     debug!("sys_arch_prctl: code = {:?}, addr = {:#x}", code, addr);
 
     match code {
         ArchPrctlCode::GetFs => {
-            *UserPtr::from(addr).get_as_mut()? = tf.tls();
+            uspace.write(UserPtr::from(addr), tf.tls())?;
             Ok(0)
         }
         ArchPrctlCode::SetFs => {
@@ -111,8 +112,9 @@ pub fn sys_arch_prctl(
             Ok(0)
         }
         ArchPrctlCode::GetGs => {
-            *UserPtr::from(addr).get_as_mut()? =
-                unsafe { x86::msr::rdmsr(x86::msr::IA32_KERNEL_GSBASE) };
+            uspace.write(UserPtr::from(addr), unsafe {
+                x86::msr::rdmsr(x86::msr::IA32_KERNEL_GSBASE)
+            })?;
             Ok(0)
         }
         ArchPrctlCode::SetGs => {

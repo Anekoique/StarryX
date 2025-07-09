@@ -2,7 +2,6 @@
 
 use core::{
     ffi::CStr,
-    sync::atomic::{AtomicBool, Ordering, compiler_fence},
 };
 
 use alloc::{
@@ -225,28 +224,6 @@ pub fn load_user_app(
     )?;
 
     Ok((entry, user_sp))
-}
-
-#[percpu::def_percpu]
-static ACCESSING_USER_MEM: AtomicBool = AtomicBool::new(false);
-
-/// Enables scoped access into user memory, allowing page faults to occur inside
-/// kernel.
-pub fn access_user_memory<R>(f: impl FnOnce() -> R) -> R {
-    // Set the flag using atomic operation with proper memory ordering
-    ACCESSING_USER_MEM.with_current(|v| {
-        v.store(true, Ordering::Release);
-        compiler_fence(Ordering::SeqCst);
-        let result = f();
-        compiler_fence(Ordering::SeqCst);
-        v.store(false, Ordering::Release);
-        result
-    })
-}
-
-/// Check if the current thread is accessing user memory.
-pub fn is_accessing_user_memory() -> bool {
-    ACCESSING_USER_MEM.with_current(|v| v.load(Ordering::Acquire))
 }
 
 /// Memory mapping region information for mmap
