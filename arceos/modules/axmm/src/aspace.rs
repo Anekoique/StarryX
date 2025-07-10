@@ -635,6 +635,7 @@ impl AddrSpace {
     ) -> bool {
         assert!(flags.contains(MappingFlags::WRITE));
         let paddr = paddr.align_down(align);
+        let vaddr = vaddr.align_down(align);
 
         debug!(
             "handle_cow_fault: vaddr: {:#x}, paddr: {:#x}, flags: {:?}, align: {:?}, ref_count: {}",

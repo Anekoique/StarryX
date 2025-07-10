@@ -103,10 +103,6 @@ impl Backend {
         populate: bool,
         align: PageSize,
     ) -> bool {
-        debug!(
-            "handle_page_fault_alloc: vaddr: {:#x}, orig_flags: {:?}, populate: {}, align: {:?}",
-            vaddr, orig_flags, populate, align
-        );
         if populate {
             false // Populated mappings should not trigger page faults.
         } else if let Some(frame) = alloc_frame(true, align) {

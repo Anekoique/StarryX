@@ -1,8 +1,6 @@
 //! User address space management.
 
-use core::{
-    ffi::CStr,
-};
+use core::ffi::CStr;
 
 use alloc::{
     borrow::ToOwned,
@@ -278,12 +276,23 @@ impl MmapRegion {
         let split_start = range.start;
         let split_end = range.end;
 
+        // Get a copy of populated pages to filter for each part
+        let populated_pages = self.populated_pages.lock().clone();
+
         let before = if self_start < split_start {
+            let before_range = VirtAddrRange::from_start_size(self_start, split_start - self_start);
+            // Filter populated pages that belong to the before part
+            let before_pages: BTreeSet<VirtAddr> = populated_pages
+                .iter()
+                .filter(|&page| before_range.contains(*page))
+                .cloned()
+                .collect();
+
             Some(Self {
-                vaddr_range: VirtAddrRange::from_start_size(self_start, split_start - self_start),
+                vaddr_range: before_range,
                 vm_file: self.vm_file.clone(),
                 file_offset: self.file_offset,
-                populated_pages: Mutex::new(BTreeSet::new()),
+                populated_pages: Mutex::new(before_pages),
                 page_align: self.page_align,
             })
         } else {
@@ -291,11 +300,19 @@ impl MmapRegion {
         };
 
         let after = if split_end < self_end {
+            let after_range = VirtAddrRange::from_start_size(split_end, self_end - split_end);
+            // Filter populated pages that belong to the after part
+            let after_pages: BTreeSet<VirtAddr> = populated_pages
+                .iter()
+                .filter(|&page| after_range.contains(*page))
+                .cloned()
+                .collect();
+
             Some(Self {
-                vaddr_range: VirtAddrRange::from_start_size(split_end, self_end - split_end),
+                vaddr_range: after_range,
                 vm_file: self.vm_file.clone(),
                 file_offset: self.file_offset + (split_end - self_start) as isize,
-                populated_pages: Mutex::new(BTreeSet::new()),
+                populated_pages: Mutex::new(after_pages),
                 page_align: self.page_align,
             })
         } else {
@@ -305,14 +322,20 @@ impl MmapRegion {
         let overlap_start = self_start.max(split_start);
         let overlap_end = self_end.min(split_end);
         let overlap = if overlap_start < overlap_end {
+            let overlap_range =
+                VirtAddrRange::from_start_size(overlap_start, overlap_end - overlap_start);
+            // Filter populated pages that belong to the overlap part
+            let overlap_pages: BTreeSet<VirtAddr> = populated_pages
+                .iter()
+                .filter(|&page| overlap_range.contains(*page))
+                .cloned()
+                .collect();
+
             Some(Self {
-                vaddr_range: VirtAddrRange::from_start_size(
-                    overlap_start,
-                    overlap_end - overlap_start,
-                ),
+                vaddr_range: overlap_range,
                 vm_file: self.vm_file.clone(),
                 file_offset: self.file_offset + (overlap_start - self_start) as isize,
-                populated_pages: Mutex::new(BTreeSet::new()),
+                populated_pages: Mutex::new(overlap_pages),
                 page_align: self.page_align,
             })
         } else {
@@ -330,11 +353,23 @@ impl MmapRegion {
         let overlap_start = self.vaddr_range.start.max(range.start);
         let overlap_end = self.vaddr_range.end.min(range.end);
 
+        let overlap_range =
+            VirtAddrRange::from_start_size(overlap_start, overlap_end - overlap_start);
+
+        // Filter populated pages that belong to the overlap part
+        let overlap_pages: BTreeSet<VirtAddr> = self
+            .populated_pages
+            .lock()
+            .iter()
+            .filter(|&page| overlap_range.contains(*page))
+            .cloned()
+            .collect();
+
         Some(Self {
-            vaddr_range: VirtAddrRange::from_start_size(overlap_start, overlap_end - overlap_start),
+            vaddr_range: overlap_range,
             vm_file: self.vm_file.clone(),
             file_offset: self.file_offset + (overlap_start - self.vaddr_range.start) as isize,
-            populated_pages: Mutex::new(BTreeSet::new()),
+            populated_pages: Mutex::new(overlap_pages),
             page_align: self.page_align,
         })
     }
