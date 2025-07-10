@@ -89,9 +89,11 @@ pub fn sys_connect(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> Linux
     let addr = SocketAddr::read_from_user(addr, addrlen)?;
     debug!("sys_connect <= fd: {}, addr: {:?}", fd, addr);
 
-    Socket::from_fd(fd)?.connect(addr)?;
-
-    Ok(0)
+    match Socket::from_fd(fd)?.connect(addr) {
+        Ok(_) => Ok(0),
+        Err(e) if e == LinuxError::EAGAIN => Err(LinuxError::EINPROGRESS),
+        Err(e) => Err(e),
+    }
 }
 
 /// Get socket name (local address).
