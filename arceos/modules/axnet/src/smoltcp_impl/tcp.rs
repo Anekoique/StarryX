@@ -219,11 +219,12 @@ impl TcpSocket {
 
         // Here our state must be `CONNECTING`, and only one thread can run here.
         if self.is_nonblocking() {
-            Err(AxError::WouldBlock)
+            Ok(())
         } else {
             self.block_on(|| {
                 let PollState { writable, .. } = self.poll_connect()?;
                 if !writable {
+                    debug!("socket connect() failed: writable");
                     Err(AxError::WouldBlock)
                 } else if self.get_state() == STATE_CONNECTED {
                     Ok(())
