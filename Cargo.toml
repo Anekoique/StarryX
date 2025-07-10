@@ -23,18 +23,19 @@ axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
 ] }
 
 axconfig = { git = "https://github.com/oscomp/arceos.git" }
-axhal = { git = "https://github.com/oscomp/arceos.git", features = [ "uspace", "rtc" ] }
+axhal = { git = "https://github.com/oscomp/arceos.git", features = [ "uspace", "rtc", "irq" ] }
 axlog = { git = "https://github.com/oscomp/arceos.git" }
 axmm = { git = "https://github.com/oscomp/arceos.git", features = [ "cow", "copy-from" ] }
 axnet = { git = "https://github.com/oscomp/arceos.git" }
 axns = { git = "https://github.com/oscomp/arceos.git", features = [ "thread-local" ] }
 axruntime = { git = "https://github.com/oscomp/arceos.git" }
-axsync = { git = "https://github.com/oscomp/arceos.git" }
-axtask = { git = "https://github.com/oscomp/arceos.git" }
+axsync = { git = "https://github.com/oscomp/arceos.git", features = [ "multitask" ] }
+axtask = { git = "https://github.com/oscomp/arceos.git", features = [ "smp" ] }
 
 axprocess = { path = "./modules/axprocess" }
 axsignal = { path = "./modules/axsignal" }
 axuspace = { path = "./modules/axuspace" }
+axvma = { path = "./modules/axvma" }
 
 axfs-ng = { path = "./arceos/modules/axfs-ng" }
 axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
@@ -82,6 +83,7 @@ axtask.workspace = true
 axprocess.workspace = true
 axsignal.workspace = true
 axuspace.workspace = true
+axvma.workspace = true
 
 axerrno.workspace = true
 linkme.workspace = true

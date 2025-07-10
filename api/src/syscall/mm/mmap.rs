@@ -2,8 +2,9 @@ use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::PageSize;
 use axtask::current;
+use axvma::MmapRegion;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
-use starry_core::{mm::MmapRegion, task::TaskExt};
+use starry_core::task::{FileWrapper, TaskExt};
 
 use crate::{
     ctypes::mm::{MmapFlags, MmapProt},
@@ -94,7 +95,7 @@ pub fn sys_mmap(
 
     if populate {
         let file = File::from_fd(fd)?;
-        let mut file = file.inner();
+        let file = file.inner();
         let file_size = file.inner().len()? as usize;
         if offset < 0 || offset as usize >= file_size {
             return Err(LinuxError::EINVAL);
@@ -108,7 +109,7 @@ pub fn sys_mmap(
         // Create and add VMA mapping region
         process_data.add_region(MmapRegion::new(
             VirtAddrRange::from_start_size(start_addr, aligned_length),
-            File::from_fd(fd)?.clone_inner(),
+            FileWrapper(File::from_fd(fd)?.clone_inner()),
             if offset < 0 { 0 } else { offset },
             page_size,
         ))?;

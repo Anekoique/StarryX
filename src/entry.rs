@@ -4,6 +4,7 @@ use axhal::arch::UspaceContext;
 use axprocess::{Pid, init_proc};
 use axsignal::Signo;
 use axsync::Mutex;
+use axvma::VmaManager;
 use linux_raw_sys::general::AT_FDCWD;
 use spin::RwLock;
 use starry_api::{
@@ -11,7 +12,7 @@ use starry_api::{
     ipc::IPC_MANAGER,
 };
 use starry_core::{
-    mm::{VmaMapping, copy_from_kernel, load_user_app, map_trampoline, new_user_aspace_empty},
+    mm::{copy_from_kernel, load_user_app, map_trampoline, new_user_aspace_empty},
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
 
@@ -47,7 +48,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
         Arc::default(),
         Some(Signo::SIGCHLD),
         None,
-        RwLock::new(VmaMapping::new()),
+        RwLock::new(VmaManager::new()),
     );
 
     FD_TABLE

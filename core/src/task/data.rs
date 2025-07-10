@@ -18,7 +18,7 @@ use axhal::{
     irq::with_irqs_disabled,
     time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
-use axmm::AddrSpace;
+use axmm::{AddrSpace, PageIter4K};
 use axns::{AxNamespace, AxNamespaceIf};
 use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
 use axsignal::{
@@ -28,17 +28,13 @@ use axsignal::{
 use axsync::{Mutex, RawMutex};
 use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
 use axuspace::{UserSpaceAccess, check_region};
+use axvma::{MmapRegion, VmFile, VmaManager};
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
-use crate::{
-    mm::{MmapRegion, VmaMapping},
-    resources::Rlimits,
-    task::FutexTable,
-    time::TimeStat,
-};
+use crate::{resources::Rlimits, task::FutexTable, time::TimeStat};
 
 /// Create a new user task.
 pub fn new_user_task(
@@ -195,6 +191,19 @@ impl axsignal::api::WaitQueue for WaitQueueWrapper {
     }
 }
 
+/// Wrapper for [`axfs_ng::FsFile`].
+#[derive(Clone)]
+pub struct FileWrapper(pub Arc<Mutex<axfs_ng::FsFile<RawMutex>>>);
+impl VmFile for FileWrapper {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
+        self.0.lock().read_at(buf, offset)
+    }
+
+    fn len(&self) -> LinuxResult<u64> {
+        self.0.lock().len()
+    }
+}
+
 /// Extended data for [`Thread`].
 pub struct ThreadData {
     /// When the thread exits, the kernel clears the word at this address if it is not NULL.
@@ -251,7 +260,7 @@ pub struct ProcessData {
     /// The futex table
     pub futex_table: FutexTable,
     /// The VMA mapping for mmap regions
-    pub vma_mapping: RwLock<VmaMapping>,
+    pub vma_mapping: RwLock<VmaManager<FileWrapper>>,
 }
 
 impl ProcessData {
@@ -262,7 +271,7 @@ impl ProcessData {
         signal_actions: Arc<Mutex<SignalActions>>,
         exit_signal: Option<Signo>,
         rlimits: Option<Rlimits>,
-        vma_mapping: RwLock<VmaMapping>,
+        vma_mapping: RwLock<VmaManager<FileWrapper>>,
     ) -> Self {
         Self {
             exe_path: RwLock::new(exe_path),
@@ -314,15 +323,16 @@ impl ProcessData {
     }
 
     /// Add a new memory mapping region
-    pub fn add_region(&self, region: MmapRegion) -> LinuxResult<()> {
+    pub fn add_region(&self, region: MmapRegion<FileWrapper>) -> LinuxResult<()> {
         self.vma_mapping.write().add_region(region)
     }
 
     /// Remove all regions that overlap with the given address range
-    pub fn remove_overlapping_regions(&self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion> {
-        self.vma_mapping
-            .write()
-            .remove_overlapping_regions(vaddr_range)
+    pub fn remove_overlapping_regions(
+        &self,
+        vaddr_range: VirtAddrRange,
+    ) -> Vec<MmapRegion<FileWrapper>> {
+        self.vma_mapping.write().remove_overlapped(vaddr_range)
     }
 
     /// Clear all mmap mappings
@@ -332,7 +342,32 @@ impl ProcessData {
 
     /// Populate file-backed pages in the address space
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
-        self.vma_mapping.read().populate_file_pages(vaddr, len)
+        let start_addr = vaddr.align_down_4k();
+        let end_addr = (vaddr + len).align_up_4k();
+        let aspace = self.aspace.lock();
+
+        for page_addr in PageIter4K::new(start_addr, end_addr).unwrap() {
+            if let Some(region) = self.vma_mapping.read().find_region(page_addr) {
+                // Skip if this page has already been populated in this region
+                if region.populated.lock().contains(&page_addr) {
+                    continue;
+                }
+
+                // File-backed page, read from file and write to aspace
+                match region.get_buf(page_addr) {
+                    Ok(page_data) => {
+                        debug!("Populating page: {:#x}", page_addr);
+                        aspace.write(page_addr, &page_data, region.align)?;
+                    }
+                    Err(LinuxError::EEXIST) => {
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

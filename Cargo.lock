@@ -465,6 +465,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "axvma"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "memory_addr",
+ "page_table_multiarch",
+ "spin 0.9.8",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1501,6 +1511,7 @@ dependencies = [
  "axsync",
  "axtask",
  "axuspace",
+ "axvma",
  "linkme",
  "linux-raw-sys",
  "shlex",
@@ -1530,6 +1541,7 @@ dependencies = [
  "axsync",
  "axtask",
  "axuspace",
+ "axvma",
  "bitflags 2.9.1",
  "bitmaps",
  "cfg-if",
@@ -1566,6 +1578,7 @@ dependencies = [
  "axsync",
  "axtask",
  "axuspace",
+ "axvma",
  "crate_interface",
  "inherit-methods-macro",
  "kernel-elf-parser",

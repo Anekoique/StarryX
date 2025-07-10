@@ -23,6 +23,7 @@ axtask.workspace = true
 axprocess.workspace = true
 axsignal.workspace = true
 axuspace.workspace = true
+axvma.workspace = true
 
 axerrno.workspace = true
 bitflags.workspace = true

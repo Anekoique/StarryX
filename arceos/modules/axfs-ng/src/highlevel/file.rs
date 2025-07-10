@@ -326,7 +326,7 @@ impl<M: RawMutex> FsFile<M> {
     }
 
     /// Reads a number of bytes starting from a given offset.
-    pub fn read_at(&mut self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
+    pub fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
         self.access(FileFlags::READ)?.read_at(buf, offset)
     }
 
