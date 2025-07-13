@@ -3,9 +3,9 @@ use axhal::{
     arch::TrapFrame,
     trap::{SYSCALL, register_trap_handler},
 };
-use starry_api::*;
-use starry_core::task::{time_stat_from_kernel_to_user, time_stat_from_user_to_kernel};
 use syscalls::Sysno;
+use xapi::*;
+use xcore::time::{time_stat_from_kernel_to_user, time_stat_from_user_to_kernel};
 
 #[register_trap_handler(SYSCALL)]
 fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {

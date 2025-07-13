@@ -37,7 +37,7 @@ pub struct Process {
     is_zombie: AtomicBool,
     pub(crate) tg: SpinNoIrq<ThreadGroup>,
 
-    data: Box<dyn Any + Send + Sync>,
+    pub(crate) data: Box<dyn Any + Send + Sync>,
 
     // TODO: child subreaper
     children: SpinNoIrq<StrongMap<Pid, Arc<Process>>>,

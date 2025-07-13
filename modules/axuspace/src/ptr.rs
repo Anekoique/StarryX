@@ -114,6 +114,13 @@ impl<T> From<*mut T> for UserPtr<T> {
     }
 }
 
+impl<T> From<Option<*mut T>> for UserPtr<T> {
+    /// Create UserPtr from a mutable pointer
+    fn from(value: Option<*mut T>) -> Self {
+        UserPtr(value.unwrap_or(ptr::null_mut()))
+    }
+}
+
 impl<T> Default for UserPtr<T> {
     /// Create a null UserPtr
     fn default() -> Self {

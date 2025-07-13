@@ -7,7 +7,7 @@ use axsignal::{SignalInfo, Signo};
 use axtask::current;
 use axuspace::is_accessing_user_memory;
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
-use starry_core::task::{TaskExt, send_signal_process};
+use xcore::task::{XTaskExt, send_signal_process};
 
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
@@ -19,11 +19,12 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         return false;
     }
 
-    let curr_ext = TaskExt::from_task(&current());
+    let xtask = XTaskExt::from_task(&current());
+    let xprocess = xtask.xprocess();
     let send_sigsegv = || {
         debug!("Sending SIGSEGV");
         let _ = send_signal_process(
-            curr_ext.thread.process(),
+            xtask.thread_ref().process(),
             SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
         );
     };
@@ -33,7 +34,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         .contains(&vaddr.as_usize())
     {
         // Stack extension, check rlimit
-        let rlimit = &curr_ext.process_data().rlimits.read()[RLIMIT_STACK];
+        let rlimit = &xprocess.rlimits.read()[RLIMIT_STACK];
         let size = axconfig::plat::USER_STACK_TOP - vaddr.as_usize();
         if size as u64 > rlimit.current {
             debug!("Stack extension, check rlimit");
@@ -41,8 +42,8 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         }
     }
 
-    if !curr_ext
-        .process_data()
+    if !xprocess
+        .uspace()
         .aspace
         .lock()
         .handle_page_fault(vaddr, access_flags)
@@ -50,17 +51,17 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         warn!(
             "{} ({:?}): segmentation fault at {:#x}, sending SIGSEGV",
             current().id_name(),
-            curr_ext.thread,
+            xtask.thread_ref(),
             vaddr
         );
         let _ = send_signal_process(
-            curr_ext.thread.process(),
+            xtask.thread_ref().process(),
             SignalInfo::new(Signo::from_repr(SIGSEGV as u8).unwrap(), SI_KERNEL as _),
         );
     }
 
-    curr_ext
-        .process_data()
+    xprocess
+        .uspace()
         .populate_file_pages(vaddr.align_down_4k(), PAGE_SIZE_4K)
         .map_err(|_| send_sigsegv())
         .ok();

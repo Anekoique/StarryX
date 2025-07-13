@@ -1,0 +1,283 @@
+//! User task management.
+
+use core::{
+    alloc::Layout,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+use alloc::{
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+use axerrno::{LinuxError, LinuxResult};
+use axhal::arch::UspaceContext;
+use axns::{AxNamespace, AxNamespaceIf};
+use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
+use axsignal::{
+    Signo,
+    api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
+};
+use axsync::Mutex;
+use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
+use axuspace::{UserPtr, UserSpaceAccess, nullable};
+use spin::{Once, RwLock};
+use weak_map::WeakMap;
+
+use crate::{
+    mm::XUserSpace,
+    resources::Rlimits,
+    task::{FutexTable, ProcessSignal, ThreadSignal, with_current},
+    time::TimeStat,
+};
+
+pub fn new_user_task(
+    name: &str,
+    uctx: UspaceContext,
+    tid_addr: Option<&'static mut Pid>,
+) -> TaskInner {
+    TaskInner::new(
+        move || {
+            with_current(|curr| {
+                if let Some(tid_addr) = tid_addr {
+                    nullable!(curr.task_ext().xprocess().uspace().write(
+                        UserPtr::<u32>::from(tid_addr as *mut _),
+                        curr.id().as_u64() as Pid
+                    ))
+                    .map_err(|_| panic!("Failed to write tid to user space"))
+                    .ok();
+                }
+                let kstack_top = curr.kernel_stack_top().unwrap();
+                info!(
+                    "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
+                    uctx.ip(),
+                    uctx.sp(),
+                    kstack_top,
+                );
+                unsafe { uctx.enter_uspace(kstack_top) }
+            })
+        },
+        name.into(),
+        axconfig::plat::KERNEL_STACK_SIZE,
+    )
+}
+
+axtask::def_task_ext!(XTaskExt);
+
+pub struct XTaskExt(Arc<Thread>);
+
+impl XTaskExt {
+    pub fn new(thread: Arc<Thread>) -> Self {
+        Self(thread)
+    }
+
+    pub fn from_task(task: &TaskInner) -> &'static XTaskExt {
+        unsafe { &*(task.task_ext() as *const Self) }
+    }
+
+    pub fn thread_ref(&self) -> &Arc<Thread> {
+        &self.0
+    }
+
+    pub fn process_ref(&self) -> &Arc<Process> {
+        self.0.process()
+    }
+
+    pub fn thread(&self) -> Arc<Thread> {
+        self.0.clone()
+    }
+
+    pub fn process(&self) -> Arc<Process> {
+        self.0.process().clone()
+    }
+
+    pub fn xthread_ref(&self) -> &XThread {
+        self.0.data().unwrap()
+    }
+
+    pub fn xthread(&self) -> &'static XThread {
+        unsafe { &*(self.0.data::<XThread>().unwrap() as *const XThread) }
+    }
+
+    pub fn xprocess_ref(&self) -> &XProcess {
+        self.0.process().data().unwrap()
+    }
+
+    pub fn xprocess(&self) -> &'static XProcess {
+        unsafe { &*(self.0.process().data::<XProcess>().unwrap() as *const XProcess) }
+    }
+}
+
+pub struct XThread {
+    pub time: RwLock<TimeStat>,
+    pub clear_child_tid: AtomicUsize,
+    pub robust_list_head: AtomicUsize,
+    pub signal: ThreadSignal,
+}
+
+impl XThread {
+    pub fn new(proc: &XProcess) -> Self {
+        Self {
+            time: RwLock::new(TimeStat::new()),
+            clear_child_tid: AtomicUsize::new(0),
+            robust_list_head: AtomicUsize::new(0),
+            signal: ThreadSignalManager::new(proc.signal.clone()),
+        }
+    }
+
+    pub fn from_thread(thread: &Arc<Thread>) -> &XThread {
+        thread.data::<Self>().unwrap()
+    }
+
+    pub fn clear_child_tid(&self) -> usize {
+        self.clear_child_tid.load(Ordering::Relaxed)
+    }
+
+    pub fn set_clear_child_tid(&self, clear_child_tid: usize) {
+        self.clear_child_tid
+            .store(clear_child_tid, Ordering::Relaxed);
+    }
+}
+
+pub struct XProcess {
+    pub exe_path: RwLock<String>,
+    pub uspace: XUserSpace,
+    pub ns: AxNamespace,
+    pub child_exit_wq: WaitQueue,
+    pub exit_signal: Option<Signo>,
+    pub signal: Arc<ProcessSignal>,
+    pub rlimits: RwLock<Rlimits>,
+    pub futex_table: FutexTable,
+}
+
+impl XProcess {
+    pub fn new(
+        exe_path: String,
+        uspace: XUserSpace,
+        signal_actions: Arc<Mutex<SignalActions>>,
+        exit_signal: Option<Signo>,
+        rlimits: Option<Rlimits>,
+    ) -> Self {
+        Self {
+            exe_path: RwLock::new(exe_path),
+            uspace,
+            ns: AxNamespace::new_thread_local(),
+            child_exit_wq: WaitQueue::new(),
+            exit_signal,
+            signal: Arc::new(ProcessSignalManager::new(
+                signal_actions,
+                axconfig::plat::SIGNAL_TRAMPOLINE,
+            )),
+            rlimits: RwLock::new(rlimits.unwrap_or_default()),
+            futex_table: FutexTable::new(),
+        }
+    }
+
+    pub fn from_process(process: &Arc<Process>) -> &XProcess {
+        process.data().unwrap()
+    }
+
+    pub fn from_thread(thread: &Arc<Thread>) -> &XProcess {
+        thread.process().data().unwrap()
+    }
+
+    pub fn is_clone_child(&self) -> bool {
+        self.exit_signal != Some(Signo::SIGCHLD)
+    }
+
+    pub fn uspace(&self) -> &XUserSpace {
+        &self.uspace
+    }
+}
+
+struct AxTaskExtImpl;
+#[crate_interface::impl_interface]
+impl AxTaskExtIf for AxTaskExtImpl {
+    fn switch_to_task() {}
+
+    fn switch_from_task() {}
+
+    fn update_real_timer() {}
+}
+
+struct AxNamespaceImpl;
+#[crate_interface::impl_interface]
+impl AxNamespaceIf for AxNamespaceImpl {
+    fn current_namespace_base() -> *mut u8 {
+        static KERNEL_NS_BASE: Once<usize> = Once::new();
+        let current = axtask::current();
+        if unsafe { current.task_ext_ptr() }.is_null() {
+            return *(KERNEL_NS_BASE.call_once(|| {
+                let global_ns = AxNamespace::global();
+                let layout = Layout::from_size_align(global_ns.size(), 64).unwrap();
+                let dst = unsafe { alloc::alloc::alloc(layout) };
+                let src = global_ns.base();
+                unsafe { core::ptr::copy_nonoverlapping(src, dst, global_ns.size()) };
+                dst as usize
+            })) as *mut u8;
+        }
+        current.task_ext().xprocess().ns.base()
+    }
+}
+
+static THREAD_TABLE: RwLock<WeakMap<Pid, Weak<Thread>>> = RwLock::new(WeakMap::new());
+static PROCESS_TABLE: RwLock<WeakMap<Pid, Weak<Process>>> = RwLock::new(WeakMap::new());
+static PROCESS_GROUP_TABLE: RwLock<WeakMap<Pid, Weak<ProcessGroup>>> = RwLock::new(WeakMap::new());
+static SESSION_TABLE: RwLock<WeakMap<Pid, Weak<Session>>> = RwLock::new(WeakMap::new());
+
+pub fn add_thread_to_table(thread: &Arc<Thread>) {
+    let mut thread_table = THREAD_TABLE.write();
+    thread_table.insert(thread.tid(), thread);
+
+    let mut process_table = PROCESS_TABLE.write();
+    let process = thread.process();
+    if process_table.contains_key(&process.pid()) {
+        return;
+    }
+    process_table.insert(process.pid(), process);
+
+    let mut process_group_table = PROCESS_GROUP_TABLE.write();
+    let process_group = process.group();
+    if process_group_table.contains_key(&process_group.pgid()) {
+        return;
+    }
+    process_group_table.insert(process_group.pgid(), &process_group);
+
+    let mut session_table = SESSION_TABLE.write();
+    let session = process_group.session();
+    if session_table.contains_key(&session.sid()) {
+        return;
+    }
+    session_table.insert(session.sid(), &session);
+}
+
+pub fn processes() -> Vec<Arc<Process>> {
+    PROCESS_TABLE.read().values().collect()
+}
+
+pub fn get_thread(tid: Pid) -> LinuxResult<Arc<Thread>> {
+    if tid == 0 {
+        Ok(current().task_ext().thread())
+    } else {
+        THREAD_TABLE.read().get(&tid).ok_or(LinuxError::ESRCH)
+    }
+}
+
+pub fn get_process(pid: Pid) -> LinuxResult<Arc<Process>> {
+    if pid == 0 {
+        Ok(current().task_ext().process())
+    } else {
+        PROCESS_TABLE.read().get(&pid).ok_or(LinuxError::ESRCH)
+    }
+}
+
+pub fn get_process_group(pgid: Pid) -> LinuxResult<Arc<ProcessGroup>> {
+    PROCESS_GROUP_TABLE
+        .read()
+        .get(&pgid)
+        .ok_or(LinuxError::ESRCH)
+}
+
+pub fn get_session(sid: Pid) -> LinuxResult<Arc<Session>> {
+    SESSION_TABLE.read().get(&sid).ok_or(LinuxError::ESRCH)
+}

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["api", "core"]
+members = ["xapi", "xcore"]
 exclude = ["arceos", "apps"]
 
 [workspace.package]
@@ -43,6 +43,7 @@ axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
 axerrno = "0.1"
 bitflags = "2.6"
 cfg-if = "1.0"
+inherit-methods-macro = "0.1.0"
 linkme = "0.3"
 linux-raw-sys = { version = "0.9.3", default-features = false, features = [
     "no_std",
@@ -55,8 +56,8 @@ page_table_multiarch = "0.5.5"
 memory_addr = "0.4"
 spin = "0.9"
 
-starry-core = { path = "./core" }
-starry-api = { path = "./api" }
+xcore = { path = "./xcore" }
+xapi = { path = "./xapi" }
 
 [package]
 name = "starry"
@@ -86,11 +87,12 @@ axuspace.workspace = true
 axvma.workspace = true
 
 axerrno.workspace = true
+inherit-methods-macro.workspace = true
 linkme.workspace = true
 linux-raw-sys.workspace = true
 
-starry-core.workspace = true
-starry-api.workspace = true
+xcore.workspace = true
+xapi.workspace = true
 
 spin.workspace = true
 shlex = { version = "1.3.0", default-features = false }

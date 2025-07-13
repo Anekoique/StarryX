@@ -21,9 +21,19 @@ impl Thread {
         &self.process
     }
 
+    /// The data associated with the [`Process`] this thread belongs to.
+    pub fn proc_data<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.process.data.downcast_ref::<T>()
+    }
+
     /// The data associated with the [`Thread`].
     pub fn data<T: Any + Send + Sync>(&self) -> Option<&T> {
         self.data.downcast_ref::<T>()
+    }
+
+    /// The data associated with the [`Thread`] as an [`Arc`].
+    pub fn data_arc<T: Any + Send + Sync>(&self) -> Option<Arc<&T>> {
+        self.data.downcast_ref::<T>().map(Arc::new)
     }
 
     /// Exits the thread.

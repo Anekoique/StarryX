@@ -7,17 +7,17 @@ use axsync::Mutex;
 use axvma::VmaManager;
 use linux_raw_sys::general::AT_FDCWD;
 use spin::RwLock;
-use starry_api::{
+use xapi::{
     fs::{FD_TABLE, with_fs},
     ipc::IPC_MANAGER,
 };
-use starry_core::{
-    mm::{copy_from_kernel, load_user_app, map_trampoline, new_user_aspace_empty},
-    task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
+use xcore::{
+    mm::{XUserSpace, copy_from_kernel, load_app, map_trampoline, new_aspace},
+    task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task},
 };
 
 pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
-    let mut uspace = new_user_aspace_empty()
+    let mut uspace = new_aspace()
         .and_then(|mut it| {
             copy_from_kernel(&mut it)?;
             map_trampoline(&mut it)?;
@@ -34,7 +34,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     })
     .expect("Failed to resolve executable path");
 
-    let (entry_vaddr, ustack_top) = load_user_app(&mut uspace, None, args, envs)
+    let (entry_vaddr, ustack_top) = load_app(&mut uspace, None, args, envs)
         .unwrap_or_else(|e| panic!("Failed to load user app: {}", e));
 
     let uctx = UspaceContext::new(entry_vaddr.into(), ustack_top, 2333);
@@ -42,13 +42,12 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     let mut task = new_user_task(&name, uctx, None);
     task.ctx_mut().set_page_table_root(uspace.page_table_root());
 
-    let process_data = ProcessData::new(
+    let process_data = XProcess::new(
         exe_path.clone(),
-        Arc::new(Mutex::new(uspace)),
+        XUserSpace::new(Arc::new(Mutex::new(uspace)), RwLock::new(VmaManager::new())),
         Arc::default(),
         Some(Signo::SIGCHLD),
         None,
-        RwLock::new(VmaManager::new()),
     );
 
     FD_TABLE
@@ -66,11 +65,11 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
 
     let thread = process
         .new_thread(tid)
-        .data(ThreadData::new(process.data().unwrap()))
+        .data(XThread::new(process.data().unwrap()))
         .build();
     add_thread_to_table(&thread);
 
-    task.init_task_ext(TaskExt::new(thread));
+    task.init_task_ext(XTaskExt::new(thread));
 
     let task = axtask::spawn_task(task);
 
