@@ -26,6 +26,8 @@
 extern crate axlog;
 extern crate alloc;
 
+/// Architecture-specific configurations
+pub mod config;
 /// Virtual filesystem implementations and operations
 pub mod fs;
 /// Memory management and address space operations

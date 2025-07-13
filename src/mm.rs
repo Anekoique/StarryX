@@ -29,13 +29,13 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         );
     };
 
-    if (axconfig::plat::USER_STACK_TOP - axconfig::plat::USER_STACK_SIZE
-        ..axconfig::plat::USER_STACK_TOP)
+    if (xcore::config::USER_STACK_TOP - xcore::config::USER_STACK_SIZE
+        ..xcore::config::USER_STACK_TOP)
         .contains(&vaddr.as_usize())
     {
         // Stack extension, check rlimit
         let rlimit = &xprocess.rlimits.read()[RLIMIT_STACK];
-        let size = axconfig::plat::USER_STACK_TOP - vaddr.as_usize();
+        let size = xcore::config::USER_STACK_TOP - vaddr.as_usize();
         if size as u64 > rlimit.current {
             debug!("Stack extension, check rlimit");
             send_sigsegv();

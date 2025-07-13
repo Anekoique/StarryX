@@ -67,7 +67,7 @@ pub fn sys_mmap(
 
         // Remove any existing VMA mappings in the range before unmapping
         let vaddr_range = VirtAddrRange::from_start_size(dst_addr, aligned_length);
-        xprocess.uspace().remove_overlapping_regions(vaddr_range);
+        xprocess.remove_overlapping_regions(vaddr_range);
         aspace.unmap(dst_addr, aligned_length)?;
         dst_addr
     } else {
@@ -110,7 +110,7 @@ pub fn sys_mmap(
         aspace.write(start_addr, &buf, page_size)?;
     } else if !map_flags.contains(MmapFlags::ANONYMOUS) {
         // Create and add VMA mapping region
-        xprocess.uspace().add_region(MmapRegion::new(
+        xprocess.add_region(MmapRegion::new(
             VirtAddrRange::from_start_size(start_addr, aligned_length),
             FileWrapper(File::from_fd(fd)?.clone_inner()),
             if offset < 0 { 0 } else { offset },
@@ -134,7 +134,7 @@ pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
 
         // Remove VMA mapping regions before unmapping
         let vaddr_range = VirtAddrRange::from_start_size(start_addr, length);
-        xprocess.uspace().remove_overlapping_regions(vaddr_range);
+        xprocess.remove_overlapping_regions(vaddr_range);
 
         // Re-acquire aspace lock for actual unmapping
         aspace.unmap(start_addr, length)?;

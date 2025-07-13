@@ -6,7 +6,6 @@ AX_TESTCASE ?= oscomp
 ARCH ?= x86_64
 LOG ?= off
 FEATURES ?= fp_simd,lwext4_rs
-EXTRA_CONFIG ?= $(PWD)/configs/$(ARCH).toml
 
 export NO_AXSTD := y
 export AX_LIB := axfeat
@@ -36,14 +35,14 @@ all: oscomp_build
 oscomp_build:
 	@echo "Building for OS Competition..."
 	@mkdir -p .cargo
-	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" configs/config.toml.temp > .cargo/config.toml
+	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/configs/config.toml.temp > .cargo/config.toml
 	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=riscv64 BUS=mmio
 	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=loongarch64
 
 oscomp_binary: defconfig
 	@echo "Building for $(ARCH) architecture..."
 	@if [ -d "$(PWD)/bin" ]; then cp -r $(PWD)/bin/* /root/.cargo/bin; fi
-	@$(MAKE) -C $(AX_ROOT) A=$(PWD) EXTRA_CONFIG=$(EXTRA_CONFIG) build
+	@$(MAKE) -C $(AX_ROOT) A=$(PWD) build
 	@if [ "$(ARCH)" = "riscv64" ]; then \
 		cp $$(basename $(PWD))_$(ARCH)-qemu-virt.bin kernel-rv; \
 	else \
@@ -97,7 +96,7 @@ clippy: defconfig
 		--target $(TARGET) --all-features -- -D warnings -A clippy::new_without_default
 
 defconfig build run justrun debug disasm:
-	@$(MAKE) -C $(AX_ROOT) A=$(PWD) EXTRA_CONFIG=$(EXTRA_CONFIG) $@
+	@$(MAKE) -C $(AX_ROOT) A=$(PWD) $@
 
 setup_disk_image:
 	@echo "Setting up disk image for $(ARCH)..."

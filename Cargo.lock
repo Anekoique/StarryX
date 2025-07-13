@@ -1969,6 +1969,7 @@ dependencies = [
  "axtask",
  "axuspace",
  "axvma",
+ "cfg-if",
  "crate_interface",
  "inherit-methods-macro",
  "kernel-elf-parser",

@@ -19,8 +19,8 @@ use xmas_elf::{ElfFile, program::SegmentData};
 
 pub fn new_aspace() -> AxResult<AddrSpace> {
     AddrSpace::new_empty(
-        VirtAddr::from_usize(axconfig::plat::USER_SPACE_BASE),
-        axconfig::plat::USER_SPACE_SIZE,
+        VirtAddr::from_usize(crate::config::USER_SPACE_BASE),
+        crate::config::USER_SPACE_SIZE,
     )
 }
 
@@ -33,7 +33,7 @@ pub fn copy_from_kernel(aspace: &mut AddrSpace) -> AxResult {
 
 pub fn map_trampoline(aspace: &mut AddrSpace) -> AxResult {
     aspace.map_linear(
-        axconfig::plat::SIGNAL_TRAMPOLINE.into(),
+        crate::config::SIGNAL_TRAMPOLINE.into(),
         virt_to_phys(axsignal::arch::signal_trampoline_address().into()),
         PAGE_SIZE_4K,
         MappingFlags::READ | MappingFlags::EXECUTE | MappingFlags::USER,
@@ -45,7 +45,7 @@ pub fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [Au
     let uspace_base = uspace.base().as_usize();
     let elf_parser = ELFParser::new(
         elf,
-        axconfig::plat::USER_INTERP_BASE,
+        crate::config::USER_INTERP_BASE,
         Some(uspace_base as isize),
         uspace_base,
     )
@@ -145,8 +145,8 @@ pub fn load_app(
     }
 
     let (entry, mut auxv) = map_elf(uspace, &elf)?;
-    let ustack_end = VirtAddr::from_usize(axconfig::plat::USER_STACK_TOP);
-    let ustack_size = axconfig::plat::USER_STACK_SIZE;
+    let ustack_end = VirtAddr::from_usize(crate::config::USER_STACK_TOP);
+    let ustack_size = crate::config::USER_STACK_SIZE;
     let ustack_start = ustack_end - ustack_size;
     debug!(
         "Mapping user stack: {:#x?} -> {:#x?}",
@@ -165,8 +165,8 @@ pub fn load_app(
     let user_sp = ustack_end - stack_data.len();
     uspace.write(user_sp, stack_data.as_slice(), PageSize::Size4K)?;
 
-    let heap_start = VirtAddr::from_usize(axconfig::plat::USER_HEAP_BASE);
-    let heap_size = axconfig::plat::USER_HEAP_SIZE;
+    let heap_start = VirtAddr::from_usize(crate::config::USER_HEAP_BASE);
+    let heap_size = crate::config::USER_HEAP_SIZE;
     uspace.map_alloc(
         heap_start,
         heap_size,

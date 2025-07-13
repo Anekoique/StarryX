@@ -25,8 +25,8 @@ impl XUserSpace {
     ) -> Self {
         Self {
             aspace,
-            heap_bottom: AtomicUsize::new(axconfig::plat::USER_HEAP_BASE),
-            heap_top: AtomicUsize::new(axconfig::plat::USER_HEAP_BASE),
+            heap_bottom: AtomicUsize::new(crate::config::USER_HEAP_BASE),
+            heap_top: AtomicUsize::new(crate::config::USER_HEAP_BASE),
             vma_manager,
         }
     }

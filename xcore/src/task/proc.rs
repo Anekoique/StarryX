@@ -21,11 +21,14 @@ use axsignal::{
 use axsync::Mutex;
 use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
 use axuspace::{UserPtr, UserSpaceAccess, nullable};
+use axvma::MmapRegion;
+use inherit_methods_macro::inherit_methods;
+use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
 use crate::{
-    mm::XUserSpace,
+    mm::{FileWrapper, XUserSpace},
     resources::Rlimits,
     task::{FutexTable, ProcessSignal, ThreadSignal, with_current},
     time::TimeStat,
@@ -58,7 +61,7 @@ pub fn new_user_task(
             })
         },
         name.into(),
-        axconfig::plat::KERNEL_STACK_SIZE,
+        crate::config::KERNEL_STACK_SIZE,
     )
 }
 
@@ -166,7 +169,7 @@ impl XProcess {
             exit_signal,
             signal: Arc::new(ProcessSignalManager::new(
                 signal_actions,
-                axconfig::plat::SIGNAL_TRAMPOLINE,
+                crate::config::SIGNAL_TRAMPOLINE,
             )),
             rlimits: RwLock::new(rlimits.unwrap_or_default()),
             futex_table: FutexTable::new(),
@@ -188,6 +191,21 @@ impl XProcess {
     pub fn uspace(&self) -> &XUserSpace {
         &self.uspace
     }
+}
+
+#[inherit_methods(from = "self.uspace")]
+impl XProcess {
+    pub fn get_heap_bottom(&self) -> usize;
+    pub fn set_heap_bottom(&self, bottom: usize);
+    pub fn get_heap_top(&self) -> usize;
+    pub fn set_heap_top(&self, top: usize);
+    pub fn add_region(&self, region: MmapRegion<FileWrapper>) -> LinuxResult<()>;
+    pub fn remove_overlapping_regions(
+        &self,
+        vaddr_range: VirtAddrRange,
+    ) -> Vec<MmapRegion<FileWrapper>>;
+    pub fn clear_regions(&self);
+    pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()>;
 }
 
 struct AxTaskExtImpl;
