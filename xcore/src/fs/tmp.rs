@@ -97,6 +97,7 @@ fn release_inode(fs: &MemoryFs, inode: &Arc<MemoryInode>, nlink: u64) {
     let mut metadata = inode.metadata.lock();
     metadata.nlink -= nlink;
     if metadata.nlink == 0 && Arc::strong_count(inode) == 2 {
+        debug!("release_inode: {:?}", inode.ino);
         inodes.remove(metadata.inode as usize - 1);
     }
 }

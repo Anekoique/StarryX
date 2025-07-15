@@ -4,7 +4,7 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{collections::BTreeSet, vec, vec::Vec};
+use alloc::{collections::BTreeSet, sync::Arc, vec, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 use page_table_multiarch::PageSize;
@@ -24,6 +24,13 @@ pub trait VmFile: Send + Sync + Clone {
         Ok(self.len()? == 0)
     }
 }
+
+type VmRegion<F> = Arc<MmapRegion<F>>;
+type SplitResult<F> = (
+    Option<VmRegion<F>>,
+    Option<VmRegion<F>>,
+    Option<VmRegion<F>>,
+);
 
 /// Represents a memory-mapped region with file backing
 pub struct MmapRegion<F: VmFile> {
@@ -63,10 +70,7 @@ impl<F: VmFile> MmapRegion<F> {
 
     /// Split this region at the given range, returning up to three segments
     /// Returns (before_segment, overlap_segment, after_segment)
-    pub fn split_at_range(
-        &self,
-        range: &VirtAddrRange,
-    ) -> (Option<Self>, Option<Self>, Option<Self>) {
+    pub fn split_at_range(&self, range: &VirtAddrRange) -> SplitResult<F> {
         if !self.overlaps(range) {
             return (None, None, None);
         }
@@ -76,20 +80,20 @@ impl<F: VmFile> MmapRegion<F> {
         let populated_pages = self.populated.lock().clone();
 
         // Helper to create a segment with the given range
-        let create_segment = |segment_range: VirtAddrRange| -> Self {
+        let create_segment = |segment_range: VirtAddrRange| -> Arc<Self> {
             let populated = populated_pages
                 .iter()
                 .filter(|&page| segment_range.contains(*page))
                 .cloned()
                 .collect();
 
-            Self {
+            Arc::new(Self {
                 range: segment_range,
                 file: self.file.clone(),
                 offset: self.offset + (segment_range.start - self_range.start) as isize,
                 populated: Mutex::new(populated),
                 align: self.align,
-            }
+            })
         };
 
         // Create segment before the split range
@@ -126,7 +130,7 @@ impl<F: VmFile> MmapRegion<F> {
     pub fn get_buf(&self, vaddr: VirtAddr) -> LinuxResult<Vec<u8>> {
         let page_addr = vaddr.align_down(self.align);
         if self.populated.lock().contains(&page_addr) {
-            return Err(LinuxError::EFAULT);
+            return Err(LinuxError::EEXIST);
         }
 
         let page_offset = page_addr - self.range.start;
@@ -160,7 +164,7 @@ impl<F: VmFile> Clone for MmapRegion<F> {
 #[derive(Clone)]
 pub struct VmaManager<F: VmFile> {
     /// Collection of memory-mapped regions
-    regions: Vec<MmapRegion<F>>,
+    regions: Vec<VmRegion<F>>,
 }
 
 impl<F: VmFile> Default for VmaManager<F> {
@@ -184,18 +188,18 @@ impl<F: VmFile> VmaManager<F> {
 
     /// Add a new memory-mapped region to the manager
     pub fn add_region(&mut self, region: MmapRegion<F>) -> LinuxResult<()> {
-        self.regions.push(region);
+        self.regions.push(Arc::new(region));
         Ok(())
     }
 
     /// Find the region containing the given virtual address
-    pub fn find_region(&self, vaddr: VirtAddr) -> Option<&MmapRegion<F>> {
+    pub fn find_region(&self, vaddr: VirtAddr) -> Option<&VmRegion<F>> {
         self.regions.iter().find(|r| r.contains(vaddr))
     }
 
     /// Remove all regions that overlap with the given address range
     /// Splits overlapping regions and retains non-overlapping parts
-    pub fn remove_overlapped(&mut self, vaddr_range: VirtAddrRange) -> Vec<MmapRegion<F>> {
+    pub fn remove_overlapped(&mut self, vaddr_range: VirtAddrRange) -> Vec<VmRegion<F>> {
         let mut removed = Vec::new();
         let mut retained = Vec::new();
 

@@ -14,6 +14,7 @@ mod utils;
 
 pub use self::aspace::AddrSpace;
 pub use self::backend::{Backend, shared::SharedPages};
+pub use self::frame::{alloc_frame, dealloc_frame};
 pub use self::utils::*;
 
 use axerrno::{AxError, AxResult};

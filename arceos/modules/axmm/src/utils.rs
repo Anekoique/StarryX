@@ -113,7 +113,7 @@ impl FrameGuard {
 impl Drop for FrameGuard {
     fn drop(&mut self) {
         for frame in self.frames.drain(..) {
-            crate::backend::alloc::dealloc_frame(frame, self.align);
+            crate::frame::dealloc_frame(frame, self.align);
         }
     }
 }

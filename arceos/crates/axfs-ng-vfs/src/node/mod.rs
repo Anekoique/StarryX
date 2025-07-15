@@ -317,4 +317,12 @@ impl<M: RawMutex> DirEntry<M> {
         file.read_at(&mut buf, 0)?;
         String::from_utf8(buf).map_err(|_| VfsError::EINVAL)
     }
+
+    /// Get the file node
+    pub fn get_file_node(&self) -> Arc<dyn FileNodeOps<M>> {
+        match &self.0.node {
+            Node::File(file) => file.inner().clone(),
+            _ => panic!("not a file node"),
+        }
+    }
 }

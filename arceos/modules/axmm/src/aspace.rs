@@ -8,10 +8,7 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange, is_aligned};
 use memory_set::{MemoryArea, MemorySet};
 
 #[cfg(feature = "cow")]
-use crate::{
-    backend::alloc::{alloc_frame, dealloc_frame},
-    frame::frame_table,
-};
+use crate::frame::{alloc_frame, dealloc_frame, frame_table};
 use crate::{
     backend::{Backend, shared::SharedPages},
     mapping_err_to_ax_err,

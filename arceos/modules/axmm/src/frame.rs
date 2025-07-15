@@ -13,8 +13,12 @@ use core::{
 };
 
 use alloc::boxed::Box;
+use axalloc::global_allocator;
+use axhal::mem::{phys_to_virt, virt_to_phys};
 use lazy_static::lazy_static;
-use memory_addr::PhysAddr;
+use memory_addr::{PhysAddr, VirtAddr};
+
+use crate::utils::{PAGE_SIZE_4K, PageSize};
 
 const FRAME_SHIFT: usize = 12;
 pub const MAX_FRAME_NUM: usize = axconfig::plat::PHYS_MEMORY_SIZE >> FRAME_SHIFT;
@@ -81,4 +85,28 @@ impl FrameRefTable {
     pub fn ref_count(&self, paddr: PhysAddr) -> usize {
         self.info(paddr).ref_count.load(Ordering::SeqCst)
     }
+}
+
+pub fn alloc_frame(zeroed: bool, align: PageSize) -> Option<PhysAddr> {
+    let page_size: usize = align.into();
+    let num_pages = page_size / PAGE_SIZE_4K;
+    let vaddr = VirtAddr::from(global_allocator().alloc_pages(num_pages, page_size).ok()?);
+    if zeroed {
+        unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, page_size) };
+    }
+    let paddr = virt_to_phys(vaddr);
+    #[cfg(feature = "cow")]
+    frame_table().inc_ref(paddr);
+    Some(paddr)
+}
+
+pub fn dealloc_frame(frame: PhysAddr, align: PageSize) {
+    #[cfg(feature = "cow")]
+    if frame_table().dec_ref(frame) > 1 {
+        return;
+    }
+    let page_size: usize = align.into();
+    let num_pages = page_size / PAGE_SIZE_4K;
+    let vaddr = phys_to_virt(frame);
+    global_allocator().dealloc_pages(vaddr.as_usize(), num_pages);
 }

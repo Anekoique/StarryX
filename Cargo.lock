@@ -31,6 +31,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
 name = "anstream"
 version = "0.6.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -868,6 +874,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "foldhash"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
 name = "glob"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -893,6 +905,11 @@ name = "hashbrown"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash",
+]
 
 [[package]]
 name = "heapless"
@@ -1081,6 +1098,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86ea4e65087ff52f3862caff188d489f1fab49a0cb09e01b2e3f1a617b10aaed"
+dependencies = [
+ "hashbrown",
+]
+
+[[package]]
 name = "lwext4_rust"
 version = "0.2.0"
 source = "git+https://github.com/Mivik/lwext4_rust?rev=ebd38f6#ebd38f6f8f9f098ab84081ec0f4a8cc25adcdb0c"
@@ -1180,6 +1206,18 @@ name = "once_cell_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
+
+[[package]]
+name = "page_cache"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "axhal",
+ "log",
+ "lru",
+ "memory_addr",
+ "spin 0.9.8",
+]
 
 [[package]]
 name = "page_table_entry"
@@ -1515,6 +1553,7 @@ dependencies = [
  "inherit-methods-macro",
  "linkme",
  "linux-raw-sys",
+ "page_cache",
  "shlex",
  "spin 0.9.8",
  "syscalls",
@@ -1973,10 +2012,12 @@ dependencies = [
  "crate_interface",
  "inherit-methods-macro",
  "kernel-elf-parser",
+ "lazy_static",
  "linkme",
  "linux-raw-sys",
  "memory_addr",
  "numeric-enum-macro",
+ "page_cache",
  "page_table_multiarch",
  "percpu",
  "rand",

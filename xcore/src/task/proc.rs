@@ -67,6 +67,7 @@ pub fn new_user_task(
 
 axtask::def_task_ext!(XTaskExt);
 
+#[repr(transparent)]
 pub struct XTaskExt(Arc<Thread>);
 
 impl XTaskExt {
@@ -203,7 +204,7 @@ impl XProcess {
     pub fn remove_overlapping_regions(
         &self,
         vaddr_range: VirtAddrRange,
-    ) -> Vec<MmapRegion<FileWrapper>>;
+    ) -> Vec<Arc<MmapRegion<FileWrapper>>>;
     pub fn clear_regions(&self);
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()>;
 }

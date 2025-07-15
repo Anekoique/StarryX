@@ -1,6 +1,7 @@
 use core::fmt;
 
-use axfs_ng_vfs::{FileNode, Location, Metadata, VfsError, VfsResult};
+use alloc::sync::Arc;
+use axfs_ng_vfs::{FileNode, FileNodeOps, Location, Metadata, VfsError, VfsResult};
 use axio::SeekFrom;
 use lock_api::RawMutex;
 
@@ -54,6 +55,7 @@ pub struct OpenOptions {
     create: bool,
     create_new: bool,
     directory: bool,
+    direct: bool,
     pub cloexec: bool,
     user: Option<(u32, u32)>,
     // system-specific
@@ -74,6 +76,7 @@ impl OpenOptions {
             create_new: false,
             directory: false,
             cloexec: false,
+            direct: false,
             user: None,
             // system-specific
             custom_flags: 0,
@@ -126,6 +129,12 @@ impl OpenOptions {
     /// Sets the option to open directory instead.
     pub fn directory(&mut self, directory: bool) -> &mut Self {
         self.directory = directory;
+        self
+    }
+
+    /// Sets the option to use direct I/O.
+    pub fn direct(&mut self, direct: bool) -> &mut Self {
+        self.direct = direct;
         self
     }
 
@@ -252,6 +261,7 @@ impl fmt::Debug for OpenOptions {
             create,
             create_new,
             directory,
+            direct,
             cloexec,
             user,
             custom_flags,
@@ -266,6 +276,7 @@ impl fmt::Debug for OpenOptions {
             .field("create", create)
             .field("create_new", create_new)
             .field("directory", directory)
+            .field("direct", direct)
             .field("cloexec", cloexec)
             .field("user", user)
             .field("custom_flags", custom_flags)
@@ -279,7 +290,7 @@ pub struct FsFile<M> {
     inner: Location<M>,
     pub(crate) flags: FileFlags,
 
-    position: u64,
+    pub position: u64,
 }
 impl<M: RawMutex> FsFile<M> {
     pub(crate) fn new(inner: Location<M>, flags: FileFlags) -> Self {
@@ -314,6 +325,15 @@ impl<M: RawMutex> FsFile<M> {
         self.access(FileFlags::READ)?.len()
     }
 
+    /// Get the file inode number.
+    pub fn inode(&self) -> VfsResult<u64> {
+        Ok(self.access(FileFlags::READ)?.inode())
+    }
+
+    pub fn get_file_node(&self) -> Arc<dyn FileNodeOps<M>> {
+        self.inner.get_file_node()
+    }
+
     /// Truncates or extends the underlying file, updating the size of this file to become `size`.
     pub fn set_len(&self, size: u64) -> VfsResult<()> {
         self.access(FileFlags::WRITE)?.set_len(size)
@@ -333,6 +353,11 @@ impl<M: RawMutex> FsFile<M> {
     /// Writes a number of bytes starting from a given offset.
     pub fn write_at(&mut self, buf: &[u8], offset: u64) -> VfsResult<usize> {
         self.access(FileFlags::WRITE)?.write_at(buf, offset)
+    }
+
+    /// Get the current position of the file.
+    pub fn set_position(&mut self, position: u64) {
+        self.position = position;
     }
 }
 

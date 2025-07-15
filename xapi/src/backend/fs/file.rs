@@ -6,6 +6,7 @@ use axfs_ng_vfs::{DeviceId, Location, Metadata};
 use axhal::time::TimeValue;
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
+use xcore::mm::PAGE_CACHE_MANAGER;
 
 use super::{add_file_like, get_file_like};
 use crate::ctypes::{stat, statx, statx_timestamp};
@@ -71,7 +72,15 @@ impl File {
 
 impl FileLike for File {
     fn read(&self, buf: &mut [u8]) -> LinuxResult<usize> {
-        Ok(self.inner().read(buf)?)
+        let mut inner = self.inner();
+        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?) {
+            let position = inner.position;
+            cache
+                .read_at(buf, position)
+                .inspect(|n| inner.set_position(position + *n as u64))
+        } else {
+            Ok(inner.read(buf)?)
+        }
     }
 
     fn write(&self, buf: &[u8]) -> LinuxResult<usize> {

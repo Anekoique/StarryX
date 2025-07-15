@@ -13,8 +13,8 @@ use inherit_methods_macro::inherit_methods;
 use lock_api::{Mutex, RawMutex};
 
 use crate::{
-    DirEntry, DirEntrySink, Filesystem, FilesystemOps, Metadata, MetadataUpdate, NodePermission,
-    NodeType, ReferenceKey, VfsError, VfsResult,
+    DirEntry, DirEntrySink, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate,
+    NodePermission, NodeType, ReferenceKey, VfsError, VfsResult,
     path::{DOT, DOTDOT, PathBuf},
 };
 
@@ -137,6 +137,11 @@ impl<M: RawMutex> Location<M> {
     /// Returns whether the location is empty (has zero length).
     pub fn is_empty(&self) -> VfsResult<bool> {
         self.len().map(|len| len == 0)
+    }
+
+    /// Get the file node
+    pub fn get_file_node(&self) -> Arc<dyn FileNodeOps<M>> {
+        self.entry.get_file_node()
     }
 }
 

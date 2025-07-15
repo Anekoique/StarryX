@@ -1,10 +1,15 @@
 use core::ops::Deref;
 
 use alloc::{sync::Arc, vec::Vec};
-use axhal::paging::{MappingFlags, PageTable};
+use axhal::{
+    mem::virt_to_phys,
+    paging::{MappingFlags, PageTable},
+};
 use memory_addr::{PhysAddr, VirtAddr};
 
 use super::Backend;
+#[cfg(feature = "cow")]
+use crate::frame::frame_table;
 use crate::utils::{PageIterWrapper, PageSize};
 
 pub struct SharedPages {
@@ -23,7 +28,7 @@ impl Deref for SharedPages {
 impl Drop for SharedPages {
     fn drop(&mut self) {
         for frame in &self.phys_pages {
-            super::alloc::dealloc_frame(*frame, self.align);
+            crate::frame::dealloc_frame(*frame, self.align);
         }
     }
 }
@@ -39,11 +44,15 @@ impl Backend {
         let pages = if let Some(source) = source {
             assert_eq!(source.align, align);
             assert_eq!(source.len(), size / align as usize);
+            #[cfg(feature = "cow")]
+            for addr in PageIterWrapper::new(start, start + size, align).unwrap() {
+                frame_table().inc_ref(virt_to_phys(addr));
+            }
             source
         } else {
             Arc::new(SharedPages {
                 phys_pages: PageIterWrapper::new(start, start + size, align)?
-                    .map(|_| super::alloc::alloc_frame(true, align).unwrap())
+                    .map(|_| crate::frame::alloc_frame(true, align).unwrap())
                     .collect(),
                 align,
             })
@@ -83,12 +92,9 @@ impl Backend {
         );
         for i in 0..pages.len() {
             let addr = start + i * pages.align as usize;
-            if let Ok((_, page_size, tlb)) = pt.unmap(addr) {
+            if let Ok((_, _, tlb)) = pt.unmap(addr) {
                 // Deallocate the physical frame if there is a mapping in the
                 // page table.
-                if page_size.is_huge() {
-                    return false;
-                }
                 tlb.flush();
             } else {
                 // Deallocation is needn't if the page is not mapped.

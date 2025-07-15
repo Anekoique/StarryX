@@ -33,7 +33,7 @@ ln -v -s /lib /usr/lib64
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
-# /glibc/runtest.exe -w entry-dynamic.exe syscall_sign_extend
+# /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh

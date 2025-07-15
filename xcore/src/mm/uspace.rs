@@ -1,14 +1,18 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng_vfs::FileNodeOps;
 use axmm::{AddrSpace, PageIter4K};
 use axsync::{Mutex, RawMutex};
-
 use axuspace::UserSpaceAccess;
 use axvma::{MmapRegion, VmFile, VmaManager};
-use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
-use page_table_multiarch::MappingFlags;
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
+use page_cache::{InodeOps, PageOps};
+use page_table_multiarch::{MappingFlags, PageSize};
 use spin::RwLock;
 
 pub struct XUserSpace {
@@ -54,7 +58,7 @@ impl XUserSpace {
     pub fn remove_overlapping_regions(
         &self,
         vaddr_range: VirtAddrRange,
-    ) -> Vec<MmapRegion<FileWrapper>> {
+    ) -> Vec<Arc<MmapRegion<FileWrapper>>> {
         self.vma_manager.write().remove_overlapped(vaddr_range)
     }
 
@@ -113,6 +117,30 @@ impl UserSpaceAccess for &XUserSpace {
     }
 }
 
+impl PageOps for XUserSpace {
+    fn alloc_page() -> Option<PhysAddr> {
+        axmm::alloc_frame(true, PageSize::Size4K)
+    }
+
+    fn dealloc_page(addr: PhysAddr) {
+        axmm::dealloc_frame(addr, PageSize::Size4K)
+    }
+
+    fn read_page(addr: VirtAddr, buf: &mut [u8]) -> LinuxResult {
+        unsafe {
+            core::ptr::copy_nonoverlapping(addr.as_ptr(), buf.as_mut_ptr(), buf.len());
+        }
+        Ok(())
+    }
+
+    fn write_page(addr: VirtAddr, buf: &[u8]) -> LinuxResult {
+        unsafe {
+            core::ptr::copy_nonoverlapping(buf.as_ptr(), addr.as_mut_ptr(), buf.len());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 pub struct FileWrapper(pub Arc<Mutex<axfs_ng::FsFile<RawMutex>>>);
 impl VmFile for FileWrapper {
@@ -122,5 +150,27 @@ impl VmFile for FileWrapper {
 
     fn len(&self) -> LinuxResult<u64> {
         self.0.lock().len()
+    }
+}
+
+pub struct InodeWrapper(pub Mutex<Weak<dyn FileNodeOps<RawMutex>>>);
+impl InodeOps for InodeWrapper {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
+        self.0.lock().upgrade().unwrap().read_at(buf, offset)
+    }
+    fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
+        self.0.lock().upgrade().unwrap().write_at(buf, offset)
+    }
+    fn len(&self) -> LinuxResult<u64> {
+        self.0.lock().upgrade().unwrap().len()
+    }
+}
+impl InodeWrapper {
+    pub fn inode(&self) -> u64 {
+        self.0.lock().upgrade().unwrap().inode()
+    }
+
+    pub fn is_stale(&self) -> bool {
+        self.0.lock().upgrade().is_none()
     }
 }

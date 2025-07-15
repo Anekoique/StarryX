@@ -3,11 +3,16 @@ use core::{
     panic,
 };
 
+use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::OpenResult;
-use axsync::RawMutex;
+use axsync::{Mutex, RawMutex};
 use axuspace::{UserConstPtr, UserSpaceAccess};
-use xcore::task::with_uspace;
+use xcore::{
+    fs::is_virtual_fs,
+    mm::{InodeWrapper, PAGE_CACHE_MANAGER},
+    task::with_uspace,
+};
 
 use crate::{
     ctypes::{
@@ -20,9 +25,16 @@ use crate::{
     sys_getegid, sys_geteuid,
 };
 
-fn add_to_fd(result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
+fn add_to_fd(path: &str, result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
     match result {
-        OpenResult::File(file) => File::new(file).add_to_fd_table(cloexec),
+        OpenResult::File(file) => {
+            if !is_virtual_fs(path) {
+                PAGE_CACHE_MANAGER.get_or_create(InodeWrapper(Mutex::new(Arc::downgrade(
+                    &file.get_file_node(),
+                ))));
+            }
+            File::new(file).add_to_fd_table(cloexec)
+        }
         OpenResult::Dir(dir) => Directory::new(dir).add_to_fd_table(cloexec),
     }
 }
@@ -46,9 +58,10 @@ pub fn sys_openat(
         dirfd, path, flags, mode
     );
 
+    PAGE_CACHE_MANAGER.clear_stale_cache();
     let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
     with_fs(dirfd, path, |fs| fs.open(&options, path))
-        .and_then(|result| add_to_fd(result, options.cloexec))
+        .and_then(|result| add_to_fd(path, result, options.cloexec))
         .map(|fd| fd as isize)
 }
 
