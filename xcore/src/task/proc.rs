@@ -204,7 +204,7 @@ impl XProcess {
     pub fn remove_overlapping_regions(
         &self,
         vaddr_range: VirtAddrRange,
-    ) -> Vec<Arc<MmapRegion<FileWrapper>>>;
+    ) -> Vec<MmapRegion<FileWrapper>>;
     pub fn clear_regions(&self);
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()>;
 }

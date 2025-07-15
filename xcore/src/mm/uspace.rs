@@ -58,7 +58,7 @@ impl XUserSpace {
     pub fn remove_overlapping_regions(
         &self,
         vaddr_range: VirtAddrRange,
-    ) -> Vec<Arc<MmapRegion<FileWrapper>>> {
+    ) -> Vec<MmapRegion<FileWrapper>> {
         self.vma_manager.write().remove_overlapped(vaddr_range)
     }
 
