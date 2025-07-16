@@ -445,7 +445,7 @@ impl TaskContext {
     }
 }
 
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn context_switch(_current_stack: &mut u64, _next_stack: &u64) {
     unsafe {
         naked_asm!(
