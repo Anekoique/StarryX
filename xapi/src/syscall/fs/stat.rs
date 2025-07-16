@@ -5,7 +5,7 @@ use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{Location, NodePermission};
 use axsync::RawMutex;
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::task::with_uspace;
+use xcore::{mm::PAGE_CACHE_MANAGER, task::with_uspace};
 
 use crate::{
     ctypes::{
@@ -66,6 +66,9 @@ pub fn sys_fstatat(
         uspace.write(
             statbuf,
             with_location(dirfd, path, flags, |location| {
+                if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(location.inode()) {
+                    cache.sync()?;
+                }
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))
@@ -109,6 +112,9 @@ pub fn sys_statx(
         uspace.write(
             statxbuf,
             with_location(dirfd, path, flags, |location| {
+                if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(location.inode()) {
+                    cache.sync()?;
+                }
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))

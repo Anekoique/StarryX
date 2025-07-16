@@ -57,15 +57,14 @@ cd /musl
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
-# ./libcbench_testcode.sh
+./libcbench_testcode.sh
 # ./iperf_testcode.sh
 
 cd /glibc
-# ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
-./iozone_testcode.sh
+# ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./cyclictest_testcode.sh

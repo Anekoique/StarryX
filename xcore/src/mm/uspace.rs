@@ -161,6 +161,9 @@ impl InodeOps for InodeWrapper {
     fn len(&self) -> LinuxResult<u64> {
         self.0.lock().len()
     }
+    fn set_len(&self, len: u64) -> LinuxResult {
+        self.0.lock().set_len(len)
+    }
 }
 impl InodeWrapper {
     pub fn inode(&self) -> u64 {

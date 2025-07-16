@@ -13,7 +13,7 @@ family = "loongarch64-qemu-virt"
 # Base address of the whole physical memory.
 phys-memory-base = 0x8000_0000        # uint
 # Size of the whole physical memory. (2G)
-phys-memory-size = 0x8000_0000         # uint
+phys-memory-size = 0x4000_0000         # uint
 # Base physical address of the kernel image.
 kernel-base-paddr = 0x8000_0000       # uint
 
