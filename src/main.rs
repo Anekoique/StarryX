@@ -12,6 +12,7 @@ use alloc::{format, string::ToString};
 mod entry;
 mod mm;
 mod syscall;
+mod gui;
 
 const LOGO: &str = r#"
  .d8888b.  888                                      Y88b   d88P
@@ -33,6 +34,23 @@ fn main() {
     // Create a init process
     axprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
     xcore::fs::init_root().expect("Failed to mount vfs");
+
+    info!("=== StarryX Graphics System Starting ===");
+    info!("Initializing graphics display...");
+    
+    // 等待显示系统完全初始化
+    axtask::yield_now();
+    
+    // 直接启动图形演示
+    info!("Starting graphics framebuffer test...");
+    
+    gui::test_framebuffer_drawing();
+    
+    // 这里不应该到达，但如果到达了，进入无限循环
+    info!("Graphics demo ended unexpectedly, entering infinite loop...");
+    loop {
+        axtask::yield_now();
+    }
 
     if option_env!("AX_TESTCASE") == Some("oscomp") {
         let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];
@@ -63,4 +81,6 @@ fn main() {
             info!("User task {:?} exited with code: {:?}", args, exit_code);
         }
     }
+
+    
 }

@@ -5,7 +5,7 @@ AX_ROOT ?= $(PWD)/arceos
 AX_TESTCASE ?= oscomp
 ARCH ?= x86_64
 LOG ?= off
-FEATURES ?= fp_simd,lwext4_rs
+FEATURES ?= fp_simd,lwext4_rs,display
 
 export NO_AXSTD := y
 export AX_LIB := axfeat

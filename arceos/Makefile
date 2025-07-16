@@ -52,7 +52,7 @@ APP_FEATURES ?=
 # QEMU options
 BLK ?= n
 NET ?= n
-GRAPHIC ?= n
+GRAPHIC ?= y
 BUS ?= pci
 MEM ?= 1G
 ACCEL ?=

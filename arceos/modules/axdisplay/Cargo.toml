@@ -15,3 +15,12 @@ lazyinit = "0.2"
 axdriver = { workspace = true, features = ["display"] }
 axsync = { workspace = true }
 axdriver_display = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2" }
+
+# 可选的embedded-graphics支持
+embedded-graphics = { version = "0.8", default-features = false, optional = true }
+micromath = { version = "2.1", default-features = false, optional = true }
+
+[features]
+default = []
+# 启用embedded-graphics集成
+embedded-graphics = ["dep:embedded-graphics", "dep:micromath"]
