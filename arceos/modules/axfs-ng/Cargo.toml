@@ -31,8 +31,8 @@ cfg-if = "1.0.0"
 slab = { version = "0.4.9", default-features = false }
 
 [dependencies.lwext4_rust]
-git = "https://github.com/Mivik/lwext4_rust"
-rev = "ebd38f6"
+git = "https://github.com/Anekoique/lwext4_rust"
+rev = "0643200"
 default-features = false
 optional = true
 

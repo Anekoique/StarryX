@@ -115,9 +115,11 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
 
     pub fn load_page(&self, index: u64) -> LinuxResult<CachePage> {
         if let Some(page) = self.get_page(index) {
+            debug!("Cache hit: index={}", index);
             return Ok(page);
         }
 
+        debug!("Cache miss: index={}", index);
         let mut page = CachePage::new(P::alloc_page().ok_or(LinuxError::ENOMEM)?);
         let mut buf = [0u8; PAGE_SIZE_4K];
         let offset = index << PAGE_SHIFT;
@@ -153,7 +155,6 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
             let copy_size = (read_len - buf_offset).min(remain);
 
             let page = self.load_page(page_idx)?;
-
             let mut temp_buf = [0u8; PAGE_SIZE_4K];
             P::read_page(phys_to_virt(page.addr), &mut temp_buf)?;
 
@@ -168,6 +169,7 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     }
 
     pub fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
+        debug!("Cache write: offset={}, len={}", offset, buf.len());
         let mut current_offset = offset;
         let mut buf_offset = 0;
 
@@ -207,6 +209,7 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
         let mut buf = [0u8; PAGE_SIZE_4K];
         P::read_page(phys_to_virt(page.addr), &mut buf)?;
         let offset = index << PAGE_SHIFT;
+        debug!("write_back_page: offset={}, len={}", offset, buf.len());
         self.host.write_at(&buf, offset)?;
         page.mark_up_to_date();
         Ok(())

@@ -64,6 +64,5 @@ impl PageCacheManager {
             }
         }
         drop(caches);
-        debug!("clear stale cache done");
     }
 }

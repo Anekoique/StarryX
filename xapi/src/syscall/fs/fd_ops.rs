@@ -3,7 +3,6 @@ use core::{
     panic,
 };
 
-use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::OpenResult;
 use axsync::{Mutex, RawMutex};
@@ -17,7 +16,7 @@ use xcore::{
 use crate::{
     ctypes::{
         __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
-        FD_CLOEXEC, O_NONBLOCK, fs::flags_to_options,
+        FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, fs::flags_to_options,
     },
     fs::{
         Directory, FD_TABLE, File, FileLike, add_file_like, close_file_like, get_file_like, with_fs,
@@ -29,9 +28,7 @@ fn add_to_fd(path: &str, result: OpenResult<RawMutex>, cloexec: bool) -> LinuxRe
     match result {
         OpenResult::File(file) => {
             if !is_virtual_fs(path) {
-                PAGE_CACHE_MANAGER.get_or_create(InodeWrapper(Mutex::new(Arc::downgrade(
-                    &file.get_file_node(),
-                ))));
+                PAGE_CACHE_MANAGER.get_or_create(InodeWrapper(Mutex::new(file.get_file_node())));
             }
             File::new(file).add_to_fd_table(cloexec)
         }
@@ -61,7 +58,7 @@ pub fn sys_openat(
     PAGE_CACHE_MANAGER.clear_stale_cache();
     let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
     with_fs(dirfd, path, |fs| fs.open(&options, path))
-        .and_then(|result| add_to_fd(path, result, options.cloexec))
+        .and_then(|result| add_to_fd(path, result, flags as u32 & O_CLOEXEC != 0))
         .map(|fd| fd as isize)
 }
 

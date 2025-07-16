@@ -1,5 +1,6 @@
 #![no_std]
 #![allow(missing_docs)]
+#![feature(let_chains)]
 
 #[macro_use]
 extern crate axlog;

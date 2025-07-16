@@ -1,9 +1,6 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use alloc::{
-    sync::{Arc, Weak},
-    vec::Vec,
-};
+use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng_vfs::FileNodeOps;
 use axmm::{AddrSpace, PageIter4K};
@@ -153,24 +150,24 @@ impl VmFile for FileWrapper {
     }
 }
 
-pub struct InodeWrapper(pub Mutex<Weak<dyn FileNodeOps<RawMutex>>>);
+pub struct InodeWrapper(pub Mutex<Arc<dyn FileNodeOps<RawMutex>>>);
 impl InodeOps for InodeWrapper {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
-        self.0.lock().upgrade().unwrap().read_at(buf, offset)
+        self.0.lock().read_at(buf, offset)
     }
     fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
-        self.0.lock().upgrade().unwrap().write_at(buf, offset)
+        self.0.lock().write_at(buf, offset)
     }
     fn len(&self) -> LinuxResult<u64> {
-        self.0.lock().upgrade().unwrap().len()
+        self.0.lock().len()
     }
 }
 impl InodeWrapper {
     pub fn inode(&self) -> u64 {
-        self.0.lock().upgrade().unwrap().inode()
+        self.0.lock().inode()
     }
 
     pub fn is_stale(&self) -> bool {
-        self.0.lock().upgrade().is_none()
+        Arc::strong_count(&*self.0.lock()) == 1
     }
 }

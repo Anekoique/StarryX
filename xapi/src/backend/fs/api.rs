@@ -1,7 +1,8 @@
 use core::ffi::c_int;
 
+use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, FsContext, FsFile};
+use axfs_ng::{FS_CONTEXT, FsContext};
 use axfs_ng_vfs::Location;
 use axsync::RawMutex;
 
@@ -24,10 +25,9 @@ pub fn with_fs<R>(
 
 pub fn with_file<R>(
     dirfd: c_int,
-    f: impl FnOnce(&mut FsFile<RawMutex>) -> LinuxResult<R>,
+    f: impl FnOnce(&mut Arc<File>) -> LinuxResult<R>,
 ) -> LinuxResult<R> {
-    let sys_file = File::from_fd(dirfd)?;
-    f(&mut sys_file.inner())
+    f(&mut File::from_fd(dirfd)?)
 }
 
 pub fn with_location<R>(

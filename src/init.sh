@@ -1,3 +1,18 @@
+# ./busybox mkdir -v /bin
+# ./busybox ln -v -s /musl/busybox /bin/busybox
+# cd /bin
+# export PATH=/bin
+# busybox ln -v -s busybox ln
+# busybox ln -v -s busybox cp
+# busybox ln -v -s busybox stat
+# busybox ln -v -s busybox mkdir
+# mkdir -v /lib
+# cp -v /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib
+# 
+# stat /lib/ld-linux-riscv64-lp64d.so.1
+# stat /glibc/lib/ld-linux-riscv64-lp64d.so.1
+
+
 ./busybox mkdir -v /bin
 ./busybox ln -v -s /musl/busybox /bin/busybox
 cd /bin
@@ -14,6 +29,7 @@ ln -v -s busybox env
 ln -v -s busybox mkdir
 ln -v -s busybox sleep
 ln -v -s busybox basename
+ln -v -s busybox stat
 
 mkdir -v /lib
 mkdir -v /etc
@@ -33,7 +49,7 @@ ln -v -s /lib /usr/lib64
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
-./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
+# ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
@@ -45,10 +61,11 @@ cd /musl
 # ./iperf_testcode.sh
 
 cd /glibc
+# ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
-# ./iozone_testcode.sh
+./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./cyclictest_testcode.sh

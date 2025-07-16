@@ -7,11 +7,12 @@ use lock_api::RawMutex;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy)]
-    pub struct FileFlags: u8 {
+    pub struct FileFlags: u32 {
         const READ = 1;
         const WRITE = 2;
         const EXECUTE = 4;
         const APPEND = 8;
+        const DIRECT = 16;
     }
 }
 
@@ -56,7 +57,6 @@ pub struct OpenOptions {
     create_new: bool,
     directory: bool,
     direct: bool,
-    pub cloexec: bool,
     user: Option<(u32, u32)>,
     // system-specific
     custom_flags: i32,
@@ -75,7 +75,6 @@ impl OpenOptions {
             create: false,
             create_new: false,
             directory: false,
-            cloexec: false,
             direct: false,
             user: None,
             // system-specific
@@ -135,12 +134,6 @@ impl OpenOptions {
     /// Sets the option to use direct I/O.
     pub fn direct(&mut self, direct: bool) -> &mut Self {
         self.direct = direct;
-        self
-    }
-
-    /// Sets the option to close the file on exec.
-    pub fn cloexec(&mut self, cloexec: bool) -> &mut Self {
-        self.cloexec = cloexec;
         self
     }
 
@@ -220,14 +213,30 @@ impl OpenOptions {
     }
 
     pub(crate) fn to_flags(&self) -> VfsResult<FileFlags> {
-        Ok(match (self.read, self.write, self.append) {
-            (true, false, false) => FileFlags::READ,
-            (false, true, false) => FileFlags::WRITE,
-            (true, true, false) => FileFlags::READ | FileFlags::WRITE,
-            (false, _, true) => FileFlags::WRITE | FileFlags::APPEND,
-            (true, _, true) => FileFlags::READ | FileFlags::WRITE | FileFlags::APPEND,
-            (false, false, false) => return Err(VfsError::EINVAL),
-        })
+        if self.append && !self.write {
+            return Err(VfsError::EINVAL);
+        }
+
+        let mut flags = FileFlags::empty();
+
+        if self.read {
+            flags |= FileFlags::READ;
+        }
+        if self.write {
+            flags |= FileFlags::WRITE;
+        }
+        if self.append {
+            flags |= FileFlags::APPEND;
+        }
+        if self.direct {
+            flags |= FileFlags::DIRECT;
+        }
+
+        if !(flags.intersects(FileFlags::READ | FileFlags::WRITE)) {
+            return Err(VfsError::EINVAL);
+        }
+
+        Ok(flags)
     }
 
     pub(crate) fn is_valid(&self) -> bool {
@@ -262,7 +271,6 @@ impl fmt::Debug for OpenOptions {
             create_new,
             directory,
             direct,
-            cloexec,
             user,
             custom_flags,
             mode,
@@ -277,7 +285,6 @@ impl fmt::Debug for OpenOptions {
             .field("create_new", create_new)
             .field("directory", directory)
             .field("direct", direct)
-            .field("cloexec", cloexec)
             .field("user", user)
             .field("custom_flags", custom_flags)
             .field("mode", mode)
@@ -317,7 +324,7 @@ impl<M: RawMutex> FsFile<M> {
     ///
     /// If `data_only` is `true`, only the file data is synced, not the metadata.
     pub fn sync(&self, data_only: bool) -> VfsResult<()> {
-        self.access(FileFlags::READ)?.sync(data_only)
+        self.access(FileFlags::WRITE)?.sync(data_only)
     }
 
     /// Get the file size.
@@ -327,7 +334,7 @@ impl<M: RawMutex> FsFile<M> {
 
     /// Get the file inode number.
     pub fn inode(&self) -> VfsResult<u64> {
-        Ok(self.access(FileFlags::READ)?.inode())
+        Ok(self.access(FileFlags::empty())?.inode())
     }
 
     pub fn get_file_node(&self) -> Arc<dyn FileNodeOps<M>> {
@@ -358,6 +365,11 @@ impl<M: RawMutex> FsFile<M> {
     /// Get the current position of the file.
     pub fn set_position(&mut self, position: u64) {
         self.position = position;
+    }
+
+    /// Get the file flags.
+    pub fn get_flags(&self) -> FileFlags {
+        self.flags
     }
 }
 

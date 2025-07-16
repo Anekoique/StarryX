@@ -231,5 +231,5 @@ pub fn sys_statfs(path: UserConstPtr<c_char>, buf: UserPtr<statfs>) -> LinuxResu
 /// * `fd` - File descriptor
 /// * `buf` - Buffer to write filesystem statistics
 pub fn sys_fstatfs(fd: i32, buf: UserPtr<statfs>) -> LinuxResult<isize> {
-    with_file(fd, |file| statfs(file.inner(), buf)).map(|_| 0)
+    with_file(fd, |file| statfs(file.inner().inner(), buf)).map(|_| 0)
 }

@@ -5,7 +5,7 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 use axio::{Seek, SeekFrom};
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::task::with_uspace;
+use xcore::{mm::PAGE_CACHE_MANAGER, task::with_uspace};
 
 use crate::{
     ctypes::{__kernel_off_t, iovec},
@@ -154,7 +154,7 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     debug!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, |file| {
-        file.access(FileFlags::WRITE)?.set_len(length as _)
+        file.inner().access(FileFlags::WRITE)?.set_len(length as _)
     })
     .map(|_| 0)
 }
@@ -165,7 +165,13 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
 /// * `fd` - File descriptor
 pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fsync <= {}", fd);
-    with_file(fd, |file| file.sync(false)).map(|_| 0)
+    with_file(fd, |file| {
+        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(file.inner().inode()?) {
+            cache.sync()?;
+        }
+        file.inner().sync(false)
+    })
+    .map(|_| 0)
 }
 
 /// Synchronize a file's in-core data with storage device.
@@ -174,7 +180,7 @@ pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
 /// * `fd` - File descriptor
 pub fn sys_fdatasync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fdatasync <= {}", fd);
-    with_file(fd, |file| file.sync(true)).map(|_| 0)
+    with_file(fd, |file| file.inner().sync(true)).map(|_| 0)
 }
 
 /// Read from a file descriptor at a given offset.
@@ -338,7 +344,7 @@ pub fn sys_sendfile(
     let dest = get_file_like(out_fd)?;
     let offset = with_uspace(|uspace| nullable!(uspace.read(offset)))?;
 
-    match offset {
+    let result = match offset {
         Some(mut offset) => with_file(in_fd, |src_file| {
             do_sendfile(
                 |buf| {
@@ -350,6 +356,13 @@ pub fn sys_sendfile(
             )
         }),
         None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.as_ref()),
-    }
-    .map(|n| n as _)
+    }?;
+    with_file(out_fd, |dest_file| {
+        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(dest_file.inner().inode()?) {
+            debug!("syncing cache");
+            cache.sync()?;
+        }
+        Ok(())
+    })?;
+    Ok(result as isize)
 }

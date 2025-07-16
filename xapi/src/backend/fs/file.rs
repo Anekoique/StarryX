@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axfs_ng_vfs::{DeviceId, Location, Metadata};
 use axhal::time::TimeValue;
 use axio::{PollState, Read};
@@ -68,6 +69,28 @@ impl File {
     pub fn clone_inner(&self) -> Arc<Mutex<axfs_ng::FsFile<RawMutex>>> {
         self.inner.clone()
     }
+
+    /// Read a number of bytes starting from a given offset.
+    pub fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
+        let inner = self.inner();
+        if !inner.get_flags().contains(FileFlags::DIRECT)
+            && let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?)
+        {
+            cache.read_at(buf, offset)
+        } else {
+            inner.read_at(buf, offset)
+        }
+    }
+
+    /// Write a number of bytes starting from a given offset.
+    pub fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
+        let mut inner = self.inner();
+        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?) {
+            cache.write_at(buf, offset)
+        } else {
+            inner.write_at(buf, offset)
+        }
+    }
 }
 
 impl FileLike for File {
@@ -84,7 +107,17 @@ impl FileLike for File {
     }
 
     fn write(&self, buf: &[u8]) -> LinuxResult<usize> {
-        self.inner().write(buf)
+        let mut inner = self.inner();
+        if !inner.get_flags().contains(FileFlags::APPEND)
+            && let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?)
+        {
+            let position = inner.position;
+            cache
+                .write_at(buf, position)
+                .inspect(|n| inner.set_position(position + *n as u64))
+        } else {
+            inner.write(buf)
+        }
     }
 
     fn stat(&self) -> LinuxResult<Kstat> {
