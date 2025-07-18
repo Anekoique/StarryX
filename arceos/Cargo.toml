@@ -29,6 +29,7 @@ members = [
     "examples/httpserver",
     "examples/httpserver",
     "examples/shell",
+    "examples/gui_demo",
 ]
 
 [workspace.package]
@@ -60,7 +61,7 @@ axfs-ng = { path = "modules/axfs-ng", default-features = false, features = [
 ] }
 axhal = { path = "modules/axhal" }
 axlog = { path = "modules/axlog" }
-axmm = { path = "modules/axmm" }
+axmm = { path = "modules/axmm" , features = ["cow"]}
 axnet = { path = "modules/axnet" }
 axns = { path = "modules/axns" }
 axruntime = { path = "modules/axruntime" }

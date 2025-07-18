@@ -1,0 +1,14 @@
+[package]
+name = "arceos-gui_demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axstd = { workspace = true, optional = true, features = ["display"] }
+axdisplay = { workspace = true, optional = true, features = ["embedded-graphics"] }
+
+[features]
+default = ["axstd", "display"]
+axstd = ["dep:axstd"]
+display = ["dep:axstd", "dep:axdisplay", "axstd/display"]
+
