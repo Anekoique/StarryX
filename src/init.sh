@@ -50,14 +50,14 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
 # ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
-# /musl/runtest.exe -w entry-static.exe syscall_sign_extend
+/musl/runtest.exe -w entry-static.exe socket
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
-./libcbench_testcode.sh
+# ./libcbench_testcode.sh
 # ./iperf_testcode.sh
 
 cd /glibc

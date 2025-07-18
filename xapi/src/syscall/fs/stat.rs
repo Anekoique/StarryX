@@ -66,9 +66,7 @@ pub fn sys_fstatat(
         uspace.write(
             statbuf,
             with_location(dirfd, path, flags, |location| {
-                if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(location.inode()) {
-                    cache.sync()?;
-                }
+                PAGE_CACHE_MANAGER.sync_file(location.inode())?;
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))
@@ -112,9 +110,7 @@ pub fn sys_statx(
         uspace.write(
             statxbuf,
             with_location(dirfd, path, flags, |location| {
-                if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(location.inode()) {
-                    cache.sync()?;
-                }
+                PAGE_CACHE_MANAGER.sync_file(location.inode())?;
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))

@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use axerrno::LinuxResult;
 use lazy_static::lazy_static;
 use page_cache::PageCache;
 use spin::RwLock;
@@ -42,6 +43,13 @@ impl PageCacheManager {
 
     pub fn clear(&self) {
         self.caches.write().clear();
+    }
+
+    pub fn sync_file(&self, inode: u64) -> LinuxResult<()> {
+        if let Some(cache) = self.get_cache(inode) {
+            cache.sync()?;
+        } 
+        Ok(())
     }
 
     pub fn clear_stale_cache(&self) {

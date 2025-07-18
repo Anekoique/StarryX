@@ -166,9 +166,7 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
 pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fsync <= {}", fd);
     with_file(fd, |file| {
-        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(file.inner().inode()?) {
-            cache.sync()?;
-        }
+        PAGE_CACHE_MANAGER.sync_file(file.inner().inode()?)?;
         file.inner().sync(false)
     })
     .map(|_| 0)
@@ -357,12 +355,9 @@ pub fn sys_sendfile(
         }),
         None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.as_ref()),
     }?;
+
     with_file(out_fd, |dest_file| {
-        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(dest_file.inner().inode()?) {
-            debug!("syncing cache");
-            cache.sync()?;
-        }
-        Ok(())
+        PAGE_CACHE_MANAGER.sync_file(dest_file.inner().inode()?)
     })?;
     Ok(result as isize)
 }
