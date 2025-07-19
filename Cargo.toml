@@ -14,7 +14,7 @@ homepage = "https://github.com/arceos-org/arceos"
 repository = "https://github.com/arceos-org/starry-next"
 
 [workspace.dependencies]
-axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
+axfeat = { path = "arceos/api/axfeat", features = [
     "fs",
     "irq",
     "multitask",
@@ -22,15 +22,15 @@ axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
     "smp",
 ] }
 
-axconfig = { git = "https://github.com/oscomp/arceos.git" }
-axhal = { git = "https://github.com/oscomp/arceos.git", features = [ "uspace", "rtc", "irq" ] }
-axlog = { git = "https://github.com/oscomp/arceos.git" }
-axmm = { git = "https://github.com/oscomp/arceos.git", features = [ "cow", "copy-from" ] }
-axnet = { git = "https://github.com/oscomp/arceos.git" }
-axns = { git = "https://github.com/oscomp/arceos.git", features = [ "thread-local" ] }
-axruntime = { git = "https://github.com/oscomp/arceos.git" }
-axsync = { git = "https://github.com/oscomp/arceos.git", features = [ "multitask" ] }
-axtask = { git = "https://github.com/oscomp/arceos.git", features = [ "smp" ] }
+axconfig = { path = "arceos/modules/axconfig" }
+axhal = { path = "arceos/modules/axhal", features = [ "uspace", "rtc", "irq" ] }
+axlog = { path = "arceos/modules/axlog" }
+axmm = { path = "arceos/modules/axmm", features = [ "cow", "copy-from" ] }
+axnet = { path = "arceos/modules/axnet" }
+axns = { path = "arceos/modules/axns", features = [ "thread-local" ] }
+axruntime = { path = "arceos/modules/axruntime" }
+axsync = { path = "arceos/modules/axsync", features = [ "multitask" ] }
+axtask = { path = "arceos/modules/axtask", features = [ "smp" ] }
 
 axprocess = { path = "./modules/axprocess" }
 axsignal = { path = "./modules/axsignal" }

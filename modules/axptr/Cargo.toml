@@ -6,9 +6,9 @@ authors = ["Mivik <mivikq@gmail.com>"]
 
 [dependencies]
 axerrno = "0.1"
-axhal = { git = "https://github.com/oscomp/arceos.git" }
-axmm = { git = "https://github.com/oscomp/arceos.git" }
-axtask = { git = "https://github.com/oscomp/arceos.git" }
+axhal.workspace = true
+axmm.workspace = true
+axtask.workspace = true
 xcore = { workspace = true }
 memory_addr = "0.4"
 page_table_multiarch = "0.5.5"
