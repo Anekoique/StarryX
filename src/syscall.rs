@@ -438,7 +438,20 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::connect => sys_connect(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
         Sysno::getsockname => sys_getsockname(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::getpeername => sys_getpeername(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
-        Sysno::setsockopt => Ok(0),
+        Sysno::setsockopt => sys_setsockopt(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3().into(),
+            tf.arg4() as _,
+        ),
+        Sysno::getsockopt => sys_getsockopt(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3().into(),
+            tf.arg4().into(),
+        ),
         Sysno::listen => sys_listen(tf.arg0() as _, tf.arg1() as _),
         Sysno::accept => sys_accept(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::sendto => sys_sendto(

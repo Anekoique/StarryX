@@ -465,6 +465,7 @@ name = "axuspace"
 version = "0.1.0"
 dependencies = [
  "axerrno",
+ "log",
  "memory_addr",
  "page_table_multiarch",
  "percpu",
@@ -1543,6 +1544,7 @@ dependencies = [
  "axfs-ng",
  "axhal",
  "axlog",
+ "axmm",
  "axprocess",
  "axruntime",
  "axsignal",

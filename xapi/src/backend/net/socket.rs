@@ -133,6 +133,33 @@ impl Socket {
         }
     }
 
+    pub fn set_nagle_enabled(&self, enabled: bool) -> LinuxResult {
+        match self {
+            Socket::Tcp(tcpsocket) => Ok(tcpsocket.lock().set_nagle_enabled(enabled)?),
+            _ => Err(LinuxError::EOPNOTSUPP),
+        }
+    }
+
+    pub fn set_reuse_addr(&self, reuse_addr: bool) -> LinuxResult {
+        match self {
+            Socket::Udp(udpsocket) => Ok(udpsocket.lock().set_reuse_addr(reuse_addr)),
+            Socket::Tcp(tcpsocket) => Ok(tcpsocket.lock().set_reuse_addr(reuse_addr)),
+            _ => Err(LinuxError::EOPNOTSUPP),
+        }
+    }
+
+    pub fn get_recv_buffer_size(&self) -> LinuxResult<u32> {
+        match self {
+            _ => Ok(64 * 1024),
+        }
+    }
+
+    pub fn get_send_buffer_size(&self) -> LinuxResult<u32> {
+        match self {
+            _ => Ok(64 * 1024),
+        }
+    }
+
     impl_socket!(pub fn send(&self, buf: &[u8]) -> LinuxResult<usize>);
     impl_socket!(pub fn poll(&self) -> LinuxResult<PollState>);
     impl_socket!(pub fn shutdown(&self) -> LinuxResult);

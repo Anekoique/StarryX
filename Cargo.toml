@@ -81,6 +81,7 @@ axlog.workspace = true
 axruntime.workspace = true
 axsync.workspace = true
 axtask.workspace = true
+axmm.workspace = true
 
 axprocess.workspace = true
 axsignal.workspace = true

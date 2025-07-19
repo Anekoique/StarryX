@@ -1,135 +1,220 @@
-use axerrno::LinuxResult;
-use axio::PollState;
+use core::{fmt, time::Duration};
+
+use axerrno::{LinuxError, LinuxResult};
+use axhal::time::wall_time;
 use axsignal::SignalSet;
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use bitmaps::Bitmap;
+use linux_raw_sys::{
+    general::{__FD_SETSIZE, __kernel_fd_set, timespec, timeval},
+    select_macros::{FD_ISSET, FD_SET, FD_ZERO},
+};
 use xcore::task::with_uspace;
 
-use crate::{
-    ctypes::{timespec, timeval},
-    fs::FD_TABLE,
-    time::{TimeValue, TimeValueLike, wall_time},
-};
+use crate::{fs::get_file_like, time::TimeValueLike};
 
-fn do_select(
-    nfds: u32,
-    read_fds: UserPtr<u8>,
-    write_fds: UserPtr<u8>,
-    except_fds: UserPtr<u8>,
-    timeout: Option<TimeValue>,
-) -> LinuxResult<isize> {
-    let num_words = nfds.div_ceil(8) as usize;
-    let (mut read_fds, mut write_fds, mut except_fds) = with_uspace(|uspace| -> LinuxResult<_> {
-        let read_fds = nullable!(uspace.raw_slice(read_fds, num_words))?;
-        let write_fds = nullable!(uspace.raw_slice(write_fds, num_words))?;
-        let except_fds = nullable!(uspace.raw_slice(except_fds, num_words))?;
-        Ok((read_fds, write_fds, except_fds))
-    })?;
-    if let Some(fds) = read_fds.as_mut() {
-        fds.fill(0);
-    }
-    if let Some(fds) = write_fds.as_mut() {
-        fds.fill(0);
-    }
-    if let Some(fds) = except_fds.as_mut() {
-        fds.fill(0);
-    }
+struct FdSet(Bitmap<{ __FD_SETSIZE as usize }>);
 
-    fn fill(
-        nfds: u32,
-        fds: &mut Option<&'static mut [u8]>,
-        f: impl Fn(PollState) -> bool,
-    ) -> LinuxResult<usize> {
-        let Some(fds) = fds else { return Ok(0) };
-        let mut num = 0;
-        for fd in FD_TABLE.ids() {
-            if fd >= nfds as usize {
-                break;
-            }
-            if let Some(file) = FD_TABLE.get(fd) {
-                if f(file.poll()?) {
-                    debug!("select: fd: {} is ready, nfds: {}", fd, nfds);
-                    fds[fd / 8] |= 1 << (fd % 8);
-                    num += 1;
+impl FdSet {
+    fn new(nfds: usize, fds: Option<&__kernel_fd_set>) -> Self {
+        let mut bitmap = Bitmap::new();
+        if let Some(fds) = fds {
+            for i in 0..nfds {
+                if unsafe { FD_ISSET(i as _, fds) } {
+                    bitmap.set(i, true);
                 }
             }
         }
-        Ok(num)
+        Self(bitmap)
     }
-    let deadline = timeout.map(|t| wall_time() + t);
+}
 
-    debug!(
-        "select timeout: {:?} {} {} {} {}",
-        timeout,
-        nfds,
-        read_fds.is_some(),
-        write_fds.is_some(),
-        except_fds.is_some()
+impl fmt::Debug for FdSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(&self.0).finish()
+    }
+}
+
+#[derive(Debug)]
+struct FdSets {
+    nfds: usize,
+    read: FdSet,
+    write: FdSet,
+    except: FdSet,
+}
+
+impl FdSets {
+    fn new(
+        nfds: usize,
+        readfds: Option<&__kernel_fd_set>,
+        writefds: Option<&__kernel_fd_set>,
+        exceptfds: Option<&__kernel_fd_set>,
+    ) -> Self {
+        Self {
+            nfds,
+            read: FdSet::new(nfds, readfds),
+            write: FdSet::new(nfds, writefds),
+            except: FdSet::new(nfds, exceptfds),
+        }
+    }
+
+    // TODO: unity select and poll implementation like asterinas:
+    // https://github.com/asterinas/asterinas/blob/main/kernel/src/syscall/poll.rs
+    fn poll(
+        &self,
+        mut readfds: Option<&mut __kernel_fd_set>,
+        mut writefds: Option<&mut __kernel_fd_set>,
+        mut exceptfds: Option<&mut __kernel_fd_set>,
+    ) -> LinuxResult<usize> {
+        unsafe {
+            if let Some(readfds) = readfds.as_deref_mut() {
+                FD_ZERO(readfds);
+            }
+            if let Some(writefds) = writefds.as_deref_mut() {
+                FD_ZERO(writefds);
+            }
+            if let Some(exceptfds) = exceptfds.as_deref_mut() {
+                FD_ZERO(exceptfds);
+            }
+        }
+
+        let mut res = 0usize;
+        for fd in &(self.read.0 | self.write.0 | self.except.0) {
+            if fd >= self.nfds {
+                break;
+            }
+
+            let f = get_file_like(fd as _)?;
+            match f.poll() {
+                Ok(state) => {
+                    if state.readable
+                        && self.read.0.get(fd)
+                        && let Some(readfds) = readfds.as_deref_mut()
+                    {
+                        res += 1;
+                        unsafe { FD_SET(fd as _, readfds) };
+                    }
+                    if state.writable
+                        && self.write.0.get(fd)
+                        && let Some(writefds) = writefds.as_deref_mut()
+                    {
+                        res += 1;
+                        unsafe { FD_SET(fd as _, writefds) };
+                    }
+                }
+                Err(e) => {
+                    debug!("poll fd={} error: {:?}", fd, e);
+                    if self.except.0.get(fd)
+                        && let Some(exceptfds) = exceptfds.as_deref_mut()
+                    {
+                        res += 1;
+                        unsafe { FD_SET(fd as _, exceptfds) };
+                    }
+                }
+            }
+        }
+
+        Ok(res)
+    }
+}
+
+fn do_select(
+    nfds: u32,
+    readfds: UserPtr<__kernel_fd_set>,
+    writefds: UserPtr<__kernel_fd_set>,
+    exceptfds: UserPtr<__kernel_fd_set>,
+    timeout: Option<Duration>,
+) -> LinuxResult<isize> {
+    if nfds > __FD_SETSIZE {
+        return Err(LinuxError::EINVAL);
+    }
+
+    let (mut readfds, mut writefds, mut exceptfds) = with_uspace(|uspace| -> LinuxResult<_> {
+        let readfds = nullable!(uspace.raw_ptr(readfds))?;
+        let writefds = nullable!(uspace.raw_ptr(writefds))?;
+        let exceptfds = nullable!(uspace.raw_ptr(exceptfds))?;
+        Ok((readfds, writefds, exceptfds))
+    })?;
+
+    let sets = FdSets::new(
+        nfds as usize,
+        readfds.as_deref(),
+        writefds.as_deref(),
+        exceptfds.as_deref(),
     );
 
+    debug!(
+        "sys_select <= nfds: {} sets: {:?} timeout: {:?}",
+        nfds, sets, timeout
+    );
+
+    let deadline = timeout.map(|t| wall_time() + t);
+
     loop {
+        axnet::poll_interfaces();
         axtask::yield_now();
-        let num = fill(nfds, &mut read_fds, |state| state.readable)?
-            + fill(nfds, &mut write_fds, |state| state.writable)?
-            + fill(nfds, &mut except_fds, |_state| false /* TODO */)?;
-        if num > 0 {
-            return Ok(num as isize);
+
+        let res = sets.poll(
+            readfds.as_deref_mut(),
+            writefds.as_deref_mut(),
+            exceptfds.as_deref_mut(),
+        )?;
+        if res > 0 {
+            return Ok(res as _);
+        }
+
+        if res > 0 {
+            return Ok(res as _);
         }
 
         if deadline.is_some_and(|d| wall_time() >= d) {
             return Ok(0);
         }
+
+        axtask::yield_now();
     }
 }
 
-/// Monitor multiple file descriptors for I/O events.
-///
-/// # Arguments
-/// * `nfds` - Number of file descriptors to monitor
-/// * `read_fds` - Bit mask of file descriptors to check for readability
-/// * `write_fds` - Bit mask of file descriptors to check for writability
-/// * `except_fds` - Bit mask of file descriptors to check for exceptions
-/// * `timeout` - Timeout value (NULL for infinite)
 pub fn sys_select(
     nfds: u32,
-    read_fds: UserPtr<u8>,
-    write_fds: UserPtr<u8>,
-    except_fds: UserPtr<u8>,
+    readfds: UserPtr<__kernel_fd_set>,
+    writefds: UserPtr<__kernel_fd_set>,
+    exceptfds: UserPtr<__kernel_fd_set>,
     timeout: UserConstPtr<timeval>,
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
         do_select(
             nfds,
-            read_fds,
-            write_fds,
-            except_fds,
+            readfds,
+            writefds,
+            exceptfds,
             nullable!(uspace.read(timeout))?.map(timeval::to_time_value),
         )
     })
 }
 
-/// Monitor multiple file descriptors for I/O events with signal mask.
-///
-/// # Arguments
-/// * `nfds` - Number of file descriptors to monitor
-/// * `read_fds` - Bit mask of file descriptors to check for readability
-/// * `write_fds` - Bit mask of file descriptors to check for writability
-/// * `except_fds` - Bit mask of file descriptors to check for exceptions
-/// * `timeout` - Timeout specification (NULL for infinite)
-/// * `_sigmask` - Signal mask (currently unused)
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SignalSetWithSize {
+    set: UserConstPtr<SignalSet>,
+    sigsetsize: usize,
+}
+
 pub fn sys_pselect6(
     nfds: u32,
-    read_fds: UserPtr<u8>,
-    write_fds: UserPtr<u8>,
-    except_fds: UserPtr<u8>,
+    readfds: UserPtr<__kernel_fd_set>,
+    writefds: UserPtr<__kernel_fd_set>,
+    exceptfds: UserPtr<__kernel_fd_set>,
     timeout: UserConstPtr<timespec>,
-    _sigmask: UserConstPtr<SignalSet>,
+    _sigmask: UserConstPtr<SignalSetWithSize>,
 ) -> LinuxResult<isize> {
+    // FIXME: process sigmask
     with_uspace(|uspace| {
         do_select(
             nfds,
-            read_fds,
-            write_fds,
-            except_fds,
+            readfds,
+            writefds,
+            exceptfds,
             nullable!(uspace.read(timeout))?.map(timespec::to_time_value),
         )
     })
