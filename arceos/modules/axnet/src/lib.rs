@@ -40,6 +40,9 @@ pub use smoltcp::wire::{
     IpAddress as IpAddr, IpEndpoint as SocketAddr, Ipv4Address as Ipv4Addr, Ipv6Address as Ipv6Addr,
 };
 
+pub type NetError = axerrno::LinuxError;
+pub type NetResult<T = ()> = Result<T, NetError>;
+
 use axdriver::{AxDeviceContainer, prelude::*};
 
 /// Initializes the network subsystem by NIC devices.
@@ -49,4 +52,10 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
     let dev = net_devs.take_one().expect("No NIC device found!");
     info!("  use NIC 0: {:?}", dev.device_name());
     net_impl::init(dev);
+}
+
+pub(crate) fn net_error_to_axio(err: NetError) -> axio::Error {
+    match err {
+        _ => axio::Error::Io,
+    }
 }

@@ -80,13 +80,11 @@ impl Socket {
             Socket::Tcp(tcpsocket) => tcpsocket
                 .lock()
                 .accept()
-                .map(|socket| Socket::Tcp(Mutex::new(socket)))
-                .map_err(Into::into),
+                .map(|socket| Socket::Tcp(Mutex::new(socket))),
             Socket::Unix(unixsocket) => unixsocket
                 .lock()
                 .accept()
-                .map(|socket| Socket::Unix(Mutex::new(socket)))
-                .map_err(Into::into),
+                .map(|socket| Socket::Unix(Mutex::new(socket))),
         }
     }
 

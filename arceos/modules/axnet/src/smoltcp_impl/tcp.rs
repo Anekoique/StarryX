@@ -2,7 +2,6 @@ use core::cell::UnsafeCell;
 use core::net::SocketAddr;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-use axerrno::{AxError, AxResult, ax_err, ax_err_type};
 use axhal::time::current_ticks;
 use axio::{PollState, Read, Write};
 use axsync::Mutex;
@@ -14,6 +13,7 @@ use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint};
 
 use super::addr::UNSPECIFIED_ENDPOINT;
 use super::{LISTEN_TABLE, SOCKET_SET, SocketSetWrapper};
+use crate::{NetError, NetResult, net_error_to_axio};
 
 // State transitions:
 // CLOSED -(connect)-> BUSY -> CONNECTING -> CONNECTED -(shutdown)-> BUSY -> CLOSED
@@ -80,23 +80,23 @@ impl TcpSocket {
     /// Returns the local address and port, or
     /// [`Err(NotConnected)`](AxError::NotConnected) if not connected.
     #[inline]
-    pub fn local_addr(&self) -> AxResult<SocketAddr> {
-        // 为了通过测例，已经`bind`但未`listen`的socket也可以返回地址
+    pub fn local_addr(&self) -> NetResult<SocketAddr> {
+        // FIXME: 为了通过测例，已经`bind`但未`listen`的socket也可以返回地址
         match self.get_state() {
             STATE_CONNECTED | STATE_LISTENING | STATE_CLOSED => {
                 Ok(unsafe { self.local_addr.get().read() }.into())
             }
-            _ => Err(AxError::NotConnected),
+            _ => Err(NetError::ENOTCONN),
         }
     }
 
     /// Returns the remote address and port, or
     /// [`Err(NotConnected)`](AxError::NotConnected) if not connected.
     #[inline]
-    pub fn peer_addr(&self) -> AxResult<SocketAddr> {
+    pub fn peer_addr(&self) -> NetResult<SocketAddr> {
         match self.get_state() {
             STATE_CONNECTED | STATE_LISTENING => Ok(unsafe { self.peer_addr.get().read() }.into()),
-            _ => Err(AxError::NotConnected),
+            _ => Err(NetError::ENOTCONN),
         }
     }
 
@@ -163,7 +163,7 @@ impl TcpSocket {
     /// Connects to the given address and port.
     ///
     /// The local port is generated automatically.
-    pub fn connect(&self, remote_addr: SocketAddr) -> AxResult {
+    pub fn connect(&self, remote_addr: SocketAddr) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_CONNECTING, || {
             // SAFETY: no other threads can read or write these fields.
             let handle = unsafe { self.handle.get().read() }
@@ -191,14 +191,10 @@ impl TcpSocket {
                     socket
                         .connect(iface.lock().context(), remote_endpoint, bound_endpoint)
                         .or_else(|e| match e {
-                            ConnectError::InvalidState => {
-                                ax_err!(BadState, "socket connect() failed")
-                            }
-                            ConnectError::Unaddressable => {
-                                ax_err!(ConnectionRefused, "socket connect() failed")
-                            }
+                            ConnectError::InvalidState => Err(NetError::EFAULT),
+                            ConnectError::Unaddressable => Err(NetError::ECONNREFUSED),
                         })?;
-                    Ok::<(IpEndpoint, IpEndpoint), AxError>((
+                    Ok::<(IpEndpoint, IpEndpoint), NetError>((
                         socket.local_endpoint().unwrap(),
                         socket.remote_endpoint().unwrap(),
                     ))
@@ -212,7 +208,7 @@ impl TcpSocket {
             }
             Ok(())
         })
-        .unwrap_or_else(|_| ax_err!(AlreadyExists, "socket connect() failed: already connected"))?; // EISCONN
+        .unwrap_or_else(|_| Err(NetError::EISCONN))?;
 
         // HACK: yield() to let server to listen
         yield_now();
@@ -222,11 +218,15 @@ impl TcpSocket {
             let PollState { writable, .. } = self.poll_connect()?;
             if !writable {
                 debug!("socket connect() failed: writable");
-                Err(AxError::WouldBlock)
+                if self.is_nonblocking() {
+                    Err(NetError::EINPROGRESS)
+                } else {
+                    Err(NetError::EAGAIN)
+                }
             } else if self.get_state() == STATE_CONNECTED {
                 Ok(())
             } else {
-                ax_err!(ConnectionRefused, "socket connect() failed")
+                Err(NetError::ECONNREFUSED)
             }
         })
     }
@@ -237,7 +237,7 @@ impl TcpSocket {
     ///
     /// It's must be called before [`listen`](Self::listen) and
     /// [`accept`](Self::accept).
-    pub fn bind(&self, mut local_addr: SocketAddr) -> AxResult {
+    pub fn bind(&self, mut local_addr: SocketAddr) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_CLOSED, || {
             // TODO: check addr is available
             if local_addr.port() == 0 {
@@ -248,7 +248,7 @@ impl TcpSocket {
             unsafe {
                 let old = self.local_addr.get().read();
                 if old != UNSPECIFIED_ENDPOINT {
-                    return ax_err!(InvalidInput, "socket bind() failed: already bound");
+                    return Err(NetError::EINVAL);
                 }
                 self.local_addr.get().write(local_addr.into());
             }
@@ -265,14 +265,14 @@ impl TcpSocket {
             }
             Ok(())
         })
-        .unwrap_or_else(|_| ax_err!(InvalidInput, "socket bind() failed: already bound"))
+        .unwrap_or_else(|_| Err(NetError::EINVAL))
     }
 
     /// Starts listening on the bound address and port.
     ///
     /// It's must be called after [`bind`](Self::bind) and before
     /// [`accept`](Self::accept).
-    pub fn listen(&self) -> AxResult {
+    pub fn listen(&self) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_LISTENING, || {
             let bound_endpoint = self.bound_endpoint()?;
             unsafe {
@@ -291,9 +291,9 @@ impl TcpSocket {
     /// is established. When established, a new [`TcpSocket`] is returned.
     ///
     /// It's must be called after [`bind`](Self::bind) and [`listen`](Self::listen).
-    pub fn accept(&self) -> AxResult<TcpSocket> {
+    pub fn accept(&self) -> NetResult<TcpSocket> {
         if !self.is_listening() {
-            return ax_err!(InvalidInput, "socket accept() failed: not listen");
+            return Err(NetError::EINVAL);
         }
 
         // SAFETY: `self.local_addr` should be initialized after `bind()`.
@@ -306,7 +306,7 @@ impl TcpSocket {
     }
 
     /// Close the connection.
-    pub fn shutdown(&self) -> AxResult {
+    pub fn shutdown(&self) -> NetResult {
         // stream
         self.update_state(STATE_CONNECTED, STATE_CLOSED, || {
             // SAFETY: `self.handle` should be initialized in a connected socket, and
@@ -355,11 +355,11 @@ impl TcpSocket {
     }
 
     /// Receives data from the socket, stores it in the given buffer.
-    pub fn recv(&self, buf: &mut [u8]) -> AxResult<usize> {
+    pub fn recv(&self, buf: &mut [u8]) -> NetResult<usize> {
         if self.is_connecting() {
-            return Err(AxError::WouldBlock);
+            return Err(NetError::EAGAIN);
         } else if !self.is_connected() {
-            return ax_err!(NotConnected, "socket recv() failed");
+            return Err(NetError::ENOTCONN);
         }
 
         // SAFETY: `self.handle` should be initialized in a connected socket.
@@ -369,19 +369,17 @@ impl TcpSocket {
                 if socket.recv_queue() > 0 {
                     // data available
                     // TODO: use socket.recv(|buf| {...})
-                    let len = socket
-                        .recv_slice(buf)
-                        .map_err(|_| ax_err_type!(BadState, "socket recv() failed"))?;
+                    let len = socket.recv_slice(buf).map_err(|_| NetError::EFAULT)?;
                     Ok(len)
                 } else if !socket.is_active() {
                     // not open
-                    ax_err!(ConnectionRefused, "socket recv() failed")
+                    Err(NetError::ENOTCONN)
                 } else if !socket.may_recv() {
                     // connection closed
                     Ok(0)
                 } else {
                     // no more data
-                    Err(AxError::WouldBlock)
+                    Err(NetError::EAGAIN)
                 }
             })
         })
@@ -389,11 +387,11 @@ impl TcpSocket {
     /// Receives data from the socket, stores it in the given buffer.
     ///
     /// It will return [`Err(Timeout)`](AxError::Timeout) if expired.
-    pub fn recv_timeout(&self, buf: &mut [u8], ticks: u64) -> AxResult<usize> {
+    pub fn recv_timeout(&self, buf: &mut [u8], ticks: u64) -> NetResult<usize> {
         if self.is_connecting() {
-            return Err(AxError::WouldBlock);
+            return Err(NetError::EAGAIN);
         } else if !self.is_connected() {
-            return ax_err!(NotConnected, "socket recv() failed");
+            return Err(NetError::ENOTCONN);
         }
 
         let expire_at = current_ticks() + ticks;
@@ -405,13 +403,11 @@ impl TcpSocket {
                 if socket.recv_queue() > 0 {
                     // data available
                     // TODO: use socket.recv(|buf| {...})
-                    let len = socket
-                        .recv_slice(buf)
-                        .map_err(|_| ax_err_type!(BadState, "socket recv() failed"))?;
+                    let len = socket.recv_slice(buf).map_err(|_| NetError::EFAULT)?;
                     Ok(len)
                 } else if !socket.is_active() {
                     // not open
-                    ax_err!(ConnectionRefused, "socket recv() failed")
+                    Err(NetError::ENOTCONN)
                 } else if !socket.may_recv() {
                     // connection closed
                     Ok(0)
@@ -419,9 +415,9 @@ impl TcpSocket {
                     // no more data
                     if current_ticks() > expire_at {
                         // TODO:timeout
-                        Err(AxError::Unsupported)
+                        Err(NetError::ETIMEDOUT)
                     } else {
-                        Err(AxError::WouldBlock)
+                        Err(NetError::EAGAIN)
                     }
                 }
             })
@@ -429,11 +425,11 @@ impl TcpSocket {
     }
 
     /// Transmits data in the given buffer.
-    pub fn send(&self, buf: &[u8]) -> AxResult<usize> {
+    pub fn send(&self, buf: &[u8]) -> NetResult<usize> {
         if self.is_connecting() {
-            return Err(AxError::WouldBlock);
+            return Err(NetError::EAGAIN);
         } else if !self.is_connected() {
-            return ax_err!(NotConnected, "socket send() failed");
+            return Err(NetError::ENOTCONN);
         }
 
         // SAFETY: `self.handle` should be initialized in a connected socket.
@@ -442,24 +438,22 @@ impl TcpSocket {
             SOCKET_SET.with_socket_mut::<tcp::Socket, _, _>(handle, |socket| {
                 if !socket.is_active() || !socket.may_send() {
                     // closed by remote
-                    ax_err!(ConnectionReset, "socket send() failed")
+                    Err(NetError::ENOTCONN)
                 } else if socket.can_send() {
                     // connected, and the tx buffer is not full
                     // TODO: use socket.send(|buf| {...})
-                    let len = socket
-                        .send_slice(buf)
-                        .map_err(|_| ax_err_type!(BadState, "socket send() failed"))?;
+                    let len = socket.send_slice(buf).map_err(|_| NetError::EFAULT)?;
                     Ok(len)
                 } else {
                     // tx buffer is full
-                    Err(AxError::WouldBlock)
+                    Err(NetError::EAGAIN)
                 }
             })
         })
     }
 
     /// Whether the socket is readable or writable.
-    pub fn poll(&self) -> AxResult<PollState> {
+    pub fn poll(&self) -> NetResult<PollState> {
         match self.get_state() {
             STATE_CONNECTING => self.poll_connect(),
             STATE_CONNECTED => self.poll_stream(),
@@ -472,11 +466,11 @@ impl TcpSocket {
     }
 
     /// To set the nagle algorithm enabled or not.
-    pub fn set_nagle_enabled(&self, enabled: bool) -> AxResult {
+    pub fn set_nagle_enabled(&self, enabled: bool) -> NetResult {
         let handle = unsafe { self.handle.get().read() };
 
         let Some(handle) = handle else {
-            return Err(AxError::NotConnected);
+            return Err(NetError::ENOTCONN);
         };
 
         SOCKET_SET.with_socket_mut::<tcp::Socket, _, _>(handle, |socket| {
@@ -552,9 +546,9 @@ impl TcpSocket {
     ///
     /// It returns `Ok` if the current state is `expect`, otherwise it returns
     /// the current state in `Err`.
-    fn update_state<F, T>(&self, expect: u8, new: u8, f: F) -> Result<AxResult<T>, u8>
+    fn update_state<F, T>(&self, expect: u8, new: u8, f: F) -> Result<NetResult<T>, u8>
     where
-        F: FnOnce() -> AxResult<T>,
+        F: FnOnce() -> NetResult<T>,
     {
         match self
             .state
@@ -595,7 +589,7 @@ impl TcpSocket {
         self.get_state() == STATE_LISTENING
     }
 
-    fn bound_endpoint(&self) -> AxResult<IpListenEndpoint> {
+    fn bound_endpoint(&self) -> NetResult<IpListenEndpoint> {
         // SAFETY: no other threads can read or write `self.local_addr`.
         let local_addr = unsafe { self.local_addr.get().read() };
         let port = if local_addr.port != 0 {
@@ -612,7 +606,7 @@ impl TcpSocket {
         Ok(IpListenEndpoint { addr, port })
     }
 
-    fn poll_connect(&self) -> AxResult<PollState> {
+    fn poll_connect(&self) -> NetResult<PollState> {
         // SAFETY: `self.handle` should be initialized above.
         let handle = unsafe { self.handle.get().read().unwrap() };
         let writable =
@@ -642,7 +636,7 @@ impl TcpSocket {
         })
     }
 
-    fn poll_stream(&self) -> AxResult<PollState> {
+    fn poll_stream(&self) -> NetResult<PollState> {
         // SAFETY: `self.handle` should be initialized in a connected socket.
         let handle = unsafe { self.handle.get().read().unwrap() };
         SOCKET_SET.with_socket::<tcp::Socket, _, _>(handle, |socket| {
@@ -653,7 +647,7 @@ impl TcpSocket {
         })
     }
 
-    fn poll_listener(&self) -> AxResult<PollState> {
+    fn poll_listener(&self) -> NetResult<PollState> {
         // SAFETY: `self.local_addr` should be initialized in a listening socket.
         let local_addr = unsafe { self.local_addr.get().read() };
         Ok(PollState {
@@ -667,18 +661,19 @@ impl TcpSocket {
     /// If the socket is non-blocking, it calls the function once and returns
     /// immediately. Otherwise, it may call the function multiple times if it
     /// returns [`Err(WouldBlock)`](AxError::WouldBlock).
-    fn block_on<F, T>(&self, mut f: F) -> AxResult<T>
+    fn block_on<F, T>(&self, mut f: F) -> NetResult<T>
     where
-        F: FnMut() -> AxResult<T>,
+        F: FnMut() -> NetResult<T>,
     {
         if self.is_nonblocking() {
+            SOCKET_SET.poll_interfaces();
             f()
         } else {
             loop {
                 SOCKET_SET.poll_interfaces();
                 match f() {
                     Ok(t) => return Ok(t),
-                    Err(AxError::WouldBlock) => axtask::yield_now(),
+                    Err(NetError::EAGAIN) => axtask::yield_now(),
                     Err(e) => return Err(e),
                 }
             }
@@ -687,18 +682,18 @@ impl TcpSocket {
 }
 
 impl Read for TcpSocket {
-    fn read(&mut self, buf: &mut [u8]) -> AxResult<usize> {
-        self.recv(buf)
+    fn read(&mut self, buf: &mut [u8]) -> axerrno::AxResult<usize> {
+        self.recv(buf).map_err(net_error_to_axio)
     }
 }
 
 impl Write for TcpSocket {
-    fn write(&mut self, buf: &[u8]) -> AxResult<usize> {
-        self.send(buf)
+    fn write(&mut self, buf: &[u8]) -> axerrno::AxResult<usize> {
+        self.send(buf).map_err(net_error_to_axio)
     }
 
-    fn flush(&mut self) -> AxResult {
-        Err(AxError::Unsupported)
+    fn flush(&mut self) -> axerrno::AxResult {
+        Err(NetError::ENOSYS).map_err(net_error_to_axio)
     }
 }
 
@@ -712,7 +707,7 @@ impl Drop for TcpSocket {
     }
 }
 
-fn get_ephemeral_port() -> AxResult<u16> {
+fn get_ephemeral_port() -> NetResult<u16> {
     const PORT_START: u16 = 0xc000;
     const PORT_END: u16 = 0xffff;
     static CURR: Mutex<u16> = Mutex::new(PORT_START);
@@ -732,5 +727,5 @@ fn get_ephemeral_port() -> AxResult<u16> {
         }
         tries += 1;
     }
-    ax_err!(AddrInUse, "no avaliable ports!")
+    Err(NetError::EADDRINUSE)
 }

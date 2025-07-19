@@ -50,7 +50,7 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 cd /musl
 # ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
-/musl/runtest.exe -w entry-static.exe socket
+# /musl/runtest.exe -w entry-static.exe socket
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
@@ -58,7 +58,7 @@ cd /musl
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
-# ./iperf_testcode.sh
+./iperf_testcode.sh
 
 cd /glibc
 # ./basic_testcode.sh

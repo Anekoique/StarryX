@@ -1,13 +1,13 @@
 use alloc::{boxed::Box, collections::VecDeque};
 use core::ops::{Deref, DerefMut};
 
-use axerrno::{AxError, AxResult, ax_err};
 use axsync::Mutex;
 use smoltcp::iface::{SocketHandle, SocketSet};
 use smoltcp::socket::tcp::{self, State};
 use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint};
 
 use super::{LISTEN_QUEUE_SIZE, SOCKET_SET, SocketSetWrapper};
+use crate::{NetError, NetResult};
 
 const PORT_NUM: usize = 65536;
 
@@ -61,7 +61,7 @@ impl ListenTable {
         self.tcp[port as usize].lock().is_none()
     }
 
-    pub fn listen(&self, listen_endpoint: IpListenEndpoint) -> AxResult {
+    pub fn listen(&self, listen_endpoint: IpListenEndpoint) -> NetResult {
         let port = listen_endpoint.port;
         assert_ne!(port, 0);
         let mut entry = self.tcp[port as usize].lock();
@@ -69,7 +69,7 @@ impl ListenTable {
             *entry = Some(Box::new(ListenTableEntry::new(listen_endpoint)));
             Ok(())
         } else {
-            ax_err!(AddrInUse, "socket listen() failed")
+            Err(NetError::EADDRINUSE)
         }
     }
 
@@ -78,22 +78,22 @@ impl ListenTable {
         *self.tcp[port as usize].lock() = None;
     }
 
-    pub fn can_accept(&self, port: u16) -> AxResult<bool> {
+    pub fn can_accept(&self, port: u16) -> NetResult<bool> {
         if let Some(entry) = self.tcp[port as usize].lock().deref() {
             Ok(entry.syn_queue.iter().any(|&handle| is_connected(handle)))
         } else {
-            ax_err!(InvalidInput, "socket accept() failed: not listen")
+            Err(NetError::EINVAL)
         }
     }
 
-    pub fn accept(&self, port: u16) -> AxResult<(SocketHandle, (IpEndpoint, IpEndpoint))> {
+    pub fn accept(&self, port: u16) -> NetResult<(SocketHandle, (IpEndpoint, IpEndpoint))> {
         if let Some(entry) = self.tcp[port as usize].lock().deref_mut() {
             let syn_queue: &mut VecDeque<SocketHandle> = &mut entry.syn_queue;
             let idx = syn_queue
                 .iter()
                 .enumerate()
                 .find_map(|(idx, &handle)| is_connected(handle).then(|| idx))
-                .ok_or(AxError::WouldBlock)?; // wait for connection
+                .ok_or(NetError::EAGAIN)?; // wait for connection
             if idx > 0 {
                 warn!(
                     "slow SYN queue enumeration: index = {}, len = {}!",
@@ -105,12 +105,12 @@ impl ListenTable {
             // If the connection is reset, return ConnectionReset error
             // Otherwise, return the handle and the address tuple
             if is_closed(handle) {
-                ax_err!(ConnectionReset, "socket accept() failed: connection reset")
+                Err(NetError::ECONNRESET)
             } else {
                 Ok((handle, get_addr_tuple(handle)))
             }
         } else {
-            ax_err!(InvalidInput, "socket accept() failed: not listen")
+            Err(NetError::EINVAL)
         }
     }
 

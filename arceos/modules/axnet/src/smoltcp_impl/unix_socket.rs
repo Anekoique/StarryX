@@ -5,9 +5,10 @@ use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use spin::Mutex;
 
-use axerrno::{AxError, AxResult, ax_err};
 use axio::{PollState, Read, Write};
 use axtask::yield_now;
+
+use crate::{NetError, NetResult, net_error_to_axio};
 
 // Unix Socket address type
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -53,9 +54,9 @@ impl MessageBuffer {
         }
     }
 
-    fn write(&mut self, buf: &[u8]) -> AxResult<usize> {
+    fn write(&mut self, buf: &[u8]) -> NetResult<usize> {
         if self.data.len() + buf.len() > self.max_size {
-            return ax_err!(WouldBlock, "buffer full");
+            return Err(NetError::EAGAIN);
         }
 
         for &byte in buf {
@@ -194,20 +195,20 @@ impl UnixSocket {
     }
 
     /// Get local address
-    pub fn local_addr(&self) -> AxResult<UnixAddr> {
+    pub fn local_addr(&self) -> NetResult<UnixAddr> {
         match self.get_state() {
             STATE_CONNECTED | STATE_LISTENING => {
                 Ok(unsafe { self.local_addr.get().read() }.clone())
             }
-            _ => ax_err!(NotConnected, "socket not bound or connected"),
+            _ => Err(NetError::ENOTCONN),
         }
     }
 
     /// Get peer address
-    pub fn peer_addr(&self) -> AxResult<UnixAddr> {
+    pub fn peer_addr(&self) -> NetResult<UnixAddr> {
         match self.get_state() {
             STATE_CONNECTED => Ok(unsafe { self.peer_addr.get().read() }.clone()),
-            _ => ax_err!(NotConnected, "socket not connected"),
+            _ => Err(NetError::ENOTCONN),
         }
     }
 
@@ -227,14 +228,14 @@ impl UnixSocket {
     }
 
     /// Connect to a specific address
-    pub fn connect(&self, addr: UnixAddr) -> AxResult {
+    pub fn connect(&self, addr: UnixAddr) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_CONNECTING, || {
             // Check if the target address is being listened to
             let mut listen_table = LISTEN_TABLE.lock();
             let mut listeners = listen_table.get_mut(&addr);
 
             if listeners.is_none() || listeners.as_ref().unwrap().is_empty() {
-                return ax_err!(ConnectionRefused, "no listener on target address");
+                return Err(NetError::ECONNREFUSED);
             }
 
             // Create connection pair
@@ -258,41 +259,41 @@ impl UnixSocket {
 
             Ok(())
         })
-        .unwrap_or_else(|_| ax_err!(AlreadyExists, "socket already connected"))?;
+        .unwrap_or_else(|_| Err(NetError::EEXIST))?;
 
         self.set_state(STATE_CONNECTED);
         Ok(())
     }
 
     /// Bind to a specific address
-    pub fn bind(&self, addr: UnixAddr) -> AxResult {
+    pub fn bind(&self, addr: UnixAddr) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_CLOSED, || {
             // Check if the address is already in use
             if matches!(addr, UnixAddr::Pathname(_)) {
                 let listen_table = LISTEN_TABLE.lock();
                 if listen_table.contains_key(&addr) {
-                    return ax_err!(AddrInUse, "address already in use");
+                    return Err(NetError::EADDRINUSE);
                 }
             }
 
             unsafe {
                 let old_addr = self.local_addr.get().read();
                 if !old_addr.is_unnamed() {
-                    return ax_err!(InvalidInput, "socket already bound");
+                    return Err(NetError::EINVAL);
                 }
                 self.local_addr.get().write(addr);
             }
             Ok(())
         })
-        .unwrap_or_else(|_| ax_err!(InvalidInput, "socket already bound"))
+        .unwrap_or_else(|_| Err(NetError::EINVAL))
     }
 
     /// Start listening
-    pub fn listen(&self) -> AxResult {
+    pub fn listen(&self) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_LISTENING, || {
             let local_addr = unsafe { self.local_addr.get().read() }.clone();
             if local_addr.is_unnamed() {
-                return ax_err!(InvalidInput, "socket not bound");
+                return Err(NetError::EINVAL);
             }
 
             let mut listen_table = LISTEN_TABLE.lock();
@@ -303,9 +304,9 @@ impl UnixSocket {
     }
 
     /// Accept a connection
-    pub fn accept(&self) -> AxResult<UnixSocket> {
+    pub fn accept(&self) -> NetResult<UnixSocket> {
         if !self.is_listening() {
-            return ax_err!(InvalidInput, "socket not listening");
+            return Err(NetError::EINVAL);
         }
 
         let local_addr = unsafe { self.local_addr.get().read() }.clone();
@@ -317,35 +318,35 @@ impl UnixSocket {
                     if let Some(client_socket) = listeners.pop_front() {
                         Ok(client_socket)
                     } else {
-                        Err(AxError::WouldBlock)
+                        Err(NetError::EAGAIN)
                     }
                 }
-                None => ax_err!(InvalidInput, "socket not listening"),
+                None => Err(NetError::EINVAL),
             }
         })
     }
 
     /// Send data
-    pub fn send(&self, buf: &[u8]) -> AxResult<usize> {
+    pub fn send(&self, buf: &[u8]) -> NetResult<usize> {
         if !self.is_connected() {
-            return ax_err!(NotConnected, "socket not connected");
+            return Err(NetError::ENOTCONN);
         }
 
         let connection = unsafe {
             match (*self.connection.get()).as_ref() {
                 Some(conn) => conn.clone(),
-                None => return ax_err!(NotConnected, "no connection"),
+                None => return Err(NetError::ENOTCONN),
             }
         };
 
         if connection.peer_closed.load(Ordering::Acquire) {
-            return ax_err!(ConnectionReset, "peer closed connection");
+            return Err(NetError::ECONNRESET);
         }
 
         self.block_on(|| {
             let mut send_buf = connection.send_buf.lock();
             if send_buf.available_space() == 0 {
-                Err(AxError::WouldBlock)
+                Err(NetError::EAGAIN)
             } else {
                 send_buf.write(buf)
             }
@@ -353,15 +354,15 @@ impl UnixSocket {
     }
 
     /// Receive data
-    pub fn recv(&self, buf: &mut [u8]) -> AxResult<usize> {
+    pub fn recv(&self, buf: &mut [u8]) -> NetResult<usize> {
         if !self.is_connected() {
-            return ax_err!(NotConnected, "socket not connected");
+            return Err(NetError::ENOTCONN);
         }
 
         let connection = unsafe {
             match (*self.connection.get()).as_ref() {
                 Some(conn) => conn.clone(),
-                None => return ax_err!(NotConnected, "no connection"),
+                None => return Err(NetError::ENOTCONN),
             }
         };
 
@@ -371,7 +372,7 @@ impl UnixSocket {
                 if connection.peer_closed.load(Ordering::Acquire) {
                     Ok(0) // EOF
                 } else {
-                    Err(AxError::WouldBlock)
+                    Err(NetError::EAGAIN)
                 }
             } else {
                 Ok(recv_buf.read(buf))
@@ -380,7 +381,7 @@ impl UnixSocket {
     }
 
     /// Close socket
-    pub fn shutdown(&self) -> AxResult {
+    pub fn shutdown(&self) -> NetResult {
         match self.get_state() {
             STATE_CONNECTED => {
                 unsafe {
@@ -409,7 +410,7 @@ impl UnixSocket {
     }
 
     /// Poll socket state
-    pub fn poll(&self) -> AxResult<PollState> {
+    pub fn poll(&self) -> NetResult<PollState> {
         match self.get_state() {
             STATE_CONNECTED => self.poll_stream(),
             STATE_LISTENING => self.poll_listener(),
@@ -429,9 +430,9 @@ impl UnixSocket {
         self.state.store(state, Ordering::Release);
     }
 
-    fn update_state<F, T>(&self, expect: u8, new: u8, f: F) -> Result<AxResult<T>, u8>
+    fn update_state<F, T>(&self, expect: u8, new: u8, f: F) -> Result<NetResult<T>, u8>
     where
-        F: FnOnce() -> AxResult<T>,
+        F: FnOnce() -> NetResult<T>,
     {
         match self
             .state
@@ -458,11 +459,11 @@ impl UnixSocket {
         self.get_state() == STATE_LISTENING
     }
 
-    fn poll_stream(&self) -> AxResult<PollState> {
+    fn poll_stream(&self) -> NetResult<PollState> {
         let connection = unsafe {
             match (*self.connection.get()).as_ref() {
                 Some(conn) => conn.clone(),
-                None => return ax_err!(NotConnected, "no connection"),
+                None => return Err(NetError::ENOTCONN),
             }
         };
 
@@ -476,7 +477,7 @@ impl UnixSocket {
         })
     }
 
-    fn poll_listener(&self) -> AxResult<PollState> {
+    fn poll_listener(&self) -> NetResult<PollState> {
         let local_addr = unsafe { self.local_addr.get().read() }.clone();
         let listen_table = LISTEN_TABLE.lock();
         let has_pending = listen_table
@@ -490,9 +491,9 @@ impl UnixSocket {
         })
     }
 
-    fn block_on<F, T>(&self, mut f: F) -> AxResult<T>
+    fn block_on<F, T>(&self, mut f: F) -> NetResult<T>
     where
-        F: FnMut() -> AxResult<T>,
+        F: FnMut() -> NetResult<T>,
     {
         if self.is_nonblocking() {
             f()
@@ -500,7 +501,7 @@ impl UnixSocket {
             loop {
                 match f() {
                     Ok(t) => return Ok(t),
-                    Err(AxError::WouldBlock) => yield_now(),
+                    Err(NetError::EAGAIN) => yield_now(),
                     Err(e) => return Err(e),
                 }
             }
@@ -509,17 +510,17 @@ impl UnixSocket {
 }
 
 impl Read for UnixSocket {
-    fn read(&mut self, buf: &mut [u8]) -> AxResult<usize> {
-        self.recv(buf)
+    fn read(&mut self, buf: &mut [u8]) -> axerrno::AxResult<usize> {
+        self.recv(buf).map_err(net_error_to_axio)
     }
 }
 
 impl Write for UnixSocket {
-    fn write(&mut self, buf: &[u8]) -> AxResult<usize> {
-        self.send(buf)
+    fn write(&mut self, buf: &[u8]) -> axerrno::AxResult<usize> {
+        self.send(buf).map_err(net_error_to_axio)
     }
 
-    fn flush(&mut self) -> AxResult {
+    fn flush(&mut self) -> axerrno::AxResult {
         Ok(()) // Unix sockets don't need explicit flushing
     }
 }

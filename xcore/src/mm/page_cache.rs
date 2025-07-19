@@ -48,7 +48,7 @@ impl PageCacheManager {
     pub fn sync_file(&self, inode: u64) -> LinuxResult<()> {
         if let Some(cache) = self.get_cache(inode) {
             cache.sync()?;
-        } 
+        }
         Ok(())
     }
 
