@@ -20,6 +20,7 @@ axfeat = { path = "arceos/api/axfeat", features = [
     "multitask",
     "net",
     "smp",
+    "sched_rr",
 ] }
 
 axconfig = { path = "arceos/modules/axconfig" }

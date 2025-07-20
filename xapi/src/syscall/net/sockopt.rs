@@ -6,12 +6,16 @@ use xcore::task::with_uspace;
 
 use crate::{
     ctypes::{
-        IPPROTO_IP, IPPROTO_TCP, IPPROTO_UDP, SO_RCVBUF, SO_REUSEADDR, SOL_SOCKET, TCP_NODELAY,
-        socklen_t, SO_SNDBUF,
+        IPPROTO_IP, IPPROTO_TCP, IPPROTO_UDP, SO_RCVBUF, SO_REUSEADDR, SO_SNDBUF, SOL_SOCKET,
+        TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY, socklen_t, SO_RCVTIMEO,
     },
     fs::FileLike,
     net::Socket,
 };
+
+const TCP_MAXSEG_DEFAULT: u32 = 1460;
+const CONGESTION: &str = "reno";
+const CONGESTION_BYTES: &[u8] = CONGESTION.as_bytes();
 
 pub fn sys_getsockopt(
     fd: i32,
@@ -47,8 +51,32 @@ pub fn sys_getsockopt(
                 Ok(())
             })?;
         } else {
+        }
+    } else if level == IPPROTO_TCP as _ {
+        if optname == TCP_MAXSEG as _ {
+            let len = TCP_MAXSEG_DEFAULT;
+            with_uspace(|uspace| -> LinuxResult<()> {
+                uspace.write(optval.cast::<u32>(), len)?;
+                uspace.write(optlen, size_of::<u32>() as socklen_t)?;
+                Ok(())
+            })?;
+        } else if optname == TCP_CONGESTION as _ {
+            // FIXME: implement this
+            with_uspace(|uspace| -> LinuxResult<()> {
+                uspace.write_slice(optval.cast::<u8>(), CONGESTION_BYTES)?;
+                uspace.write(optlen, CONGESTION_BYTES.len() as socklen_t)?;
+                Ok(())
+            })?;
+            return Ok(0);
+        } else if optname == TCP_INFO as _ {
+            return Ok(0);
+        } else {
             return Err(LinuxError::ENOPROTOOPT);
         }
+    } else if level == IPPROTO_IP as _ {
+        return Err(LinuxError::ENOPROTOOPT);
+    } else {
+        return Err(LinuxError::ENOPROTOOPT);
     }
     Ok(0)
 }
@@ -73,8 +101,8 @@ pub fn sys_setsockopt(
     if level == SOL_SOCKET as _ {
         if optname == SO_REUSEADDR as _ {
             socket.set_reuse_addr(true)?;
-        } else {
-            return Err(LinuxError::ENOPROTOOPT);
+        } else if optname == SO_RCVTIMEO as _ {
+            return Ok(0);
         }
     } else if level == IPPROTO_IP as _ {
         match optname {

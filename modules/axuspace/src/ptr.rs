@@ -176,7 +176,7 @@ impl<T> UserPtr<T> {
 
 /// Immutable user space pointer wrapper
 #[repr(transparent)]
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct UserConstPtr<T>(*const T);
 
 impl<T> From<usize> for UserConstPtr<T> {

@@ -199,4 +199,12 @@ impl FileLike for Socket {
         }
         Ok(())
     }
+
+    fn is_nonblocking(&self) -> bool {
+        match self {
+            Socket::Udp(udpsocket) => udpsocket.lock().is_nonblocking(),
+            Socket::Tcp(tcpsocket) => tcpsocket.lock().is_nonblocking(),
+            Socket::Unix(unixsocket) => unixsocket.lock().is_nonblocking(),
+        }
+    }
 }

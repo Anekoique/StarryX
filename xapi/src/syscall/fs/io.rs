@@ -96,6 +96,7 @@ fn writev_impl(
 /// * `iov` - Array of iovec structures
 /// * `iocnt` - Number of iovec structures
 pub fn sys_readv(fd: i32, iov: UserPtr<iovec>, iocnt: usize) -> LinuxResult<isize> {
+    debug!("sys_readv <= fd: {}, iov: {:?}, iocnt: {}", fd, iov, iocnt);
     let f = get_file_like(fd)?;
     readv_impl(iov, iocnt, |buf| f.read(buf))
 }
@@ -124,6 +125,7 @@ pub fn sys_write(fd: i32, buf: UserConstPtr<u8>, len: usize) -> LinuxResult<isiz
 /// * `iov` - Array of iovec structures
 /// * `iocnt` - Number of iovec structures
 pub fn sys_writev(fd: i32, iov: UserConstPtr<iovec>, iocnt: usize) -> LinuxResult<isize> {
+    debug!("sys_writev <= fd: {}, iov: {:?}, iocnt: {}", fd, iov, iocnt);
     let f = get_file_like(fd)?;
     writev_impl(iov, iocnt, |buf| f.write(buf))
 }

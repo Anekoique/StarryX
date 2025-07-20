@@ -91,6 +91,7 @@ impl FdSets {
                         && self.read.0.get(fd)
                         && let Some(readfds) = readfds.as_deref_mut()
                     {
+                        debug!("select fd={} readable", fd);
                         res += 1;
                         unsafe { FD_SET(fd as _, readfds) };
                     }
@@ -98,6 +99,7 @@ impl FdSets {
                         && self.write.0.get(fd)
                         && let Some(writefds) = writefds.as_deref_mut()
                     {
+                        debug!("select fd={} writable", fd);
                         res += 1;
                         unsafe { FD_SET(fd as _, writefds) };
                     }
@@ -152,17 +154,12 @@ fn do_select(
 
     loop {
         axnet::poll_interfaces();
-        axtask::yield_now();
 
         let res = sets.poll(
             readfds.as_deref_mut(),
             writefds.as_deref_mut(),
             exceptfds.as_deref_mut(),
         )?;
-        if res > 0 {
-            return Ok(res as _);
-        }
-
         if res > 0 {
             return Ok(res as _);
         }

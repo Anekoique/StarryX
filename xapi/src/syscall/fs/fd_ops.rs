@@ -155,7 +155,8 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
         }
         F_GETFL => {
             warn!("unsupported fcntl parameters: F_GETFL, returning O_NONBLOCK");
-            Ok(O_NONBLOCK as _)
+            let nonblock = get_file_like(fd)?.is_nonblocking();
+            Ok(if nonblock { O_NONBLOCK as _ } else { 0 })
         }
         _ => {
             warn!("unsupported fcntl parameters: cmd: {}", cmd);

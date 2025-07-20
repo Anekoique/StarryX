@@ -446,6 +446,7 @@ impl TcpSocket {
                     Ok(len)
                 } else {
                     // tx buffer is full
+                    warn!("tx buffer is full");
                     Err(NetError::EAGAIN)
                 }
             })
@@ -670,6 +671,7 @@ impl TcpSocket {
             f()
         } else {
             loop {
+                debug!("Tcp: block_on loop poll_interfaces");
                 SOCKET_SET.poll_interfaces();
                 match f() {
                     Ok(t) => return Ok(t),
