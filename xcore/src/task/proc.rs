@@ -2,7 +2,7 @@
 
 use core::{
     alloc::Layout,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicI32, AtomicUsize, Ordering},
 };
 
 use alloc::{
@@ -117,6 +117,7 @@ pub struct XThread {
     pub clear_child_tid: AtomicUsize,
     pub robust_list_head: AtomicUsize,
     pub signal: ThreadSignal,
+    pub oom_score_adj: AtomicI32,
 }
 
 impl XThread {
@@ -126,6 +127,7 @@ impl XThread {
             clear_child_tid: AtomicUsize::new(0),
             robust_list_head: AtomicUsize::new(0),
             signal: ThreadSignalManager::new(proc.signal.clone()),
+            oom_score_adj: AtomicI32::new(200),
         }
     }
 
@@ -140,6 +142,18 @@ impl XThread {
     pub fn set_clear_child_tid(&self, clear_child_tid: usize) {
         self.clear_child_tid
             .store(clear_child_tid, Ordering::Relaxed);
+    }
+
+    pub fn get_oom_score_adj(&self) -> i32 {
+        self.oom_score_adj.load(Ordering::Relaxed)
+    }
+
+    pub fn set_oom_score_adj(&self, value: i32) -> LinuxResult<()> {
+        if value < -1000 || value > 1000 {
+            return Err(LinuxError::EINVAL);
+        }
+        self.oom_score_adj.store(value, Ordering::Relaxed);
+        Ok(())
     }
 }
 

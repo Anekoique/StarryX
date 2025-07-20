@@ -15,6 +15,36 @@ pub trait VirtFileOps: Send + Sync {
     fn write_all(&self, data: &[u8]) -> VfsResult<()>;
 }
 
+pub enum VirtFileOperation<'a> {
+    Read,
+    Write(&'a [u8]),
+}
+
+pub struct RwFile<F>(F);
+impl<F, R> RwFile<F>
+where
+    F: Fn(VirtFileOperation) -> VfsResult<Option<R>> + Send + Sync,
+    R: Into<Vec<u8>>,
+{
+    pub fn new(imp: F) -> Self {
+        Self(imp)
+    }
+}
+
+impl<F, R> VirtFileOps for RwFile<F>
+where
+    F: Fn(VirtFileOperation) -> VfsResult<Option<R>> + Send + Sync,
+    R: Into<Vec<u8>>,
+{
+    fn read_all(&self) -> VfsResult<Cow<[u8]>> {
+        (self.0)(VirtFileOperation::Read).map(|it| Cow::Owned(it.unwrap().into()))
+    }
+
+    fn write_all(&self, data: &[u8]) -> VfsResult<()> {
+        (self.0)(VirtFileOperation::Write(data)).map(|_| ())
+    }
+}
+
 impl<F, R> VirtFileOps for F
 where
     F: Fn() -> R + Send + Sync + 'static,
@@ -85,18 +115,20 @@ impl FileNodeOps<RawMutex> for VirtFile {
 
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
         let data = self.ops.read_all()?;
-        if offset == 0 && buf.len() >= data.len() {
-            self.ops.write_all(buf)?;
-            return Ok(buf.len());
-        }
         let mut data = data.to_vec();
-        let end_pos = offset + buf.len() as u64;
-        if end_pos > data.len() as u64 {
-            data.resize(end_pos as usize, 0);
+    
+        let end_pos = offset as usize + buf.len();
+        if data.len() < end_pos {
+            data.resize(end_pos, 0);
         }
-        data[offset as usize..].copy_from_slice(buf);
+    
+        // safe to copy
+        data[offset as usize..offset as usize + buf.len()].copy_from_slice(buf);
+    
+        self.ops.write_all(&data)?;
         Ok(buf.len())
     }
+    
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
         let mut data = self.ops.read_all()?.into_owned();

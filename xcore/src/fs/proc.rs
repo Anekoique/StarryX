@@ -1,12 +1,17 @@
 use alloc::{format, string::String, string::ToString, sync::Arc};
-use axfs_ng_vfs::Filesystem;
+use axfs_ng_vfs::{Filesystem, VfsError};
 use axsync::RawMutex;
+use core::sync::atomic::Ordering;
 
 use super::{
-    virt_file::VirtFile,
+    virt_file::{VirtFile, RwFile, VirtFileOperation},
     virt_fs::{DirMaker, VirtDir, VirtFs},
 };
-use crate::task::api::{with_current, with_xprocess};
+use crate::task::{
+    api::{with_current, with_xprocess, with_thread}, 
+    proc::XThread
+};
+
 
 /// Dummy memory information (Linux-style /proc/meminfo)
 const DUMMY_MEMINFO: &str = r#"MemTotal:        8192000 kB
@@ -176,7 +181,7 @@ fn get_current_status() -> String {
 /// Create the root /proc directory structure
 fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
     let mut root = VirtDir::builder(fs.clone());
-
+    let pid = with_current(|curr| curr.id().as_u64());
     // Add standard /proc entries
     root.add("meminfo", create_static_file(fs.clone(), DUMMY_MEMINFO))
         .add("cpuinfo", create_static_file(fs.clone(), DUMMY_CPUINFO))
@@ -214,10 +219,70 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
             "status",
             create_dynamic_file(fs.clone(), get_current_status),
         )
-        .add("comm", create_dynamic_file(fs.clone(), get_current_name));
+        .add("comm", create_dynamic_file(fs.clone(), get_current_name))
+        .add("oom_score_adj", 
+            VirtFile::new(fs.clone(), RwFile::new(move |req| {
+                let thread = with_thread(|thread| thread.clone());
+                let Some(thr_data) = thread.data::<XThread>() else {
+                    return Err(VfsError::EBADF);
+                };
+                match req {
+                    VirtFileOperation::Read => Ok(Some(thr_data.oom_score_adj.load(Ordering::SeqCst).to_string().into_bytes())),
+                    VirtFileOperation::Write(data) => {
+                        if !data.is_empty() {
+                            let value = core::str::from_utf8(data)
+                                .ok()
+                                .and_then(|it| it.parse::<i32>().ok())
+                                .ok_or(VfsError::EINVAL)?;
+                            thr_data.oom_score_adj.store(value, Ordering::SeqCst);
+                        }
+                        Ok(None)
+                    }
+                }
+            }))
+        );
 
     // Add the built self directory to root
     root.add("self", self_dir.build());
+    
+    // 添加当前进程的[pid]目录
+    root.add(&pid.to_string(), create_proc_pid_root(fs.clone()));
 
     root.build()
+}
+
+/// Create the /proc/[pid] directory structure
+fn create_proc_pid_root(fs: Arc<VirtFs>) -> DirMaker {
+    let mut pid_dir = VirtDir::builder(fs.clone());
+    pid_dir
+        // 添加进程状态文件
+        .add("status", create_dynamic_file(fs.clone(), get_current_status))
+        // 添加oom_score_adj文件
+        .add("oom_score_adj", 
+            VirtFile::new(fs.clone(), RwFile::new(move |req| {
+                let thread = with_thread(|thread| thread.clone());
+                let Some(thr_data) = thread.data::<XThread>() else {
+                    return Err(VfsError::EBADF);
+                };
+                match req {
+                    VirtFileOperation::Read => Ok(Some(thr_data.oom_score_adj.load(Ordering::SeqCst).to_string().into_bytes())),
+                    VirtFileOperation::Write(data) => {
+                        if !data.is_empty() {
+                            let value = core::str::from_utf8(data)
+                                .ok()
+                                .and_then(|it| it.parse::<i32>().ok())
+                                .ok_or(VfsError::EINVAL)?;
+                            thr_data.oom_score_adj.store(value, Ordering::SeqCst);
+                        }
+                        Ok(None)
+                    }
+                }
+            }))
+        )
+        .add("maps", create_static_file(fs.clone(), "0\n"))
+        .add("task", create_static_file(fs.clone(), "0\n"))
+        .add("stat", create_static_file(fs.clone(), "0\n"))
+        .add("mounts", create_static_file(fs.clone(), "0\n"));
+
+    pid_dir.build()
 }

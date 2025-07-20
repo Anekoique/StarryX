@@ -10,7 +10,7 @@ mod proc;
 mod tmp;
 mod virt_file;
 mod virt_fs;
-
+mod etc;
 // Re-export commonly used types and constants
 pub use dev::RTC0_DEVICE_ID;
 
@@ -60,6 +60,11 @@ pub fn init_root() -> LinuxResult<()> {
         proc::init_procfs(),
         NodePermission::from_bits_truncate(0o555),
     )?;
+    mount_fs(
+        "/etc",
+        etc::init_etcfs(),
+        NodePermission::from_bits_truncate(0o555),
+    )?;
     Ok(())
 }
 
@@ -67,5 +72,6 @@ pub fn is_virtual_fs(path: &str) -> bool {
     path.starts_with("/dev")
         || path.starts_with("/tmp")
         || path.starts_with("/proc")
+        || path.starts_with("/etc")
         || path.starts_with("/sys")
 }

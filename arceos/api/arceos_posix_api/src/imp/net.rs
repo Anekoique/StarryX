@@ -413,15 +413,17 @@ pub unsafe fn sys_accept(
         socket_fd, socket_addr as usize, socket_len as usize
     );
     syscall_body!(sys_accept, {
-        if socket_addr.is_null() || socket_len.is_null() {
-            return Err(LinuxError::EFAULT);
-        }
         let socket = Socket::from_fd(socket_fd)?;
         let new_socket = socket.accept()?;
-        let addr = new_socket.peer_addr()?;
         let new_fd = Socket::add_to_fd_table(Socket::Tcp(Mutex::new(new_socket)))?;
-        unsafe {
-            (*socket_addr, *socket_len) = into_sockaddr(addr);
+        if !socket_addr.is_null() {
+            if socket_len.is_null() {
+                return Err(LinuxError::EFAULT);
+            }
+            let addr = Socket::from_fd(new_fd)?.peer_addr()?;
+            unsafe {
+                (*socket_addr, *socket_len) = into_sockaddr(addr);
+            }
         }
         Ok(new_fd)
     })
