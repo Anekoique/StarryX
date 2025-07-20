@@ -6,6 +6,7 @@ AX_TESTCASE ?= oscomp
 ARCH ?= x86_64
 LOG ?= off
 FEATURES ?= fp_simd,lwext4_rs
+export AX_TESTCASES_LIST=$(shell cat ./apps/$(AX_TESTCASE)/testcase_list | tr '\n' ',')
 
 export NO_AXSTD := y
 export AX_LIB := axfeat
