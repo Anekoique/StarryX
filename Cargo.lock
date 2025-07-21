@@ -2018,6 +2018,7 @@ dependencies = [
  "lazy_static",
  "linkme",
  "linux-raw-sys",
+ "lock_api",
  "memory_addr",
  "numeric-enum-macro",
  "page_cache",

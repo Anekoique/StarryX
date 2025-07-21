@@ -42,3 +42,4 @@ slab = { version = "0.4.9", default-features = false }
 kernel-elf-parser = { git = "https://github.com/Anekoique/kernel_elf_parser" }
 weak-map = { git = "https://github.com/Starry-OS/weak-map.git" }
 inherit-methods-macro = "0.1.0"
+lock_api = "0.4.13"

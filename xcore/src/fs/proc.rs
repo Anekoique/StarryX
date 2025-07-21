@@ -1,17 +1,28 @@
-use alloc::{format, string::String, string::ToString, sync::Arc};
-use axfs_ng_vfs::{Filesystem, VfsError};
+use alloc::{
+    format,
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
+    vec,
+};
+
 use axsync::RawMutex;
-use core::sync::atomic::Ordering;
+use core::{sync::atomic::Ordering, str::FromStr};
+use axfs_ng_vfs::{
+    NodeOps, FilesystemOps, Metadata, MetadataUpdate, DirNodeOps, 
+    NodeType, NodePermission, Reference, DirNode,
+    Filesystem, VfsError, VfsResult, DirEntry, DirEntrySink
+};
+use inherit_methods_macro::inherit_methods;
 
 use super::{
     virt_file::{VirtFile, RwFile, VirtFileOperation},
-    virt_fs::{DirMaker, VirtDir, VirtFs},
+    virt_fs::{DirMaker, VirtDir, VirtFs, VirtNodeOps, VirtNode},
 };
 use crate::task::{
     api::{with_current, with_xprocess, with_thread}, 
-    proc::XThread
+    proc::XThread,
 };
-
 
 /// Dummy memory information (Linux-style /proc/meminfo)
 const DUMMY_MEMINFO: &str = r#"MemTotal:        8192000 kB
@@ -96,6 +107,66 @@ power management:
 
 "#;
 
+/// Trait for getting process information - should be implemented by your process management system
+pub trait ProcessInfo {
+    fn get_all_pids() -> Vec<u64>;
+    fn get_process_name(pid: u64) -> Option<String>;
+    #[allow(dead_code)]
+    fn get_process_exe_path(pid: u64) -> Option<String>;
+    #[allow(dead_code)]
+    fn get_process_cmdline(pid: u64) -> Option<String>;
+    #[allow(dead_code)]
+    fn get_process_status(pid: u64) -> Option<String>;
+    fn process_exists(pid: u64) -> bool;
+}
+
+/// Default implementation for current process - you should replace this with actual process management
+pub struct DefaultProcessInfo;
+
+impl ProcessInfo for DefaultProcessInfo {
+    fn get_all_pids() -> Vec<u64> {
+        // Return current process ID and some dummy PIDs for demonstration
+        vec![1, with_current(|curr| curr.id().as_u64())]
+    }
+
+    fn get_process_name(pid: u64) -> Option<String> {
+        if Self::process_exists(pid) {
+            Some(if pid == 1 { "init".to_string() } else { "starry_kernel".to_string() })
+        } else {
+            None
+        }
+    }
+
+    fn get_process_exe_path(pid: u64) -> Option<String> {
+        if Self::process_exists(pid) {
+            Some(if pid == 1 { "/sbin/init".to_string() } else { get_current_exe() })
+        } else {
+            None
+        }
+    }
+
+    fn get_process_cmdline(pid: u64) -> Option<String> {
+        if Self::process_exists(pid) {
+            Some(if pid == 1 { "init\0".to_string() } else { get_current_cmdline() })
+        } else {
+            None
+        }
+    }
+
+    fn get_process_status(pid: u64) -> Option<String> {
+        if Self::process_exists(pid) {
+            Some(get_process_status_for_pid(pid))
+        } else {
+            None
+        }
+    }
+
+    fn process_exists(pid: u64) -> bool {
+        // Simple check - in real implementation, check your process table
+        pid == 1 || pid == with_current(|curr| curr.id().as_u64())
+    }
+}
+
 /// Initialize the procfs filesystem
 pub fn init_procfs() -> Filesystem<RawMutex> {
     VirtFs::new_with("procfs".into(), 0x9fa0, create_proc_root)
@@ -129,7 +200,12 @@ fn get_current_name() -> String {
 /// Get current process status
 fn get_current_status() -> String {
     let pid = with_current(|curr| curr.id().as_u64());
-    let name = get_current_name();
+    get_process_status_for_pid(pid)
+}
+
+/// Get process status for a specific PID
+fn get_process_status_for_pid(pid: u64) -> String {
+    let name = DefaultProcessInfo::get_process_name(pid).unwrap_or_else(|| "unknown".to_string());
 
     format!(
         "Name:\t{}\n\
@@ -178,111 +254,229 @@ fn get_current_status() -> String {
     )
 }
 
-/// Create the root /proc directory structure
-fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
-    let mut root = VirtDir::builder(fs.clone());
-    let pid = with_current(|curr| curr.id().as_u64());
-    // Add standard /proc entries
-    root.add("meminfo", create_static_file(fs.clone(), DUMMY_MEMINFO))
-        .add("cpuinfo", create_static_file(fs.clone(), DUMMY_CPUINFO))
-        .add(
-            "version",
-            create_static_file(fs.clone(), "StarryOS version 1.0.0\n"),
-        )
-        .add(
-            "uptime",
-            create_dynamic_file(fs.clone(), || "1234.56 1200.34\n".to_string()),
-        )
-        .add(
-            "loadavg",
-            create_static_file(fs.clone(), "0.00 0.00 0.00 1/64 1\n"),
-        )
-        .add(
-            "mounts",
-            create_static_file(
-                fs.clone(),
+/// Dynamic directory that shows all process PIDs
+pub struct DynamicProcRoot {
+    node: super::virt_fs::VirtNode,
+    this: axfs_ng_vfs::WeakDirEntry<RawMutex>,
+    fs: Arc<VirtFs>,
+}
+
+impl DynamicProcRoot {
+    fn new(fs: Arc<VirtFs>, this: axfs_ng_vfs::WeakDirEntry<RawMutex>) -> Arc<Self> {
+        let node = super::virt_fs::VirtNode::new(
+            fs.clone(),
+            axfs_ng_vfs::NodeType::Directory,
+            axfs_ng_vfs::NodePermission::from_bits_truncate(0o755),
+        );
+        
+        Arc::new(Self { node, this, fs })
+    }
+
+    /// Get static entries (non-PID entries)
+    fn get_static_entries(&self) -> Vec<(&'static str, VirtNodeOps)> {
+        vec![
+            ("meminfo", VirtNodeOps::from(create_static_file(self.fs.clone(), DUMMY_MEMINFO))),
+            ("cpuinfo", VirtNodeOps::from(create_static_file(self.fs.clone(), DUMMY_CPUINFO))),
+            ("version", VirtNodeOps::from(create_static_file(self.fs.clone(), "StarryOS version 1.0.0\n"))),
+            ("uptime", VirtNodeOps::from(create_dynamic_file(self.fs.clone(), || "1234.56 1200.34\n".to_string()))),
+            ("loadavg", VirtNodeOps::from(create_static_file(self.fs.clone(), "0.00 0.00 0.00 1/64 1\n"))),
+            ("mounts", VirtNodeOps::from(create_static_file(self.fs.clone(),
                 "proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n\
-             devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0\n\
-             tmpfs /tmp tmpfs rw,relatime 0 0\n",
-            ),
-        );
+                 devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0\n\
+                 tmpfs /tmp tmpfs rw,relatime 0 0\n"
+            ))),
+            ("self", VirtNodeOps::from(create_proc_pid_dir(self.fs.clone(), true))),
+        ]
+    }
 
-    // Create /proc/self directory separately
-    let mut self_dir = VirtDir::builder(fs.clone());
-    self_dir
-        .add("exe", VirtFile::new_symlink(fs.clone(), get_current_exe))
-        .add(
-            "cmdline",
-            create_dynamic_file(fs.clone(), get_current_cmdline),
-        )
-        .add(
-            "status",
-            create_dynamic_file(fs.clone(), get_current_status),
-        )
-        .add("comm", create_dynamic_file(fs.clone(), get_current_name))
-        .add("oom_score_adj", 
-            VirtFile::new(fs.clone(), RwFile::new(move |req| {
-                let thread = with_thread(|thread| thread.clone());
-                let Some(thr_data) = thread.data::<XThread>() else {
-                    return Err(VfsError::EBADF);
-                };
-                match req {
-                    VirtFileOperation::Read => Ok(Some(thr_data.oom_score_adj.load(Ordering::SeqCst).to_string().into_bytes())),
-                    VirtFileOperation::Write(data) => {
-                        if !data.is_empty() {
-                            let value = core::str::from_utf8(data)
-                                .ok()
-                                .and_then(|it| it.parse::<i32>().ok())
-                                .ok_or(VfsError::EINVAL)?;
-                            thr_data.oom_score_adj.store(value, Ordering::SeqCst);
-                        }
-                        Ok(None)
-                    }
+    /// Check if a name is a PID (numeric string)
+    fn is_pid_name(name: &str) -> bool {
+        name.chars().all(|c| c.is_ascii_digit())
+    }
+}
+
+#[inherit_methods(from = "self.node")]
+impl NodeOps<RawMutex> for DynamicProcRoot {
+    fn inode(&self) -> u64;
+    fn metadata(&self) -> VfsResult<Metadata>;
+    fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
+    fn filesystem(&self) -> &dyn FilesystemOps<RawMutex>;
+    fn sync(&self, data_only: bool) -> VfsResult<()>;
+    fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {
+        self
+    }
+    fn len(&self) -> VfsResult<u64> {
+        Ok(0)
+    }
+}
+
+impl DirNodeOps<RawMutex> for DynamicProcRoot {
+    fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
+        use axfs_ng_vfs::path::{DOT, DOTDOT};
+        
+        let this_entry = self.this.upgrade().unwrap();
+        
+        // Collect all entries: special entries + static entries + PID entries
+        let mut all_entries = Vec::new();
+        
+        // Add . and ..
+        all_entries.push((DOT.to_string(), this_entry.metadata()?.inode, NodeType::Directory));
+        all_entries.push((DOTDOT.to_string(), 
+            this_entry.parent()
+                .map_or_else(|| this_entry.metadata(), |parent| parent.metadata())?.inode,
+            NodeType::Directory
+        ));
+        
+        // Add static entries
+        for (name, _) in self.get_static_entries() {
+            // Get metadata from the actual file
+            match self.lookup(name) {
+                Ok(entry) => {
+                    let metadata = entry.metadata()?;
+                    all_entries.push((name.to_string(), metadata.inode, metadata.node_type));
                 }
-            }))
-        );
+                Err(_) => continue,
+            }
+        }
+        
+        // Add PID entries
+        for pid in DefaultProcessInfo::get_all_pids() {
+            let pid_name = pid.to_string();
+            
+            match self.lookup(&pid_name) {
+                Ok(entry) => {
+                    let metadata = entry.metadata()?;
+                    all_entries.push((pid_name, metadata.inode, metadata.node_type));
+                }
+                Err(_) => continue,
+            }
+        }
+        
+        // Skip to offset and send entries
+        let entries_to_send = all_entries.into_iter()
+            .enumerate()
+            .skip(offset as usize);
+        
+        let mut count = 0;
+        for (i, (name, inode, node_type)) in entries_to_send {
+            if !sink.accept(&name, inode, node_type, i as u64 + 1) {
+                break;
+            }
+            count += 1;
+        }
+        
+        Ok(count)
+    }
 
-    // Add the built self directory to root
-    root.add("self", self_dir.build());
-    
-    // 添加当前进程的[pid]目录
-    root.add(&pid.to_string(), create_proc_pid_root(fs.clone()));
 
-    root.build()
+    fn lookup(&self, name: &str) -> VfsResult<DirEntry<RawMutex>> {
+        // Check static entries first
+        for (static_name, ops) in self.get_static_entries() {
+            if static_name == name {
+                let reference = Reference::new(self.this.upgrade(), name.to_string());
+                return Ok(match ops {
+                    VirtNodeOps::Dir(maker) => {
+                        DirEntry::new_dir(|this| DirNode::new(maker(this)), reference)
+                    }
+                    VirtNodeOps::File(ops) => {
+                        let node_type = ops.metadata()?.node_type;
+                        DirEntry::new_file(axfs_ng_vfs::FileNode::new(ops), node_type, reference)
+                    }
+                });
+            }
+        }
+        
+        // Check if it's a PID
+        if Self::is_pid_name(name) {
+            if let Ok(pid) = u64::from_str(name) {
+                if DefaultProcessInfo::process_exists(pid) {
+                    let reference = Reference::new(self.this.upgrade(), name.to_string());
+                    let maker = create_proc_pid_dir(self.fs.clone(), false);
+                    return Ok(DirEntry::new_dir(|this| DirNode::new(maker(this)), reference));
+                }
+            }
+        }
+        
+        Err(VfsError::ENOENT)
+    }
+
+    fn create(
+        &self,
+        _name: &str,
+        _node_type: NodeType,
+        _permission: NodePermission,
+    ) -> VfsResult<DirEntry<RawMutex>> {
+        Err(VfsError::EROFS)
+    }
+
+    fn link(&self, _name: &str, _node: &DirEntry<RawMutex>) -> VfsResult<DirEntry<RawMutex>> {
+        Err(VfsError::EROFS)
+    }
+
+    fn unlink(&self, _name: &str) -> VfsResult<()> {
+        Err(VfsError::EROFS)
+    }
+
+    fn rename(
+        &self,
+        _src_name: &str,
+        _dst_dir: &axfs_ng_vfs::DirNode<RawMutex>,
+        _dst_name: &str,
+    ) -> VfsResult<()> {
+        Err(VfsError::EROFS)
+    }
+}
+
+/// Create the root /proc directory structure with dynamic PID support
+fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
+    Arc::new(move |this| {
+        DynamicProcRoot::new(fs.clone(), this)
+    })
 }
 
 /// Create the /proc/[pid] directory structure
-fn create_proc_pid_root(fs: Arc<VirtFs>) -> DirMaker {
+fn create_proc_pid_dir(fs: Arc<VirtFs>, is_self: bool) -> DirMaker {
     let mut pid_dir = VirtDir::builder(fs.clone());
+
+    // 公共文件
     pid_dir
-        // 添加进程状态文件
         .add("status", create_dynamic_file(fs.clone(), get_current_status))
-        // 添加oom_score_adj文件
-        .add("oom_score_adj", 
-            VirtFile::new(fs.clone(), RwFile::new(move |req| {
-                let thread = with_thread(|thread| thread.clone());
-                let Some(thr_data) = thread.data::<XThread>() else {
-                    return Err(VfsError::EBADF);
-                };
-                match req {
-                    VirtFileOperation::Read => Ok(Some(thr_data.oom_score_adj.load(Ordering::SeqCst).to_string().into_bytes())),
-                    VirtFileOperation::Write(data) => {
-                        if !data.is_empty() {
-                            let value = core::str::from_utf8(data)
-                                .ok()
-                                .and_then(|it| it.parse::<i32>().ok())
-                                .ok_or(VfsError::EINVAL)?;
-                            thr_data.oom_score_adj.store(value, Ordering::SeqCst);
-                        }
-                        Ok(None)
+        .add("oom_score_adj", VirtFile::new(fs.clone(), RwFile::new(move |req| {
+            let thread = with_thread(|thread| thread.clone());
+            let Some(thr_data) = thread.data::<XThread>() else {
+                return Err(VfsError::EBADF);
+            };
+            match req {
+                VirtFileOperation::Read => Ok(Some(thr_data.oom_score_adj.load(Ordering::SeqCst).to_string().into_bytes())),
+                VirtFileOperation::Write(data) => {
+                    if !data.is_empty() {
+                        let value = core::str::from_utf8(data)
+                            .ok()
+                            .and_then(|s| s.trim().parse::<i32>().ok())
+                            .ok_or(VfsError::EINVAL)?;
+                        thr_data.oom_score_adj.store(value, Ordering::SeqCst);
                     }
+                    Ok(None)
                 }
-            }))
-        )
+            }
+        })))
         .add("maps", create_static_file(fs.clone(), "0\n"))
         .add("task", create_static_file(fs.clone(), "0\n"))
         .add("stat", create_static_file(fs.clone(), "0\n"))
-        .add("mounts", create_static_file(fs.clone(), "0\n"));
+        .add("statm", create_static_file(fs.clone(), "1024 512 256 128 0 896 0\n"))
+        .add("cmdline", create_dynamic_file(fs.clone(), get_current_cmdline))
+        .add("comm", create_dynamic_file(fs.clone(), get_current_name))
+        .add("environ", create_static_file(fs.clone(), "PATH=/bin:/usr/bin\0HOME=/root\0TERM=xterm\0\0"))
+        .add("mounts", create_static_file(fs.clone(),
+            "proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n\
+             devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0\n\
+             tmpfs /tmp tmpfs rw,relatime 0 0\n"
+        ));
+
+    // /proc/self 额外文件
+    if is_self {
+        pid_dir.add("exe", VirtFile::new_symlink(fs.clone(), get_current_exe));
+    }
 
     pid_dir.build()
 }

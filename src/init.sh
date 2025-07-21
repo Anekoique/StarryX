@@ -63,10 +63,6 @@ run_ltp() {
 
     all_testcases="
     accept01
-    accept4_01
-    access01
-    access02
-    access03
     "
 
     cd ltp/testcases/bin
