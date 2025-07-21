@@ -1,7 +1,10 @@
-use axerrno::LinuxResult;
+use alloc::sync::Arc;
+use axerrno::{LinuxError, LinuxResult};
+use axprocess::{Pid, Process};
 use axtask::current;
 use num_enum::TryFromPrimitive;
 use xcore::task::api::{with_process, with_xthread};
+use xcore::task::{get_process, get_process_group};
 
 /// Get process ID of the calling process.
 ///
@@ -45,6 +48,31 @@ pub fn sys_setsid() -> LinuxResult<isize> {
             Err(axerrno::LinuxError::EPERM)
         }
     })
+}
+
+pub fn sys_getsid(pid: Pid) -> LinuxResult<isize> {
+    Ok(get_process(pid)?.group().session().sid() as isize)
+}
+
+pub fn sys_getpgid(pid: Pid) -> LinuxResult<isize> {
+    Ok(get_process(pid)?.group().pgid() as isize)
+}
+
+pub fn sys_setpgid(pid: Pid, pgid: Pid) -> LinuxResult<isize> {
+    let f = |process: &Arc<Process>| {
+        if pgid == 0 {
+            process.create_group();
+            Ok(0)
+        } else {
+            let group = get_process_group(pgid)?;
+            if !process.move_to_group(&group) {
+                Err(LinuxError::EPERM)
+            } else {
+                Ok(0)
+            }
+        }
+    };
+    f(&get_process(pid)?)
 }
 
 /// ARCH_PRCTL codes

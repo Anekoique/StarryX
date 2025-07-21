@@ -21,7 +21,10 @@ use crate::{
 /// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
 /// * `rlimit` - Buffer to store resource limits
 pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
-    trace!("sys_getrlimit <= resource: {}, rlimit: {:?}", resource, rlimit);
+    trace!(
+        "sys_getrlimit <= resource: {}, rlimit: {:?}",
+        resource, rlimit
+    );
     with_uspace(|uspace| {
         if let Some(rlimit) = nullable!(uspace.raw_ptr(rlimit))? {
             match resource {
@@ -49,7 +52,10 @@ pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isiz
 /// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
 /// * `rlimit` - New resource limits to set
 pub fn sys_setrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
-    trace!("sys_setrlimit <= resource: {}, rlimit: {:?}", resource, rlimit);
+    trace!(
+        "sys_setrlimit <= resource: {}, rlimit: {:?}",
+        resource, rlimit
+    );
     with_uspace(|uspace| {
         if let Some(_rlimit) = nullable!(uspace.raw_ptr(rlimit))? {
             match resource {

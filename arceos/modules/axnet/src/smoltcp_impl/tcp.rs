@@ -11,7 +11,7 @@ use smoltcp::iface::SocketHandle;
 use smoltcp::socket::tcp::{self, ConnectError, State};
 use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint};
 
-use super::addr::UNSPECIFIED_ENDPOINT;
+use super::config::UNSPECIFIED_ENDPOINT;
 use super::{LISTEN_TABLE, SOCKET_SET, SocketSetWrapper};
 use crate::{NetError, NetResult, net_error_to_axio};
 

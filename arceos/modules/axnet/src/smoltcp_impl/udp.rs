@@ -10,7 +10,7 @@ use smoltcp::iface::SocketHandle;
 use smoltcp::socket::udp::{self, BindError, SendError};
 use smoltcp::wire::{IpEndpoint, IpListenEndpoint};
 
-use super::addr::UNSPECIFIED_ENDPOINT;
+use super::config::UNSPECIFIED_ENDPOINT;
 use super::{SOCKET_SET, SocketSetWrapper};
 use crate::{NetError, NetResult, net_error_to_axio};
 

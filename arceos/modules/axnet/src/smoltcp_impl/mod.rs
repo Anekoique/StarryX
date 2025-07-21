@@ -1,4 +1,4 @@
-mod addr;
+mod config;
 mod bench;
 mod dns;
 mod listen_table;
@@ -21,6 +21,7 @@ use smoltcp::socket::{self, AnySocket, Socket};
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr};
 
+use self::config::*;
 use self::listen_table::ListenTable;
 use crate::{NetError, NetResult};
 
@@ -28,30 +29,6 @@ pub use self::dns::dns_query;
 pub use self::tcp::TcpSocket;
 pub use self::udp::UdpSocket;
 pub use self::unix_socket::{UnixAddr, UnixSocket};
-
-macro_rules! env_or_default {
-    ($key:literal) => {
-        match option_env!($key) {
-            Some(val) => val,
-            None => "",
-        }
-    };
-}
-
-const IP: &str = env_or_default!("AX_IP");
-const GATEWAY: &str = env_or_default!("AX_GW");
-const DNS_SEVER: &str = "8.8.8.8";
-const IP_PREFIX: u8 = 24;
-
-const STANDARD_MTU: usize = 1500;
-
-const RANDOM_SEED: u64 = 0xA2CE_05A2_CE05_A2CE;
-
-const TCP_RX_BUF_LEN: usize = 64 * 1024;
-const TCP_TX_BUF_LEN: usize = 64 * 1024;
-const UDP_RX_BUF_LEN: usize = 64 * 1024;
-const UDP_TX_BUF_LEN: usize = 64 * 1024;
-const LISTEN_QUEUE_SIZE: usize = 512;
 
 static LISTEN_TABLE: LazyInit<ListenTable> = LazyInit::new();
 static SOCKET_SET: LazyInit<SocketSetWrapper> = LazyInit::new();

@@ -1,5 +1,6 @@
-use super::{AxNetRxToken, AxNetTxToken, STANDARD_MTU};
+use super::{AxNetRxToken, AxNetTxToken};
 use super::{DeviceWrapper, InterfaceWrapper};
+use super::config::STANDARD_MTU;
 use smoltcp::phy::{Device, RxToken, TxToken};
 
 const GB: usize = 1000 * MB;

@@ -87,7 +87,10 @@ pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxRe
     let path = with_uspace(|uspace| uspace.read_str(path))?;
     let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
 
-    trace!("sys_mkdirat <= dirfd: {}, path: {}, mode: {:?}", dirfd, path, mode);
+    trace!(
+        "sys_mkdirat <= dirfd: {}, path: {}, mode: {:?}",
+        dirfd, path, mode
+    );
     with_fs(dirfd, path, |fs| fs.create_dir(path, mode)).map(|_| 0)
 }
 
@@ -313,7 +316,10 @@ pub fn sys_symlinkat(
         Ok((target, linkpath))
     })?;
 
-    trace!("sys_symlinkat <= target: {}, new_dirfd: {}, linkpath: {}", target, new_dirfd, linkpath);
+    trace!(
+        "sys_symlinkat <= target: {}, new_dirfd: {}, linkpath: {}",
+        target, new_dirfd, linkpath
+    );
     with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath)).map(|_| 0)
 }
 

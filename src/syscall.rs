@@ -271,7 +271,6 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::getpid => sys_getpid(),
         Sysno::getppid => sys_getppid(),
         Sysno::gettid => sys_gettid(),
-        Sysno::setsid => sys_setsid(),
 
         // task sched
         Sysno::sched_yield => sys_sched_yield(),
@@ -310,6 +309,8 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             tf.arg2().into(),
             tf.arg3().into(),
         ),
+        Sysno::capget => sys_capget(tf.arg0().into(), tf.arg1().into()),
+        Sysno::capset => sys_capset(tf.arg0().into(), tf.arg1().into()),
 
         // task management
         Sysno::clone => sys_clone(
@@ -325,6 +326,10 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::exit => sys_exit(tf.arg0() as _),
         Sysno::exit_group => sys_exit_group(tf.arg0() as _),
         Sysno::wait4 => sys_wait4(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
+        Sysno::getsid => sys_getsid(tf.arg0() as _),
+        Sysno::setsid => sys_setsid(),
+        Sysno::getpgid => sys_getpgid(tf.arg0() as _),
+        Sysno::setpgid => sys_setpgid(tf.arg0() as _, tf.arg1() as _),
 
         // signal
         Sysno::rt_sigprocmask => sys_rt_sigprocmask(
