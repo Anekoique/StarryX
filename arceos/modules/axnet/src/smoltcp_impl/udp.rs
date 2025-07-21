@@ -240,11 +240,6 @@ impl UdpSocket {
             });
         }
         SOCKET_SET.with_socket_mut::<udp::Socket, _, _>(self.handle, |socket| {
-            debug!(
-                "Udp: poll readable: {}, writable: {}",
-                socket.can_recv(),
-                socket.can_send()
-            );
             Ok(PollState {
                 readable: socket.can_recv(),
                 writable: socket.can_send(),
@@ -321,7 +316,6 @@ impl UdpSocket {
             f()
         } else {
             loop {
-                debug!("Udp: block_on loop poll_interfaces");
                 SOCKET_SET.poll_interfaces();
                 match f() {
                     Ok(t) => return Ok(t),

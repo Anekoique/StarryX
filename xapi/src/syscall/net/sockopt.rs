@@ -6,8 +6,8 @@ use xcore::task::with_uspace;
 
 use crate::{
     ctypes::{
-        IPPROTO_IP, IPPROTO_TCP, IPPROTO_UDP, SO_RCVBUF, SO_REUSEADDR, SO_SNDBUF, SOL_SOCKET,
-        TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY, socklen_t, SO_RCVTIMEO,
+        L_IP, L_SOCKET, L_TCP, L_UDP, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF,
+        TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY, socklen_t,
     },
     fs::FileLike,
     net::Socket,
@@ -33,51 +33,34 @@ pub fn sys_getsockopt(
         optlen,
     );
 
-    if level == SOL_SOCKET as _ {
-        if optname == SO_RCVBUF as _ {
-            let socket = Socket::from_fd(fd)?;
-            let len = socket.get_recv_buffer_size()?;
-            with_uspace(|uspace| -> LinuxResult<()> {
-                uspace.write(optval.cast::<u32>(), len)?;
-                uspace.write(optlen, size_of::<u32>() as socklen_t)?;
-                Ok(())
-            })?;
-        } else if optname == SO_SNDBUF as _ {
-            let socket = Socket::from_fd(fd)?;
-            let len = socket.get_send_buffer_size()?;
-            with_uspace(|uspace| -> LinuxResult<()> {
-                uspace.write(optval.cast::<u32>(), len)?;
-                uspace.write(optlen, size_of::<u32>() as socklen_t)?;
-                Ok(())
-            })?;
-        } else {
-        }
-    } else if level == IPPROTO_TCP as _ {
-        if optname == TCP_MAXSEG as _ {
-            let len = TCP_MAXSEG_DEFAULT;
-            with_uspace(|uspace| -> LinuxResult<()> {
-                uspace.write(optval.cast::<u32>(), len)?;
-                uspace.write(optlen, size_of::<u32>() as socklen_t)?;
-                Ok(())
-            })?;
-        } else if optname == TCP_CONGESTION as _ {
-            // FIXME: implement this
-            with_uspace(|uspace| -> LinuxResult<()> {
-                uspace.write_slice(optval.cast::<u8>(), CONGESTION_BYTES)?;
-                uspace.write(optlen, CONGESTION_BYTES.len() as socklen_t)?;
-                Ok(())
-            })?;
-            return Ok(0);
-        } else if optname == TCP_INFO as _ {
-            return Ok(0);
-        } else {
-            return Err(LinuxError::ENOPROTOOPT);
-        }
-    } else if level == IPPROTO_IP as _ {
-        return Err(LinuxError::ENOPROTOOPT);
-    } else {
-        return Err(LinuxError::ENOPROTOOPT);
-    }
+    let optname = optname as u32;
+    let socket = Socket::from_fd(fd)?;
+    with_uspace(|uspace| match level {
+        L_SOCKET => match optname {
+            SO_RCVBUF => {
+                uspace.write(optval.cast::<u32>(), socket.get_recv_buffer_size()?)?;
+                uspace.write(optlen, size_of::<u32>() as socklen_t)
+            }
+            SO_SNDBUF => {
+                uspace.write(optval.cast::<u32>(), socket.get_send_buffer_size()?)?;
+                uspace.write(optlen, size_of::<u32>() as socklen_t)
+            }
+            _ => Err(LinuxError::ENOPROTOOPT),
+        },
+        L_TCP => match optname {
+            TCP_MAXSEG => {
+                uspace.write(optval.cast::<u32>(), TCP_MAXSEG_DEFAULT)?;
+                uspace.write(optlen, size_of::<u32>() as socklen_t)
+            }
+            TCP_CONGESTION => uspace.write_slice(optval.cast::<u8>(), CONGESTION_BYTES),
+            TCP_INFO => Ok(()),
+            _ => Err(LinuxError::ENOPROTOOPT),
+        },
+        L_UDP => Err(LinuxError::ENOPROTOOPT),
+        L_IP => Err(LinuxError::ENOPROTOOPT),
+        _ => Err(LinuxError::ENOPROTOOPT),
+    })?;
+
     Ok(0)
 }
 
@@ -86,7 +69,7 @@ pub fn sys_setsockopt(
     level: i32,
     optname: i32,
     optval: UserPtr<u8>,
-    optlen: socklen_t,
+    _optlen: socklen_t,
 ) -> LinuxResult<isize> {
     debug!(
         "sys_setsockopt <= fd: {}, level: {}, optname: {}, optval: {:?}, optlen: {}",
@@ -94,32 +77,33 @@ pub fn sys_setsockopt(
         level,
         optname,
         optval.address(),
-        optlen
+        _optlen
     );
 
+    let optname = optname as u32;
     let socket = Socket::from_fd(fd)?;
-    if level == SOL_SOCKET as _ {
-        if optname == SO_REUSEADDR as _ {
-            socket.set_reuse_addr(true)?;
-        } else if optname == SO_RCVTIMEO as _ {
-            return Ok(0);
-        }
-    } else if level == IPPROTO_IP as _ {
-        match optname {
+    match level {
+        L_SOCKET => match optname {
+            SO_REUSEADDR => {
+                let optval = with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?;
+                socket.set_reuse_addr(optval)?;
+            }
+            SO_RCVTIMEO => {
+                return Ok(0);
+            }
             _ => return Err(LinuxError::ENOPROTOOPT),
-        }
-    } else if level == IPPROTO_TCP as _ {
-        if optname == TCP_NODELAY as _ {
-            socket.set_nagle_enabled(false)?;
-        } else {
-            return Err(LinuxError::ENOPROTOOPT);
-        }
-    } else if level == IPPROTO_UDP as _ {
-        match optname {
+        },
+        L_TCP => match optname {
+            TCP_NODELAY => {
+                let optval = with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?;
+                socket.set_nagle_enabled(optval)?;
+            }
             _ => return Err(LinuxError::ENOPROTOOPT),
-        }
-    } else {
-        return Err(LinuxError::ENOPROTOOPT);
+        },
+        L_UDP => return Err(LinuxError::ENOPROTOOPT),
+        L_IP => return Err(LinuxError::ENOPROTOOPT),
+        _ => return Err(LinuxError::ENOPROTOOPT),
     }
+
     Ok(0)
 }

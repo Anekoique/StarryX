@@ -19,6 +19,10 @@ pub use linux_raw_sys::system::{new_utsname, sysinfo};
 // net
 pub const SOCK_CLOEXEC: u32 = O_CLOEXEC;
 pub const SOCK_NONBLOCK: u32 = O_NONBLOCK;
+pub const L_SOCKET: i32 = SOL_SOCKET as _;
+pub const L_IP: i32 = IPPROTO_IP as _;
+pub const L_TCP: i32 = IPPROTO_TCP as _;
+pub const L_UDP: i32 = IPPROTO_UDP as _;
 
 // fs
 pub const O_EXEC: u32 = O_PATH;

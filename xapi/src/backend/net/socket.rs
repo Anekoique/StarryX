@@ -149,15 +149,11 @@ impl Socket {
     }
 
     pub fn get_recv_buffer_size(&self) -> LinuxResult<u32> {
-        match self {
-            _ => Ok(64 * 1024),
-        }
+        Ok(64 * 1024)
     }
 
     pub fn get_send_buffer_size(&self) -> LinuxResult<u32> {
-        match self {
-            _ => Ok(64 * 1024),
-        }
+        Ok(64 * 1024)
     }
 
     impl_socket!(pub fn send(&self, buf: &[u8]) -> LinuxResult<usize>);
