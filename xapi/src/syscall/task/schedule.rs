@@ -163,7 +163,7 @@ pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> Lin
     }
 
     let dur = timespec::to_time_value(req);
-    debug!("sys_nanosleep <= {:?}", dur);
+    trace!("sys_nanosleep <= {:?}", dur);
 
     let now = axhal::time::monotonic_time();
 

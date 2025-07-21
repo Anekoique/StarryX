@@ -52,7 +52,10 @@ pub fn sys_getsockopt(
                 uspace.write(optval.cast::<u32>(), TCP_MAXSEG_DEFAULT)?;
                 uspace.write(optlen, size_of::<u32>() as socklen_t)
             }
-            TCP_CONGESTION => uspace.write_slice(optval.cast::<u8>(), CONGESTION_BYTES),
+            TCP_CONGESTION => {
+                uspace.write_slice(optval.cast::<u8>(), CONGESTION_BYTES)?;
+                uspace.write(optlen, CONGESTION_BYTES.len() as socklen_t)
+            }
             TCP_INFO => Ok(()),
             _ => Err(LinuxError::ENOPROTOOPT),
         },
@@ -85,8 +88,7 @@ pub fn sys_setsockopt(
     match level {
         L_SOCKET => match optname {
             SO_REUSEADDR => {
-                let optval = with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?;
-                socket.set_reuse_addr(optval)?;
+                socket.set_reuse_addr(with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?)?;
             }
             SO_RCVTIMEO => {
                 return Ok(0);
@@ -95,8 +97,9 @@ pub fn sys_setsockopt(
         },
         L_TCP => match optname {
             TCP_NODELAY => {
-                let optval = with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?;
-                socket.set_nagle_enabled(optval)?;
+                socket.set_nagle_enabled(!with_uspace(|uspace| {
+                    uspace.read(optval.cast::<bool>())
+                })?)?;
             }
             _ => return Err(LinuxError::ENOPROTOOPT),
         },

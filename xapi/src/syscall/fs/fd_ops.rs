@@ -97,7 +97,7 @@ fn dup_fd(old_fd: c_int) -> LinuxResult<isize> {
 /// # Arguments
 /// * `old_fd` - File descriptor to duplicate
 pub fn sys_dup(old_fd: c_int) -> LinuxResult<isize> {
-    debug!("sys_dup <= {}", old_fd);
+    trace!("sys_dup <= {}", old_fd);
     dup_fd(old_fd)
 }
 
@@ -107,7 +107,7 @@ pub fn sys_dup(old_fd: c_int) -> LinuxResult<isize> {
 /// * `old_fd` - File descriptor to duplicate
 /// * `new_fd` - Target file descriptor number
 pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> LinuxResult<isize> {
-    debug!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
+    trace!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
     let f = FD_TABLE.get(old_fd as _).ok_or(LinuxError::EBADF)?;
 
     if old_fd != new_fd {

@@ -30,10 +30,7 @@ impl PageCacheManager {
         self.caches
             .write()
             .entry(inode.inode())
-            .or_insert_with(|| {
-                debug!("cache create: {:?}", inode.inode());
-                Arc::new(PageCache::new(inode))
-            })
+            .or_insert_with(|| Arc::new(PageCache::new(inode)))
             .clone()
     }
 
@@ -66,11 +63,9 @@ impl PageCacheManager {
             .collect();
 
         for key in stale_keys {
-            debug!("Removing stale cache for inode: {}", key);
             if let Some(cache) = caches.remove(&key) {
                 let _ = cache.clear();
             }
         }
-        drop(caches);
     }
 }

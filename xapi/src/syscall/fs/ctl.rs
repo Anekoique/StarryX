@@ -30,6 +30,8 @@ use crate::{
 ///   and of type int in musl and other UNIX systems.
 /// * `argp` - The argument to the request. It is a pointer to a memory location
 pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
+    trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
+
     let f = get_file_like(fd)?;
     let stat = f.stat()?;
     if op == RTC_RD_TIME as _ && stat.rdev == RTC0_DEVICE_ID {
@@ -47,6 +49,7 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
         };
         with_uspace(|uspace| uspace.write(argp.cast::<rtc_time>(), rtc_data))?;
     }
+
     Ok(0)
 }
 
@@ -56,16 +59,13 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
 /// * `path` - Path to the new working directory
 pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     let path = with_uspace(|uspace| uspace.read_str(path))?;
-    debug!("sys_chdir <= path: {}", path);
 
+    trace!("sys_chdir <= path: {}", path);
     with_fs(AT_FDCWD, path, |fs| {
         let entry = fs.resolve(path)?;
         fs.set_current_dir(entry)
     })
     .map(|_| 0)
-    .inspect_err(|err| {
-        warn!("Failed to change directory: {err:?}");
-    })
 }
 
 /// Create a directory.
@@ -87,11 +87,8 @@ pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxRe
     let path = with_uspace(|uspace| uspace.read_str(path))?;
     let mode = NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?;
 
-    with_fs(dirfd, path, |fs| fs.create_dir(path, mode))
-        .map(|_| 0)
-        .inspect_err(|err| {
-            warn!("Failed to create directory {path}: {err:?}");
-        })
+    trace!("sys_mkdirat <= dirfd: {}, path: {}, mode: {:?}", dirfd, path, mode);
+    with_fs(dirfd, path, |fs| fs.create_dir(path, mode)).map(|_| 0)
 }
 
 // Directory buffer for getdents64 syscall
@@ -146,7 +143,7 @@ impl<'a> DirBuffer<'a> {
 /// * `len` - Buffer length
 pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
     let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
-    debug!(
+    trace!(
         "sys_getdents64 <= fd: {}, buf: {:p}, len: {}",
         fd,
         buf.as_ptr(),
@@ -189,7 +186,7 @@ pub fn sys_linkat(
         let new_path = uspace.read_str(new_path)?;
         Ok((old_path, new_path))
     })?;
-    debug!(
+    trace!(
         "sys_linkat <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
@@ -229,8 +226,7 @@ pub fn sys_link(
 /// * `flags` - Flags (0 for file, AT_REMOVEDIR for directory)
 pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> LinuxResult<isize> {
     let path = with_uspace(|uspace| uspace.read_str(path))?;
-
-    debug!(
+    trace!(
         "sys_unlinkat <= dirfd: {}, path: {:?}, flags: {}",
         dirfd, path, flags
     );
@@ -275,7 +271,6 @@ pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
 
     with_fs(AT_FDCWD, ".", |fs| {
         let cwd = fs.current_dir().absolute_path()?;
-        debug!("sys_getcwd => cwd: {}", cwd);
 
         let cwd = CString::new(cwd.as_str()).map_err(|_| LinuxError::EINVAL)?;
         let cwd = cwd.as_bytes_with_nul();
@@ -318,6 +313,7 @@ pub fn sys_symlinkat(
         Ok((target, linkpath))
     })?;
 
+    trace!("sys_symlinkat <= target: {}, new_dirfd: {}, linkpath: {}", target, new_dirfd, linkpath);
     with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath)).map(|_| 0)
 }
 
@@ -357,7 +353,7 @@ pub fn sys_readlinkat(
     with_fs(dirfd, path, |fs| {
         let entry = fs.resolve_no_follow(path)?;
         let link = entry.read_link()?;
-        debug!("sys_readlinkat => link: {}", link);
+        trace!("sys_readlinkat => link: {}", link);
         let read = size.min(link.len());
         buf[..read].copy_from_slice(&link.as_bytes()[..read]);
         Ok(read as isize)
@@ -589,7 +585,7 @@ pub fn sys_renameat2(
         let new_path = uspace.read_str(new_path)?;
         Ok((old_path, new_path))
     })?;
-    debug!(
+    trace!(
         "sys_renameat2 <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
     );

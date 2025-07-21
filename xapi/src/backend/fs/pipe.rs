@@ -190,7 +190,6 @@ impl FileLike for Pipe {
                 if buf.available_read() == 0 && self.closed() {
                     return Err(LinuxError::EPIPE);
                 }
-                debug!("pipe poll readable: {}", buf.available_read());
                 Ok(PollState {
                     readable: buf.available_read() > 0,
                     writable: false,

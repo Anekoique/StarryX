@@ -34,7 +34,7 @@ pub fn sys_clock_gettime(
         }
     };
     with_uspace(|uspace| uspace.write(tp, timespec::from_time_value(now)))?;
-    debug!("sys_clock_gettime: {:?}", tp);
+    trace!("sys_clock_gettime: {:?}", tp);
     Ok(0)
 }
 

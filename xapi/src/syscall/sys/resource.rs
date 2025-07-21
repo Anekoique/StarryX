@@ -21,6 +21,7 @@ use crate::{
 /// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
 /// * `rlimit` - Buffer to store resource limits
 pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
+    trace!("sys_getrlimit <= resource: {}, rlimit: {:?}", resource, rlimit);
     with_uspace(|uspace| {
         if let Some(rlimit) = nullable!(uspace.raw_ptr(rlimit))? {
             match resource {
@@ -48,6 +49,7 @@ pub fn sys_getrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isiz
 /// * `resource` - Resource type (RLIMIT_DATA, RLIMIT_STACK, RLIMIT_NOFILE)
 /// * `rlimit` - New resource limits to set
 pub fn sys_setrlimit(resource: u32, rlimit: UserPtr<rlimit>) -> LinuxResult<isize> {
+    trace!("sys_setrlimit <= resource: {}, rlimit: {:?}", resource, rlimit);
     with_uspace(|uspace| {
         if let Some(_rlimit) = nullable!(uspace.raw_ptr(rlimit))? {
             match resource {
@@ -77,7 +79,10 @@ pub fn sys_prlimit64(
     new_limit: UserConstPtr<rlimit64>,
     old_limit: UserPtr<rlimit64>,
 ) -> LinuxResult<isize> {
-    debug!("resource: {}", resource);
+    trace!(
+        "sys_prlimit64 <= pid: {}, resource: {}, new_limit: {:?}, old_limit: {:?}",
+        pid, resource, new_limit, old_limit
+    );
     if resource >= RLIM_NLIMITS {
         return Err(LinuxError::EINVAL);
     }
@@ -100,10 +105,6 @@ pub fn sys_prlimit64(
         if new_limit.rlim_max <= limit.max {
             limit.max = new_limit.rlim_max;
         } else {
-            debug!(
-                "new_limit.rlim_max: {}, limit.max: {}",
-                new_limit.rlim_max, limit.max
-            );
             return Err(LinuxError::EPERM);
         }
 
@@ -119,6 +120,7 @@ pub fn sys_prlimit64(
 /// * `who` - Target for resource usage (RUSAGE_SELF, RUSAGE_CHILDREN)
 /// * `usage` - Buffer to store resource usage statistics
 pub fn sys_getrusage(who: i32, usage: UserPtr<rusage>) -> LinuxResult<isize> {
+    trace!("sys_getrusage <= who: {}, usage: {:?}", who, usage);
     const RUSAGE_SELF: i32 = 0;
     with_uspace(|uspace| {
         if let Some(usage) = nullable!(uspace.raw_ptr(usage))? {
@@ -127,7 +129,6 @@ pub fn sys_getrusage(who: i32, usage: UserPtr<rusage>) -> LinuxResult<isize> {
                     let (utime_ns, _, _, stime_ns, _, _) = time_stat_output();
                     usage.ru_utime = __kernel_old_timeval::from_nanos(utime_ns as u64);
                     usage.ru_stime = __kernel_old_timeval::from_nanos(stime_ns as u64);
-                    debug!("usage: {:?}", usage);
                     Ok(0)
                 }
                 _ => Err(LinuxError::EINVAL),

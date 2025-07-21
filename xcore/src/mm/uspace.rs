@@ -76,7 +76,6 @@ impl XUserSpace {
 
                 match region.get_buf(page_addr) {
                     Ok(page_data) => {
-                        debug!("Populating page: {:#x}", page_addr);
                         aspace.write(page_addr, &page_data, region.align)?;
                     }
                     Err(LinuxError::EEXIST) => {

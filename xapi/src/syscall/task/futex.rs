@@ -30,7 +30,7 @@ pub fn sys_futex(
     uaddr2: UserPtr<u32>,
     value3: u32,
 ) -> LinuxResult<isize> {
-    info!("futex {:?} {} {}", uaddr.address(), futex_op, value);
+    debug!("futex {:?} {} {}", uaddr.address(), futex_op, value);
 
     let xprocess = current().task_ext().xprocess();
     let uspace = xprocess.uspace();

@@ -58,7 +58,7 @@ pub fn sys_fstatat(
     with_uspace(|uspace| {
         let path = nullable!(uspace.read_str(path))?;
 
-        debug!(
+        trace!(
             "sys_fstatat <= dirfd: {}, path: {:?}, flags: {}",
             dirfd, path, flags
         );
@@ -102,7 +102,7 @@ pub fn sys_statx(
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
         let path = nullable!(uspace.read_str(path))?;
-        debug!(
+        trace!(
             "sys_statx <= dirfd: {}, path: {:?}, flags: {}",
             dirfd, path, flags
         );

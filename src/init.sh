@@ -58,7 +58,7 @@ cd /musl
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
-# ./iperf_testcode.sh
+./iperf_testcode.sh
 # ./netperf_testcode.sh
 
 cd /glibc
@@ -69,4 +69,4 @@ cd /glibc
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./cyclictest_testcode.sh
-./iperf_testcode.sh
+# ./iperf_testcode.sh

@@ -39,7 +39,7 @@ pub fn sys_mmap(
         return Err(LinuxError::EINVAL);
     }
 
-    info!(
+    debug!(
         "sys_mmap: addr: {:x?}, length: {:x?}, prot: {:?}, flags: {:?}, fd: {:?}, offset: {:?}",
         addr, length, permission_flags, map_flags, fd, offset
     );

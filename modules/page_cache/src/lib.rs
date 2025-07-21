@@ -120,11 +120,11 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
 
     pub fn load_page(&self, index: u64) -> LinuxResult<CachePage> {
         if let Some(page) = self.get_page(index) {
-            debug!("Cache hit: index={}", index);
+            trace!("Cache hit: index={}", index);
             return Ok(page);
         }
 
-        debug!("Cache miss: index={}", index);
+        trace!("Cache miss: index={}", index);
         let mut page = CachePage::new(P::alloc_page().ok_or(LinuxError::ENOMEM)?);
         let mut buf = [0u8; PAGE_SIZE_4K];
         let offset = index << PAGE_SHIFT;
@@ -143,7 +143,6 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     }
 
     pub fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
-        debug!("Cache read: offset={}, len={}", offset, buf.len());
         let file_len = self.file_size.load(Ordering::Relaxed);
 
         if offset >= file_len {
@@ -175,7 +174,6 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     }
 
     pub fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
-        debug!("Cache write: offset={}, len={}", offset, buf.len());
         let mut current_offset = offset;
         let mut buf_offset = 0;
         self.file_size
@@ -223,7 +221,6 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
 
         if offset < file_size {
             let write_size = ((file_size - offset).min(PAGE_SIZE_4K as u64)) as usize;
-            debug!("write_back_page: offset={}, len={}", offset, write_size);
             self.host.write_at(&buf[..write_size], offset)?;
         }
 

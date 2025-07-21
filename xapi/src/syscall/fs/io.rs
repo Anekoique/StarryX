@@ -137,7 +137,7 @@ pub fn sys_writev(fd: i32, iov: UserConstPtr<iovec>, iocnt: usize) -> LinuxResul
 /// * `offset` - Offset value
 /// * `whence` - How to interpret the offset (SEEK_SET, SEEK_CUR, SEEK_END)
 pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResult<isize> {
-    debug!("sys_lseek <= {} {} {}", fd, offset, whence);
+    trace!("sys_lseek <= {} {} {}", fd, offset, whence);
     let pos = match whence {
         0 => SeekFrom::Start(offset as _),
         1 => SeekFrom::Current(offset as _),
@@ -154,7 +154,7 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 /// * `fd` - File descriptor
 /// * `length` - New length for the file
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
-    debug!("sys_ftruncate <= {} {}", fd, length);
+    trace!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, |file| {
         file.inner().access(FileFlags::WRITE)?.set_len(length as _)
     })
@@ -197,6 +197,7 @@ pub fn sys_pread64(
     offset: __kernel_off_t,
 ) -> LinuxResult<isize> {
     let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
+    trace!("sys_pread64 <= {}", fd);
     with_file(fd, |file| file.read_at(buf, offset as _)).map(|read| read as isize)
 }
 
@@ -214,6 +215,7 @@ pub fn sys_pwrite64(
     offset: __kernel_off_t,
 ) -> LinuxResult<isize> {
     let buf = with_uspace(|uspace| uspace.read_slice(buf, len))?;
+    trace!("sys_pwrite64 <= {}", fd);
     with_file(fd, |file| file.write_at(buf, offset as _)).map(|written| written as isize)
 }
 
@@ -333,7 +335,7 @@ pub fn sys_sendfile(
     offset: UserPtr<u64>,
     len: usize,
 ) -> LinuxResult<isize> {
-    debug!(
+    trace!(
         "sys_sendfile <= out_fd: {}, in_fd: {}, offset: {}, len: {}",
         out_fd,
         in_fd,
