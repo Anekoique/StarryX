@@ -1,5 +1,5 @@
-mod config;
 mod bench;
+mod config;
 mod dns;
 mod listen_table;
 mod tcp;

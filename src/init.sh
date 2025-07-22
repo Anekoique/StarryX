@@ -77,7 +77,7 @@ run_ltp() {
 }
 
 cd /musl
-run_ltp musl
+# run_ltp musl
 # ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh
@@ -88,6 +88,7 @@ run_ltp musl
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
+./netperf_testcode.sh
 
 cd /glibc
 # ./basic_testcode.sh

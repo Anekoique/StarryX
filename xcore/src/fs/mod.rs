@@ -6,11 +6,11 @@
 //! - `/proc` - Process information filesystem (procfs)
 
 mod dev;
+mod etc;
 mod proc;
 mod tmp;
 mod virt_file;
 mod virt_fs;
-mod etc;
 // Re-export commonly used types and constants
 pub use dev::RTC0_DEVICE_ID;
 

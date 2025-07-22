@@ -116,19 +116,18 @@ impl FileNodeOps<RawMutex> for VirtFile {
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
         let data = self.ops.read_all()?;
         let mut data = data.to_vec();
-    
+
         let end_pos = offset as usize + buf.len();
         if data.len() < end_pos {
             data.resize(end_pos, 0);
         }
-    
+
         // safe to copy
         data[offset as usize..offset as usize + buf.len()].copy_from_slice(buf);
-    
+
         self.ops.write_all(&data)?;
         Ok(buf.len())
     }
-    
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
         let mut data = self.ops.read_all()?.into_owned();

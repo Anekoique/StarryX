@@ -1,7 +1,7 @@
+use crate::alloc::string::ToString;
 use alloc::sync::Arc;
 use axfs_ng_vfs::Filesystem;
 use axsync::RawMutex;
-use crate::alloc::string::ToString;
 
 use super::{
     virt_file::VirtFile,

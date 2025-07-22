@@ -149,7 +149,7 @@ impl XThread {
     }
 
     pub fn set_oom_score_adj(&self, value: i32) -> LinuxResult<()> {
-        if value < -1000 || value > 1000 {
+        if !(-1000..=1000).contains(&value) {
             return Err(LinuxError::EINVAL);
         }
         self.oom_score_adj.store(value, Ordering::Relaxed);
