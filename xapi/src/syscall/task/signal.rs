@@ -85,6 +85,7 @@ pub fn sys_rt_sigaction(
         if matches!(signo, Signo::SIGKILL | Signo::SIGSTOP) {
             return Err(LinuxError::EINVAL);
         }
+        debug!("sys_rt_sigaction <= signo: {:?}", signo);
 
         let mut actions = xprocess.signal.actions.lock();
         if let Some(oldact) = nullable!(uspace.raw_ptr(oldact))? {

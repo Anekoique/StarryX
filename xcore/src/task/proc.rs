@@ -31,7 +31,7 @@ use crate::{
     mm::{FileWrapper, XUserSpace},
     resources::Rlimits,
     task::{FutexTable, ProcessSignal, ThreadSignal, with_current},
-    time::TimeStat,
+    time::{TimeStat, time_stat_switch_from_old_task},
 };
 
 pub fn new_user_task(
@@ -228,7 +228,9 @@ struct AxTaskExtImpl;
 impl AxTaskExtIf for AxTaskExtImpl {
     fn switch_to_task() {}
 
-    fn switch_from_task() {}
+    fn switch_from_task() {
+        time_stat_switch_from_old_task();
+    }
 
     fn update_real_timer() {}
 }

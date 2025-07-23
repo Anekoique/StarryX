@@ -28,6 +28,13 @@ impl FS_CONTEXT {
     }
 }
 
+fn is_virtual_fs(path: &str) -> bool {
+    path.starts_with("/dev")
+        || path.starts_with("/tmp")
+        || path.starts_with("/proc")
+        || path.starts_with("/sys")
+}
+
 /// Provides `std::fs`-like interface.
 pub struct FsContext<M> {
     root_dir: Location<M>,
@@ -322,7 +329,7 @@ impl<M: RawMutex> FsContext<M> {
         }
 
         // Handle file truncation
-        if options.get_truncate() {
+        if options.get_truncate() && !is_virtual_fs(path.as_str()) {
             loc.entry().as_file()?.set_len(0)?;
         }
 

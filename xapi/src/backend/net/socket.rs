@@ -148,6 +148,13 @@ impl Socket {
         }
     }
 
+    pub fn set_keep_alive(&self, keep_alive: bool) -> LinuxResult {
+        match self {
+            Socket::Tcp(tcpsocket) => Ok(tcpsocket.lock().set_keep_alive(keep_alive)),
+            _ => Err(LinuxError::EOPNOTSUPP),
+        }
+    }
+
     pub fn get_recv_buffer_size(&self) -> LinuxResult<u32> {
         Ok(64 * 1024)
     }

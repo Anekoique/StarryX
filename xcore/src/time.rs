@@ -2,9 +2,10 @@
 
 use axhal::time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos};
 use axsignal::{SignalInfo, Signo};
+use axtask::TaskExtRef;
 use linux_raw_sys::general::{SI_KERNEL, SIGALRM};
 
-use crate::task::{send_signal_process, with_process, with_xthread};
+use crate::task::{send_signal_process, with_current, with_xthread};
 
 numeric_enum_macro::numeric_enum! {
     #[repr(i32)]
@@ -121,6 +122,10 @@ impl TimeStat {
         timer_remained_ns: usize,
         timer_type: usize,
     ) -> bool {
+        debug!(
+            "set_timer: {:?}, timer_interval_ns: {:?}, timer_remained_ns: {:?}",
+            timer_type, timer_interval_ns, timer_remained_ns
+        );
         self.timer_type = timer_type.into();
         self.timer_interval_ns = timer_interval_ns;
         self.timer_remained_ns = timer_remained_ns;
@@ -134,9 +139,10 @@ impl TimeStat {
         if self.timer_remained_ns > delta {
             self.timer_remained_ns -= delta;
         } else {
-            with_process(|proc| {
+            with_current(|curr| {
+                curr.set_interrupted(true);
                 send_signal_process(
-                    proc,
+                    curr.task_ext().process_ref(),
                     SignalInfo::new(Signo::from_repr(SIGALRM as u8).unwrap(), SI_KERNEL as _),
                 )
                 .map_err(|_| panic!("Failed to send signal"))

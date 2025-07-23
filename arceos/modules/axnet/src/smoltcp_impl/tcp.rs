@@ -9,6 +9,7 @@ use axsync::Mutex;
 use axtask::yield_now;
 use smoltcp::iface::SocketHandle;
 use smoltcp::socket::tcp::{self, ConnectError, State};
+use smoltcp::time::Duration;
 use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint};
 
 use super::config::UNSPECIFIED_ENDPOINT;
@@ -135,30 +136,19 @@ impl TcpSocket {
         self.reuse_addr.store(reuse_addr, Ordering::Release);
     }
 
-    /// To get the address pair of the socket.
-    ///
-    /// Returns the local and remote endpoint pair.
-    // fn get_endpoint_pair(
-    //     &self,
-    //     remote_addr: SocketAddr,
-    // ) -> Result<(IpListenEndpoint, IpEndpoint), AxError> {
-    //     // TODO: check remote addr unreachable
-    //     #[allow(unused_mut)]
-    //     let mut remote_endpoint = from_core_sockaddr(remote_addr);
-    //     #[allow(unused_mut)]
-    //     let mut bound_endpoint = self.bound_endpoint()?;
-    //     // #[cfg(feature = "ip")]
-    //     if bound_endpoint.addr.is_none() && remote_endpoint.addr.as_bytes()[0] == 127 {
-    //         // If the remote addr is unspecified, we should copy the local addr.
-    //         // If the local addr is unspecified too, we should use the loopback interface.
-    //         if remote_endpoint.addr.is_unspecified() {
-    //             remote_endpoint.addr =
-    //                 smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::new(127, 0, 0, 1));
-    //         }
-    //         bound_endpoint.addr = Some(remote_endpoint.addr);
-    //     }
-    //     Ok((bound_endpoint, remote_endpoint))
-    // }
+    #[inline]
+    pub fn keep_alive(&self) -> Option<Duration> {
+        let handle = unsafe { self.handle.get().read() }.unwrap();
+        SOCKET_SET.with_socket::<tcp::Socket, _, _>(handle, |socket| socket.keep_alive())
+    }
+
+    #[inline]
+    pub fn set_keep_alive(&self, keep_alive: bool) {
+        let handle = unsafe { self.handle.get().read() }.unwrap();
+        SOCKET_SET.with_socket_mut::<tcp::Socket, _, _>(handle, |socket| {
+            socket.set_keep_alive(keep_alive.then_some(Duration::from_secs(70)))
+        });
+    }
 
     /// Connects to the given address and port.
     ///
@@ -457,7 +447,7 @@ impl TcpSocket {
     pub fn poll(&self) -> NetResult<PollState> {
         match self.get_state() {
             STATE_CONNECTING => self.poll_connect(),
-            STATE_CONNECTED => self.poll_stream(),
+            STATE_CONNECTED | STATE_CLOSED => self.poll_stream(),
             STATE_LISTENING => self.poll_listener(),
             _ => Ok(PollState {
                 readable: false,
@@ -671,6 +661,10 @@ impl TcpSocket {
             f()
         } else {
             loop {
+                if axtask::current().is_interrupted() {
+                    axtask::current().set_interrupted(false);
+                    return Err(NetError::EINTR);
+                }
                 debug!("Tcp: block_on loop poll_interfaces");
                 SOCKET_SET.poll_interfaces();
                 match f() {

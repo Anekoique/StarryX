@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, collections::VecDeque};
+use alloc::{boxed::Box, collections::VecDeque, sync::Arc};
 use core::ops::{Deref, DerefMut};
 
 use axsync::Mutex;
@@ -42,7 +42,7 @@ impl Drop for ListenTableEntry {
 }
 
 pub struct ListenTable {
-    tcp: Box<[Mutex<Option<Box<ListenTableEntry>>>]>,
+    tcp: Box<[Arc<Mutex<Option<Box<ListenTableEntry>>>>]>,
 }
 
 impl ListenTable {
@@ -50,7 +50,7 @@ impl ListenTable {
         let tcp = unsafe {
             let mut buf = Box::new_uninit_slice(PORT_NUM);
             for i in 0..PORT_NUM {
-                buf[i].write(Mutex::new(None));
+                buf[i].write(Arc::default());
             }
             buf.assume_init()
         };
@@ -78,6 +78,10 @@ impl ListenTable {
         *self.tcp[port as usize].lock() = None;
     }
 
+    fn listen_entry(&self, port: u16) -> Arc<Mutex<Option<Box<ListenTableEntry>>>> {
+        self.tcp[port as usize].clone()
+    }
+
     pub fn can_accept(&self, port: u16) -> NetResult<bool> {
         if let Some(entry) = self.tcp[port as usize].lock().deref() {
             Ok(entry.syn_queue.iter().any(|&handle| is_connected(handle)))
@@ -87,30 +91,34 @@ impl ListenTable {
     }
 
     pub fn accept(&self, port: u16) -> NetResult<(SocketHandle, (IpEndpoint, IpEndpoint))> {
-        if let Some(entry) = self.tcp[port as usize].lock().deref_mut() {
-            let syn_queue: &mut VecDeque<SocketHandle> = &mut entry.syn_queue;
-            let idx = syn_queue
-                .iter()
-                .enumerate()
-                .find_map(|(idx, &handle)| is_connected(handle).then(|| idx))
-                .ok_or(NetError::EAGAIN)?; // wait for connection
-            if idx > 0 {
-                warn!(
-                    "slow SYN queue enumeration: index = {}, len = {}!",
-                    idx,
-                    syn_queue.len()
-                );
-            }
-            let handle = syn_queue.swap_remove_front(idx).unwrap();
-            // If the connection is reset, return ConnectionReset error
-            // Otherwise, return the handle and the address tuple
-            if is_closed(handle) {
-                Err(NetError::ECONNRESET)
-            } else {
-                Ok((handle, get_addr_tuple(handle)))
-            }
+        let entry = self.listen_entry(port);
+        let mut table = entry.lock();
+        let Some(entry) = table.deref_mut() else {
+            warn!("accept before listen");
+            return Err(NetError::EINVAL);
+        };
+
+        let syn_queue: &mut VecDeque<SocketHandle> = &mut entry.syn_queue;
+        let idx = syn_queue
+            .iter()
+            .enumerate()
+            .find_map(|(idx, &handle)| is_connected(handle).then_some(idx))
+            .ok_or(NetError::EAGAIN)?; // wait for connection
+        if idx > 0 {
+            warn!(
+                "slow SYN queue enumeration: index = {}, len = {}!",
+                idx,
+                syn_queue.len()
+            );
+        }
+        let handle = syn_queue.swap_remove_front(idx).unwrap();
+        // If the connection is reset, return ConnectionReset error
+        // Otherwise, return the handle and the address tuple
+        if is_closed(handle) {
+            warn!("accept failed: connection reset");
+            Err(NetError::ECONNRESET)
         } else {
-            Err(NetError::EINVAL)
+            Ok((handle, get_addr_tuple(handle)))
         }
     }
 

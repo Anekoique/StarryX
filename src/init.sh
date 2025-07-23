@@ -97,5 +97,5 @@ cd /glibc
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
-# ./cyclictest_testcode.sh
 # ./iperf_testcode.sh
+# ./cyclictest_testcode.sh

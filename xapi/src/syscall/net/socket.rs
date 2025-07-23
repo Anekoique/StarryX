@@ -256,6 +256,12 @@ pub fn sys_recvfrom(
     })
 }
 
+pub fn sys_shutdown(fd: i32, how: i32) -> LinuxResult<isize> {
+    debug!("sys_shutdown <= fd: {}, how: {}", fd, how);
+    Socket::from_fd(fd)?.shutdown()?;
+    Ok(0)
+}
+
 /// Create a pair of connected sockets.
 ///
 /// # Arguments
