@@ -1,6 +1,9 @@
 //! Time and timer management for process scheduling and timing.
 
-use axhal::time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos};
+use axhal::{
+    irq::with_irqs_disabled,
+    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
+};
 use axsignal::{SignalInfo, Signo};
 use axtask::TaskExtRef;
 use linux_raw_sys::general::{SI_KERNEL, SIGALRM};
@@ -183,38 +186,22 @@ pub fn time_stat_output() -> (usize, usize, usize, usize, usize, usize) {
     )
 }
 
-pub fn time_stat_from_kernel_to_user() {
-    with_xthread(|xthread| {
-        xthread
-            .time
-            .write()
-            .switch_into_user_mode(monotonic_time_nanos() as usize);
-    });
+macro_rules! update_timer {
+    ($func_name:ident, $method:ident) => {
+        pub fn $func_name() {
+            with_irqs_disabled(|| {
+                with_xthread(|xthread| {
+                    xthread
+                        .time
+                        .write()
+                        .$method(monotonic_time_nanos() as usize);
+                });
+            });
+        }
+    };
 }
 
-pub fn time_stat_from_user_to_kernel() {
-    with_xthread(|xthread| {
-        xthread
-            .time
-            .write()
-            .switch_into_kernel_mode(monotonic_time_nanos() as usize);
-    });
-}
-
-pub fn time_stat_switch_to_new_task() {
-    with_xthread(|xthread| {
-        xthread
-            .time
-            .write()
-            .switch_to_new_task(monotonic_time_nanos() as usize);
-    });
-}
-
-pub fn time_stat_switch_from_old_task() {
-    with_xthread(|xthread| {
-        xthread
-            .time
-            .write()
-            .switch_from_old_task(monotonic_time_nanos() as usize);
-    });
-}
+update_timer!(time_stat_from_kernel_to_user, switch_into_user_mode);
+update_timer!(time_stat_from_user_to_kernel, switch_into_kernel_mode);
+update_timer!(time_stat_switch_to_new_task, switch_to_new_task);
+update_timer!(time_stat_switch_from_old_task, switch_from_old_task);

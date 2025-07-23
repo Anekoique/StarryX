@@ -1,15 +1,15 @@
 //! User task management.
 
-use core::{
-    alloc::Layout,
-    sync::atomic::{AtomicI32, AtomicUsize, Ordering},
-};
-
 use alloc::{
     string::String,
     sync::{Arc, Weak},
     vec::Vec,
 };
+use core::{
+    alloc::Layout,
+    sync::atomic::{AtomicI32, AtomicUsize, Ordering},
+};
+
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::UspaceContext;
 use axns::{AxNamespace, AxNamespaceIf};

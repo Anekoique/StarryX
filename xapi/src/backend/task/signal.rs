@@ -2,8 +2,8 @@ use axhal::{
     arch::TrapFrame,
     trap::{POST_TRAP, register_trap_handler},
 };
-use axsignal::{SignalOSAction, SignalSet};
-use xcore::task::{XProcess, XThread, with_thread, with_xthread};
+use axsignal::{SignalOSAction, SignalSet, Signo};
+use xcore::task::{XProcess, XThread, with_current, with_thread, with_xthread};
 
 use crate::do_exit;
 
@@ -20,6 +20,9 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
 
     debug!("handle signal: {:?}", sig.signo());
     let signo = sig.signo();
+    if signo == Signo::SIGALRM {
+        with_current(|curr| curr.set_interrupted(false));
+    }
     match os_action {
         SignalOSAction::Terminate => {
             do_exit(128 + signo as i32, true);
