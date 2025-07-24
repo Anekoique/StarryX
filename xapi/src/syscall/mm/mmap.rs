@@ -1,17 +1,20 @@
 use alloc::vec;
+
 use axerrno::{LinuxError, LinuxResult};
 use axhal::paging::PageSize;
 use axtask::current;
-use axvma::MmapRegion;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
+
+use axvma::MmapRegion;
 use xcore::{
+    fs::FileLike,
     mm::FileWrapper,
     task::{XTaskExt, with_xprocess},
 };
 
 use crate::{
     ctypes::mm::{MmapFlags, MmapProt},
-    fs::{File, FileLike},
+    fs::File,
 };
 
 /// Map files or devices into memory.

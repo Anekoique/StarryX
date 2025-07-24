@@ -2,14 +2,15 @@ use core::ffi::c_int;
 
 use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axns::{ResArc, def_resource};
 use bitmaps::Bitmap;
 use flatten_objects::FlattenObjects;
+use linux_raw_sys::general::RLIMIT_NOFILE;
 use spin::RwLock;
-use xcore::task::with_xprocess;
 
-use super::{FileLike, stdio};
-use crate::ctypes::RLIMIT_NOFILE;
+use super::{FileLike, XFile};
+use crate::task::with_xprocess;
 
 pub const AX_FILE_LIMIT: usize = 1024;
 
@@ -28,7 +29,7 @@ def_resource! {
 /// The flags bitmap tracks per-fd flags like FD_CLOEXEC which determines
 /// whether the file descriptor should be closed on exec().
 pub struct FdTable {
-    inner: RwLock<FlattenObjects<Arc<dyn FileLike>, AX_FILE_LIMIT>>,
+    inner: RwLock<FlattenObjects<Arc<XFile>, AX_FILE_LIMIT>>,
     flags: RwLock<Bitmap<AX_FILE_LIMIT>>,
 }
 
@@ -57,22 +58,22 @@ impl FdTable {
     }
 
     /// Get a file-like object by fd
-    pub fn get(&self, fd: usize) -> Option<Arc<dyn FileLike>> {
+    pub fn get(&self, fd: usize) -> Option<Arc<XFile>> {
         self.inner.read().get(fd).cloned()
     }
 
     /// Add a file-like object and return its fd
-    pub fn add(&self, file: Arc<dyn FileLike>) -> Result<usize, LinuxError> {
+    pub fn add(&self, file: Arc<XFile>) -> Result<usize, LinuxError> {
         self.inner.write().add(file).map_err(|_| LinuxError::EMFILE)
     }
 
     /// Add a file-like object at a specific fd
-    pub fn add_at(&self, fd: usize, file: Arc<dyn FileLike>) -> Result<usize, Arc<dyn FileLike>> {
+    pub fn add_at(&self, fd: usize, file: Arc<XFile>) -> Result<usize, Arc<XFile>> {
         self.inner.write().add_at(fd, file)
     }
 
     /// Remove a file-like object by fd
-    pub fn remove(&self, fd: usize) -> Option<Arc<dyn FileLike>> {
+    pub fn remove(&self, fd: usize) -> Option<Arc<XFile>> {
         self.inner.write().remove(fd)
     }
 
@@ -108,11 +109,7 @@ impl FdTable {
     }
 
     /// Add a file-like object with flags
-    pub fn add_with_flags(
-        &self,
-        file: Arc<dyn FileLike>,
-        cloexec: bool,
-    ) -> Result<usize, LinuxError> {
+    pub fn add_with_flags(&self, file: Arc<XFile>, cloexec: bool) -> Result<usize, LinuxError> {
         let fd = self.add(file)?;
         self.flags.write().set(fd, cloexec);
         Ok(fd)
@@ -122,7 +119,7 @@ impl FdTable {
     pub fn add_at_with_flags(
         &self,
         fd: usize,
-        file: Arc<dyn FileLike>,
+        file: Arc<XFile>,
         cloexec: bool,
     ) -> Result<(), LinuxError> {
         let result = self
@@ -149,12 +146,12 @@ impl FdTable {
 }
 
 /// Get a file-like object by `fd`.
-pub fn get_file_like(fd: c_int) -> LinuxResult<Arc<dyn FileLike>> {
+pub fn get_file_like(fd: c_int) -> LinuxResult<Arc<XFile>> {
     FD_TABLE.get(fd as usize).ok_or(LinuxError::EBADF)
 }
 
 /// Add a file to the file descriptor table.
-pub fn add_file_like(f: Arc<dyn FileLike>, cloexec: bool) -> LinuxResult<c_int> {
+pub fn add_file_like(f: Arc<dyn FileLike>, flags: FileFlags, cloexec: bool) -> LinuxResult<c_int> {
     // Check RLIMIT_NOFILE resource limit
     let fd_limit =
         with_xprocess(|xprocess| xprocess.rlimits.read()[RLIMIT_NOFILE].current as usize);
@@ -165,7 +162,7 @@ pub fn add_file_like(f: Arc<dyn FileLike>, cloexec: bool) -> LinuxResult<c_int> 
         return Err(LinuxError::EMFILE);
     }
 
-    Ok(FD_TABLE.add_with_flags(f, cloexec)? as c_int)
+    Ok(FD_TABLE.add_with_flags(Arc::new(XFile::new(f, flags)), cloexec)? as c_int)
 }
 
 /// Close a file by `fd`.
@@ -177,19 +174,4 @@ pub fn close_file_like(fd: c_int) -> LinuxResult {
 
     drop(f);
     Ok(())
-}
-
-#[ctor_bare::register_ctor]
-fn init_stdio() {
-    let fd_table = FdTable::new();
-    fd_table
-        .add_at(0, Arc::new(stdio::stdin()) as _)
-        .unwrap_or_else(|_| panic!()); // stdin
-    fd_table
-        .add_at(1, Arc::new(stdio::stdout()) as _)
-        .unwrap_or_else(|_| panic!()); // stdout
-    fd_table
-        .add_at(2, Arc::new(stdio::stdout()) as _)
-        .unwrap_or_else(|_| panic!()); // stderr
-    FD_TABLE.init_new(fd_table);
 }

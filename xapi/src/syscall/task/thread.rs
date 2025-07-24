@@ -1,10 +1,11 @@
 use alloc::sync::Arc;
+
 use axerrno::{LinuxError, LinuxResult};
-use axprocess::{Pid, Process};
 use axtask::current;
 use num_enum::TryFromPrimitive;
-use xcore::task::api::{with_process, with_xthread};
-use xcore::task::{get_process, get_process_group};
+
+use axprocess::{Pid, Process};
+use xcore::task::{get_process, get_process_group, with_process, with_xthread};
 
 /// Get process ID of the calling process.
 ///

@@ -1,15 +1,18 @@
+use alloc::ffi::CString;
 use core::{
     ffi::{c_char, c_int, c_void},
     mem::offset_of,
 };
 
-use alloc::ffi::CString;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
-use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use chrono::{Datelike, Timelike};
-use xcore::fs::RTC0_DEVICE_ID;
-use xcore::task::with_uspace;
+
+use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xcore::{
+    fs::{FileLike, RTC0_DEVICE_ID, get_file_like},
+    task::with_uspace,
+};
 
 use crate::{
     ctypes::{
@@ -17,7 +20,7 @@ use crate::{
         sys::{rtc_time, utimbuf},
         timespec, timeval,
     },
-    fs::{Directory, FileLike, get_file_like, with_fs, with_location},
+    fs::{Directory, with_fs, with_location},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 

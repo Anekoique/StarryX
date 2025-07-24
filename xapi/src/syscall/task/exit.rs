@@ -1,15 +1,18 @@
 use core::sync::atomic::Ordering;
 
-use axprocess::Pid;
 use axsignal::{SignalInfo, Signo};
 use axtask::{TaskExtRef, current};
+
+use axprocess::Pid;
 use axuspace::{UserPtr, UserSpaceAccess, nullable};
-use xcore::task::{XProcess, XThread, send_signal_process, send_signal_thread};
+use xcore::{
+    fs::FD_TABLE,
+    task::{XProcess, XThread, send_signal_process, send_signal_thread},
+};
 
 use crate::{
     ctypes::{SI_KERNEL, robust_list_head},
     exit_robust_list,
-    fs::FD_TABLE,
     ipc::IPC_MANAGER,
 };
 

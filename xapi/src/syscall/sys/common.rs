@@ -1,8 +1,9 @@
 use core::ffi::c_char;
 
 use axerrno::{LinuxError, LinuxResult};
-use axuspace::{UserPtr, UserSpaceAccess};
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
+
+use axuspace::{UserPtr, UserSpaceAccess};
 use xcore::task::{processes, with_uspace};
 
 use crate::{

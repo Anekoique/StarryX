@@ -1,7 +1,9 @@
 use axerrno::{LinuxError, LinuxResult};
+
 use axprocess::Pid;
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
+    fs::AX_FILE_LIMIT,
     task::{XProcess, get_process, with_uspace},
     time::time_stat_output,
 };
@@ -11,7 +13,6 @@ use crate::{
         __kernel_old_timeval, RLIM_NLIMITS, RLIMIT_DATA, RLIMIT_NOFILE, RLIMIT_STACK,
         RUSAGE_CHILDREN, rlimit, rlimit64, rusage,
     },
-    fs::AX_FILE_LIMIT,
     time::TimeValueLike,
 };
 

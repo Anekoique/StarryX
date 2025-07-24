@@ -10,10 +10,9 @@ bitflags::bitflags! {
     pub struct FileFlags: u32 {
         const READ = 1;
         const WRITE = 2;
-        const EXECUTE = 4;
-        const APPEND = 8;
-        const DIRECT = 16;
-        const PATH = 32;
+        const APPEND = 4;
+        const DIRECT = 8;
+        const PATH = 16;
     }
 }
 
@@ -221,7 +220,7 @@ impl OpenOptions {
         self.mode
     }
 
-    pub(crate) fn to_flags(&self) -> VfsResult<FileFlags> {
+    pub fn to_flags(&self) -> VfsResult<FileFlags> {
         if self.append && !self.write {
             return Err(VfsError::EINVAL);
         }

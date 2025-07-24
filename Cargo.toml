@@ -38,6 +38,7 @@ axsignal = { path = "./modules/axsignal" }
 axuspace = { path = "./modules/axuspace" }
 axvma = { path = "./modules/axvma" }
 page_cache = { path = "./modules/page_cache" }
+axio = { path = "./modules/axio" }
 
 axfs-ng = { path = "./arceos/modules/axfs-ng" }
 axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
@@ -83,6 +84,7 @@ axruntime.workspace = true
 axsync.workspace = true
 axtask.workspace = true
 axmm.workspace = true
+axio.workspace = true
 
 axprocess.workspace = true
 axsignal.workspace = true

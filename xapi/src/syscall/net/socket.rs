@@ -1,17 +1,18 @@
 use core::net::SocketAddr;
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
+
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::task::with_uspace;
+use xcore::{fs::FileLike, task::with_uspace};
 
 use crate::{
     ctypes::{
         AF_INET, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, SOCK_CLOEXEC, SOCK_DGRAM, SOCK_NONBLOCK,
         SOCK_STREAM, sockaddr, socklen_t,
     },
-    fs::FileLike,
     net::{Socket, SocketAddrExt},
 };
 
@@ -58,7 +59,10 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
 
     socket.set_nonblocking(sock_flags & SOCK_NONBLOCK != 0)?;
     socket
-        .add_to_fd_table(sock_flags & SOCK_CLOEXEC != 0)
+        .add_to_fd_table(
+            FileFlags::READ | FileFlags::WRITE,
+            sock_flags & SOCK_CLOEXEC != 0,
+        )
         .map_err(|_| LinuxError::EMFILE)
         .map(|fd| fd as isize)
 }
@@ -169,7 +173,9 @@ pub fn sys_accept(
     let socket = socket.accept()?;
 
     let remote_addr = socket.local_addr()?;
-    let fd = socket.add_to_fd_table(false).map(|fd| fd as isize)?;
+    let fd = socket
+        .add_to_fd_table(FileFlags::READ | FileFlags::WRITE, false)
+        .map(|fd| fd as isize)?;
     debug!("sys_accept => fd: {}, addr: {:?}", fd, remote_addr);
 
     if !addr.is_null() {
@@ -302,11 +308,17 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
     }
 
     let fd1 = socket1
-        .add_to_fd_table(sock_flags & SOCK_CLOEXEC != 0)
+        .add_to_fd_table(
+            FileFlags::READ | FileFlags::WRITE,
+            sock_flags & SOCK_CLOEXEC != 0,
+        )
         .map_err(|_| LinuxError::EMFILE)?;
 
     let fd2 = socket2
-        .add_to_fd_table(sock_flags & SOCK_CLOEXEC != 0)
+        .add_to_fd_table(
+            FileFlags::READ | FileFlags::WRITE,
+            sock_flags & SOCK_CLOEXEC != 0,
+        )
         .map_err(|_| LinuxError::EMFILE)?;
 
     with_uspace(|uspace| {

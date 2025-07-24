@@ -1,6 +1,6 @@
+use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use core::cmp::Ordering;
 
-use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axprocess::Pid;
 use axsync::Mutex;

@@ -1,16 +1,14 @@
+use alloc::sync::Arc;
 use core::net::{Ipv4Addr, SocketAddr};
 
-use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
-use axio::PollState;
-use axio::Read;
+use axio::{PollState, Read};
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
-use crate::{
-    ctypes::S_IFSOCK,
-    fs::{FileLike, Kstat, get_file_like},
-};
+use xcore::fs::{FileLike, Kstat, get_file_like};
+
+use crate::ctypes::S_IFSOCK;
 
 pub enum Socket {
     Udp(Mutex<UdpSocket>),

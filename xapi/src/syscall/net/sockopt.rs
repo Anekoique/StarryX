@@ -1,8 +1,9 @@
 use core::mem::size_of;
 
 use axerrno::{LinuxError, LinuxResult};
+
 use axuspace::{UserPtr, UserSpaceAccess};
-use xcore::task::with_uspace;
+use xcore::{fs::FileLike, task::with_uspace};
 
 use crate::{
     ctypes::{
@@ -10,7 +11,6 @@ use crate::{
         SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG,
         TCP_NODELAY, socklen_t,
     },
-    fs::FileLike,
     net::Socket,
 };
 

@@ -4,15 +4,20 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axfs_ng_vfs::{Location, NodePermission};
 use axsync::RawMutex;
+
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::{mm::PAGE_CACHE_MANAGER, task::with_uspace};
+use xcore::{
+    fs::{get_file_like, metadata_to_kstat},
+    mm::PAGE_CACHE_MANAGER,
+    task::with_uspace,
+};
 
 use crate::{
     ctypes::{
         __kernel_fsid_t, AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_FOLLOW, R_OK, W_OK, X_OK, stat,
         statfs, statx,
     },
-    fs::{get_file_like, metadata_to_kstat, with_file, with_location},
+    fs::{with_file, with_location},
 };
 
 /// Get file metadata by path and write into statbuf.

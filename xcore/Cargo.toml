@@ -16,6 +16,7 @@ axmm.workspace = true
 axns.workspace = true
 axsync.workspace = true
 axtask.workspace = true
+axio.workspace = true
 
 axprocess.workspace = true
 axsignal.workspace = true
@@ -36,7 +37,9 @@ percpu = "0.2.0"
 xmas-elf = "0.9"
 cfg-if = "1.0"
 lazy_static = "1.5"
+flatten_objects = "0.2.4"
 
+bitmaps = { version = "3.2.1", default-features = false }
 rand = { version = "0.9.1", default-features = false, features = ["alloc", "small_rng"] }
 slab = { version = "0.4.9", default-features = false }
 kernel-elf-parser = { git = "https://github.com/Anekoique/kernel_elf_parser" }

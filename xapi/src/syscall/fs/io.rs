@@ -1,15 +1,20 @@
+use alloc::vec;
 use core::ffi::c_int;
 
-use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 use axio::{Seek, SeekFrom};
+
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::{mm::PAGE_CACHE_MANAGER, task::with_uspace};
+use xcore::{
+    fs::{FileLike, get_file_like},
+    mm::PAGE_CACHE_MANAGER,
+    task::with_uspace,
+};
 
 use crate::{
     ctypes::{__kernel_off_t, iovec},
-    fs::{File, FileLike, get_file_like, with_file},
+    fs::{File, with_file},
 };
 
 /// Read data from the file indicated by `fd`.
@@ -354,10 +359,10 @@ pub fn sys_sendfile(
                     offset += bytes_read as u64;
                     Ok(bytes_read)
                 },
-                dest.as_ref(),
+                dest.file.as_ref(),
             )
         }),
-        None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.as_ref()),
+        None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.file.as_ref()),
     }?;
 
     with_file(out_fd, |dest_file| {

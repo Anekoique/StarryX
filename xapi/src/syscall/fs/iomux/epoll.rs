@@ -1,13 +1,19 @@
 use alloc::{sync::Arc, vec::Vec};
+
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
+
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess};
-use xcore::task::with_uspace;
+use xcore::{
+    fs::{add_file_like, get_file_like},
+    task::with_uspace,
+};
 
 use crate::{
     ctypes::{
         EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLIN, EPOLLOUT, epoll_event,
     },
-    fs::{EpollInstance, add_file_like, get_file_like},
+    fs::EpollInstance,
     time::{TimeValue, wall_time},
 };
 
@@ -17,7 +23,11 @@ use crate::{
 /// * `flags` - Flags to control epoll creation (EPOLL_CLOEXEC)
 pub fn sys_epoll_create1(flags: u32) -> LinuxResult<isize> {
     let epoll = Arc::new(EpollInstance::new());
-    let fd = add_file_like(epoll, flags & EPOLL_CLOEXEC != 0)?;
+    let fd = add_file_like(
+        epoll,
+        FileFlags::READ | FileFlags::WRITE,
+        flags & EPOLL_CLOEXEC != 0,
+    )?;
     Ok(fd as isize)
 }
 

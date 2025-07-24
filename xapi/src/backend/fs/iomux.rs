@@ -4,10 +4,11 @@ use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use spin::Mutex;
 
+use xcore::fs::{FileLike, Kstat, get_file_like};
+
 use crate::{
     collections::BTreeMap,
     ctypes::{epoll_event, fs::IoEvents},
-    fs::{FileLike, Kstat, get_file_like},
     time::{TimeValue, wall_time},
 };
 

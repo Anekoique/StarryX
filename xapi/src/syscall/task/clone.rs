@@ -1,21 +1,23 @@
 use alloc::sync::Arc;
+
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axhal::arch::{TrapFrame, UspaceContext};
-use axprocess::Pid;
-use axsignal::Signo;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
-use axuspace::{UserPtr, UserSpaceAccess};
 use spin::RwLock;
+
+use axprocess::Pid;
+use axsignal::Signo;
+use axuspace::{UserPtr, UserSpaceAccess};
 use xcore::{
+    fs::FD_TABLE,
     mm::{XUserSpace, copy_from_kernel},
     task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task},
 };
 
 use crate::{
     ctypes::{SIGCHLD, task::CloneFlags},
-    fs::FD_TABLE,
     ipc::IPC_MANAGER,
 };
 

@@ -1,11 +1,12 @@
+use alloc::sync::Arc;
 use core::any::Any;
 
-use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use axsync::Mutex;
 
-use super::{FileLike, Kstat};
+use xcore::fs::{FileLike, Kstat};
+
 use crate::{check_fatal_signals, ctypes::S_IFIFO};
 
 #[derive(Copy, Clone, PartialEq)]

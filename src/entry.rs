@@ -7,11 +7,9 @@ use axsync::Mutex;
 use axvma::VmaManager;
 use linux_raw_sys::general::AT_FDCWD;
 use spin::RwLock;
-use xapi::{
-    fs::{FD_TABLE, with_fs},
-    ipc::IPC_MANAGER,
-};
+use xapi::{fs::with_fs, ipc::IPC_MANAGER};
 use xcore::{
+    fs::FD_TABLE,
     mm::{XUserSpace, copy_from_kernel, load_app, map_trampoline, new_aspace},
     task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task},
 };

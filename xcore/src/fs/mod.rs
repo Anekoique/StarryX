@@ -5,6 +5,12 @@
 //! - `/tmp` - Temporary filesystem (tmpfs)
 //! - `/proc` - Process information filesystem (procfs)
 
+mod fd;
+mod file;
+
+pub use fd::*;
+pub use file::*;
+
 mod vfs;
 mod virt_file;
 mod virt_fs;

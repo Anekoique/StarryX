@@ -1,11 +1,13 @@
+use alloc::sync::Arc;
 use core::any::Any;
 
-use alloc::sync::Arc;
 use axerrno::{AxResult, LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axio::{BufReader, PollState, prelude::*};
 use axsync::Mutex;
 
-use super::{FileLike, Kstat};
+use xcore::fs::{FD_TABLE, FdTable, FileLike, Kstat, XFile};
+
 use crate::{ctypes::S_IFCHR, task::check_fatal_signals};
 
 fn console_read_bytes(buf: &mut [u8]) -> AxResult<usize> {
@@ -168,4 +170,28 @@ impl FileLike for Stdout {
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
     }
+}
+
+#[ctor_bare::register_ctor]
+fn init_stdio() {
+    let fd_table = FdTable::new();
+    fd_table
+        .add_at(0, Arc::new(XFile::new(Arc::new(stdin()), FileFlags::READ)))
+        .unwrap_or_else(|_| panic!()); // stdin
+    fd_table
+        .add_at(
+            1,
+            Arc::new(XFile::new(Arc::new(stdout()), FileFlags::WRITE)),
+        )
+        .unwrap_or_else(|_| panic!()); // stdout
+    fd_table
+        .add_at(
+            2,
+            Arc::new(XFile::new(
+                Arc::new(stdout()),
+                FileFlags::READ | FileFlags::WRITE,
+            )),
+        )
+        .unwrap_or_else(|_| panic!()); // stderr
+    FD_TABLE.init_new(fd_table);
 }

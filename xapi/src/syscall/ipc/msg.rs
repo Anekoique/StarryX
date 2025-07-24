@@ -1,8 +1,9 @@
 //! Message queue system calls implementation.
-
 use alloc::{sync::Arc, vec};
+
 use axerrno::{LinuxError, LinuxResult};
 use axsync::Mutex;
+
 use axuspace::{UserPtr, UserSpaceAccess};
 use xcore::task::{with_process, with_uspace};
 

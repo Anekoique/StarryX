@@ -1,12 +1,14 @@
+use alloc::sync::Arc;
 use core::ffi::c_int;
 
-use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FS_CONTEXT, FsContext};
 use axfs_ng_vfs::Location;
 use axsync::RawMutex;
 
-use super::{Directory, File, FileLike, get_file_like};
+use xcore::fs::{FileLike, get_file_like};
+
+use super::{Directory, File};
 use crate::ctypes::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW};
 
 pub fn with_fs<R>(

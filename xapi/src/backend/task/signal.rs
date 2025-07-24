@@ -2,6 +2,7 @@ use axhal::{
     arch::TrapFrame,
     trap::{POST_TRAP, register_trap_handler},
 };
+
 use axsignal::{SignalOSAction, SignalSet, Signo};
 use xcore::task::{XProcess, XThread, with_current, with_thread, with_xthread};
 
