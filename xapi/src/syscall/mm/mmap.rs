@@ -88,15 +88,29 @@ pub fn sys_mmap(
     };
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
-    aspace.map_alloc(
-        start_addr,
-        aligned_length,
-        permission_flags.into(),
-        populate,
-        page_size,
-    )?;
+    match map_flags & MmapFlags::TYPE {
+        MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => {
+            aspace.map_shared(
+                start_addr,
+                aligned_length,
+                permission_flags.into(),
+                None,
+                page_size,
+            )?;
+        }
+        MmapFlags::PRIVATE => {
+            aspace.map_alloc(
+                start_addr,
+                aligned_length,
+                permission_flags.into(),
+                populate,
+                page_size,
+            )?;
+        }
+        _ => return Err(LinuxError::EINVAL),
+    }
 
-    if populate {
+    if populate || map_flags.contains(MmapFlags::SHARED) {
         let file = File::from_fd(fd)?;
         let file = file.inner();
         let file_size = file.inner().len()? as usize;

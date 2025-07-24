@@ -1,8 +1,8 @@
 use axfs_ng::OpenOptions;
 
 use super::{
-    __kernel_mode_t, O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_EXEC, O_RDONLY, O_TRUNC,
-    O_WRONLY, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, c_int,
+    __kernel_mode_t, O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_EXEC, O_PATH, O_RDONLY,
+    O_TRUNC, O_WRONLY, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, c_int,
 };
 
 /// Convert open flags to [`OpenOptions`].
@@ -39,6 +39,9 @@ pub fn flags_to_options(
     }
     if flags & O_DIRECT != 0 {
         options.direct(true);
+    }
+    if flags & O_PATH != 0 {
+        options.path(true);
     }
     options
 }

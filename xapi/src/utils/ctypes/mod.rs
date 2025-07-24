@@ -11,9 +11,9 @@ pub use linux_raw_sys::{
     ioctl::RTC_RD_TIME,
     net::{
         __kernel_sa_family_t, AF_INET, AF_INET6, AF_UNIX, IP_RECVERR, IPPROTO_IP, IPPROTO_TCP,
-        IPPROTO_UDP, SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF,
-        SOCK_DGRAM, SOCK_STREAM, SOL_SOCKET, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY,
-        in_addr, in6_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
+        IPPROTO_UDP, MCAST_JOIN_GROUP, SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO,
+        SO_REUSEADDR, SO_SNDBUF, SOCK_DGRAM, SOCK_STREAM, SOL_SOCKET, TCP_CONGESTION, TCP_INFO,
+        TCP_MAXSEG, TCP_NODELAY, in_addr, in6_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
     },
     select_macros::*,
     system::{new_utsname, sysinfo},

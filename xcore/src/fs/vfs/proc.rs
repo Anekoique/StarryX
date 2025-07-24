@@ -14,9 +14,9 @@ use axsync::RawMutex;
 use core::{str::FromStr, sync::atomic::Ordering};
 use inherit_methods_macro::inherit_methods;
 
-use super::{
+use crate::fs::{
     virt_file::{RwFile, VirtFile, VirtFileOperation},
-    virt_fs::{DirMaker, VirtDir, VirtFs, VirtNodeOps},
+    virt_fs::{DirMaker, VirtDir, VirtFs, VirtNode, VirtNodeOps},
 };
 use crate::task::{
     api::{with_current, with_thread, with_xprocess},
@@ -267,14 +267,14 @@ fn get_process_status_for_pid(pid: u64) -> String {
 
 /// Dynamic directory that shows all process PIDs
 pub struct DynamicProcRoot {
-    node: super::virt_fs::VirtNode,
+    node: VirtNode,
     this: axfs_ng_vfs::WeakDirEntry<RawMutex>,
     fs: Arc<VirtFs>,
 }
 
 impl DynamicProcRoot {
     fn new(fs: Arc<VirtFs>, this: axfs_ng_vfs::WeakDirEntry<RawMutex>) -> Arc<Self> {
-        let node = super::virt_fs::VirtNode::new(
+        let node = VirtNode::new(
             fs.clone(),
             axfs_ng_vfs::NodeType::Directory,
             axfs_ng_vfs::NodePermission::from_bits_truncate(0o755),

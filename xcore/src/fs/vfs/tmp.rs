@@ -7,7 +7,7 @@ use axfs_ng_vfs::*;
 use axsync::{Mutex, RawMutex};
 use slab::Slab;
 
-use super::dummy_stat;
+use crate::fs::dummy_stat;
 
 /// Initialize and return a new temporary filesystem instance
 pub fn init_tmpfs() -> Filesystem<RawMutex> {

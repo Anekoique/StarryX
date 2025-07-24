@@ -6,9 +6,9 @@ use xcore::task::with_uspace;
 
 use crate::{
     ctypes::{
-        IP_RECVERR, L_IP, L_SOCKET, L_TCP, L_UDP, SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF,
-        SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY,
-        socklen_t,
+        IP_RECVERR, L_IP, L_SOCKET, L_TCP, L_UDP, MCAST_JOIN_GROUP, SO_DONTROUTE, SO_KEEPALIVE,
+        SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG,
+        TCP_NODELAY, socklen_t,
     },
     fs::FileLike,
     net::Socket,
@@ -113,6 +113,7 @@ pub fn sys_setsockopt(
         L_UDP => return Err(LinuxError::ENOPROTOOPT),
         L_IP => match optname {
             IP_RECVERR => return Ok(0),
+            MCAST_JOIN_GROUP => return Ok(0),
             _ => return Err(LinuxError::ENOPROTOOPT),
         },
         _ => return Err(LinuxError::ENOPROTOOPT),

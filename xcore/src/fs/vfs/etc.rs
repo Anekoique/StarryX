@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use axfs_ng_vfs::Filesystem;
 use axsync::RawMutex;
 
-use super::{
+use crate::fs::{
     virt_file::VirtFile,
     virt_fs::{DirMaker, VirtDir, VirtFs},
 };

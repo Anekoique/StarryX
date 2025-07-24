@@ -1,4 +1,6 @@
-use axerrno::LinuxError;
+use alloc::string::ToString;
+
+use axerrno::{LinuxError, LinuxResult};
 use axhal::{
     arch::TrapFrame,
     trap::{SYSCALL, register_trap_handler},
@@ -7,12 +9,8 @@ use syscalls::Sysno;
 use xapi::*;
 use xcore::time::{time_stat_from_kernel_to_user, time_stat_from_user_to_kernel};
 
-#[register_trap_handler(SYSCALL)]
-fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
-    let sysno = Sysno::from(syscall_num as u32);
-    info!("Syscall {}", sysno);
-    time_stat_from_user_to_kernel();
-    let result = match sysno {
+fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
+    match sysno {
         // fs ctl
         Sysno::ioctl => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2().into()),
         Sysno::chdir => sys_chdir(tf.arg0().into()),
@@ -486,9 +484,25 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             warn!("Unimplemented syscall: {}", sysno);
             Err(LinuxError::ENOSYS)
         }
-    };
-    let ans = result.unwrap_or_else(|err| -err.code() as _);
+    }
+}
+
+#[register_trap_handler(SYSCALL)]
+fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
+    let sysno = Sysno::new(syscall_num);
+    trace!("Syscall {:?}", sysno);
+
+    time_stat_from_user_to_kernel();
+
+    let result = sysno
+        .ok_or(LinuxError::ENOSYS)
+        .and_then(|sysno| handle_syscall_impl(tf, sysno));
+    debug!(
+        "Syscall {} return {:?}",
+        sysno.map_or("(invalid)".to_string(), |s| s.to_string()),
+        result
+    );
+
     time_stat_from_kernel_to_user();
-    info!("Syscall {:?} return {}", sysno, ans);
-    ans
+    result.unwrap_or_else(|err| -err.code() as _)
 }

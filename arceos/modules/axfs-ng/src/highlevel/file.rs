@@ -13,6 +13,7 @@ bitflags::bitflags! {
         const EXECUTE = 4;
         const APPEND = 8;
         const DIRECT = 16;
+        const PATH = 32;
     }
 }
 
@@ -57,6 +58,7 @@ pub struct OpenOptions {
     create_new: bool,
     directory: bool,
     direct: bool,
+    path: bool,
     user: Option<(u32, u32)>,
     // system-specific
     custom_flags: i32,
@@ -76,6 +78,7 @@ impl OpenOptions {
             create_new: false,
             directory: false,
             direct: false,
+            path: false,
             user: None,
             // system-specific
             custom_flags: 0,
@@ -134,6 +137,12 @@ impl OpenOptions {
     /// Sets the option to use direct I/O.
     pub fn direct(&mut self, direct: bool) -> &mut Self {
         self.direct = direct;
+        self
+    }
+
+    /// Sets the option to use path.
+    pub fn path(&mut self, path: bool) -> &mut Self {
+        self.path = path;
         self
     }
 
@@ -231,6 +240,9 @@ impl OpenOptions {
         if self.direct {
             flags |= FileFlags::DIRECT;
         }
+        if self.path {
+            flags |= FileFlags::PATH;
+        }
 
         if !(flags.intersects(FileFlags::READ | FileFlags::WRITE)) {
             return Err(VfsError::EINVAL);
@@ -271,6 +283,7 @@ impl fmt::Debug for OpenOptions {
             create_new,
             directory,
             direct,
+            path,
             user,
             custom_flags,
             mode,
@@ -285,6 +298,7 @@ impl fmt::Debug for OpenOptions {
             .field("create_new", create_new)
             .field("directory", directory)
             .field("direct", direct)
+            .field("path", path)
             .field("user", user)
             .field("custom_flags", custom_flags)
             .field("mode", mode)

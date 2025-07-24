@@ -1,9 +1,10 @@
 //! Resource management.
 use core::ops::{Index, IndexMut};
 
-use linux_raw_sys::general::{RLIM_NLIMITS, RLIMIT_NOFILE, RLIMIT_STACK};
+use linux_raw_sys::general::{RLIM_NLIMITS, RLIMIT_CORE, RLIMIT_NOFILE, RLIMIT_STACK};
 
 pub const AX_FILE_LIMIT: usize = 1024;
+pub const AX_CORE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[derive(Default, Clone)]
 pub struct Rlimit {
@@ -36,6 +37,7 @@ impl Default for Rlimits {
     fn default() -> Self {
         let mut result = Self(Default::default());
         result[RLIMIT_STACK] = (crate::config::USER_STACK_SIZE as u64).into();
+        result[RLIMIT_CORE] = (AX_CORE_SIZE as u64).into();
         result[RLIMIT_NOFILE] = (AX_FILE_LIMIT as u64).into();
         result
     }

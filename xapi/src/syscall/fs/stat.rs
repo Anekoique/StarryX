@@ -153,10 +153,6 @@ pub fn sys_faccessat2(
 ) -> LinuxResult<isize> {
     let path = with_uspace(|uspace| nullable!(uspace.read_str(path)))?;
 
-    if mode == 0 {
-        return Ok(0);
-    }
-
     let mut required_mode = NodePermission::empty();
     if mode & R_OK != 0 {
         required_mode |= NodePermission::OWNER_READ;

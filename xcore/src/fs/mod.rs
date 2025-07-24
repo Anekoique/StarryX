@@ -5,14 +5,11 @@
 //! - `/tmp` - Temporary filesystem (tmpfs)
 //! - `/proc` - Process information filesystem (procfs)
 
-mod dev;
-mod etc;
-mod proc;
-mod tmp;
+mod vfs;
 mod virt_file;
 mod virt_fs;
-// Re-export commonly used types and constants
-pub use dev::RTC0_DEVICE_ID;
+
+pub use vfs::dev::RTC0_DEVICE_ID;
 
 use axerrno::LinuxResult;
 use axfs_ng::FS_CONTEXT;
@@ -47,22 +44,22 @@ fn mount_fs(path: &str, fs: Filesystem<RawMutex>, permissions: NodePermission) -
 pub fn init_root() -> LinuxResult<()> {
     mount_fs(
         "/dev",
-        dev::init_devfs()?,
+        vfs::dev::init_devfs()?,
         NodePermission::from_bits_truncate(0o755),
     )?;
     mount_fs(
         "/tmp",
-        tmp::init_tmpfs(),
+        vfs::tmp::init_tmpfs(),
         NodePermission::from_bits_truncate(0o1777),
     )?;
     mount_fs(
         "/proc",
-        proc::init_procfs(),
+        vfs::proc::init_procfs(),
         NodePermission::from_bits_truncate(0o555),
     )?;
     mount_fs(
         "/etc",
-        etc::init_etcfs(),
+        vfs::etc::init_etcfs(),
         NodePermission::from_bits_truncate(0o555),
     )?;
     Ok(())

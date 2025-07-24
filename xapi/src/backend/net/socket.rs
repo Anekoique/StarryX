@@ -9,7 +9,7 @@ use axsync::Mutex;
 
 use crate::{
     ctypes::S_IFSOCK,
-    fs::{FileLike, Kstat},
+    fs::{FileLike, Kstat, get_file_like},
 };
 
 pub enum Socket {
@@ -209,5 +209,15 @@ impl FileLike for Socket {
             Socket::Tcp(tcpsocket) => tcpsocket.lock().is_nonblocking(),
             Socket::Unix(unixsocket) => unixsocket.lock().is_nonblocking(),
         }
+    }
+
+    fn from_fd(fd: i32) -> LinuxResult<Arc<Self>>
+    where
+        Self: Sized + 'static,
+    {
+        get_file_like(fd)?
+            .into_any()
+            .downcast::<Self>()
+            .map_err(|_| LinuxError::ENOTSOCK)
     }
 }

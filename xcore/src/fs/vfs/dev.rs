@@ -5,9 +5,9 @@ use axfs_ng_vfs::{DeviceId, Filesystem, NodeType, VfsResult};
 use axsync::{Mutex, RawMutex};
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
 
-use super::{
+use crate::fs::{
     virt_file::{VirtDevice, VirtDeviceOps},
-    virt_fs::{DirMaker, VirtDir, VirtFs},
+    virt_fs::{DirMaker, VirtDir, VirtDirBuilder, VirtFs},
 };
 
 /// The device ID for /dev/rtc0
@@ -75,7 +75,7 @@ macro_rules! device_spec {
 
 /// Helper function to add a device to the virtual directory builder
 fn add_device(
-    root: &mut super::virt_fs::VirtDirBuilder,
+    root: &mut VirtDirBuilder,
     fs: &Arc<VirtFs>,
     name: &str,
     node_type: NodeType,
