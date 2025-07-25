@@ -57,6 +57,10 @@ pub fn check_fatal_signals() {
         SignalOSAction::Terminate => {
             do_exit(128 + signo as i32, true);
         }
+        SignalOSAction::CoreDump => {
+            // TODO: implement core dump
+            do_exit(128 + signo as i32, true);
+        }
         SignalOSAction::Stop => {
             // TODO: implement stop
             do_exit(1, true);
@@ -71,5 +75,6 @@ fn post_trap_callback(tf: &mut TrapFrame, from_user: bool) {
         return;
     }
 
+    check_fatal_signals();
     check_signals(tf, None);
 }

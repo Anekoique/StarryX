@@ -248,7 +248,6 @@ impl<M: RawMutex> Location<M> {
             DOTDOT => self.parent().unwrap_or_else(|| self.clone()),
             _ => {
                 let loc = Self::new(self.mountpoint.clone(), self.entry.as_dir()?.lookup(name)?);
-                debug!("lookup_no_follow");
                 loc.resolve_mountpoint()
             }
         })

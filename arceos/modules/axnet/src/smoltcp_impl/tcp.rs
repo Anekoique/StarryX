@@ -235,6 +235,14 @@ impl TcpSocket {
             }
             // SAFETY: no other threads can read or write `self.local_addr` as we
             // have changed the state to `BUSY`.
+            let local_endpoint: IpEndpoint = local_addr.into();
+            if !self.is_reuse_addr() {
+                SOCKET_SET.bind_check(local_endpoint.addr, local_endpoint.port)?;
+            }
+
+            let bound_endpoint = self.bound_endpoint()?;
+            let handle = unsafe { self.handle.get().read() }
+                .unwrap_or_else(|| SOCKET_SET.add(SocketSetWrapper::new_tcp_socket()));
             unsafe {
                 let old = self.local_addr.get().read();
                 if old != UNSPECIFIED_ENDPOINT {
@@ -242,17 +250,10 @@ impl TcpSocket {
                 }
                 self.local_addr.get().write(local_addr.into());
             }
-            let local_endpoint: IpEndpoint = local_addr.into();
-            let bound_endpoint = self.bound_endpoint()?;
-            let handle = unsafe { self.handle.get().read() }
-                .unwrap_or_else(|| SOCKET_SET.add(SocketSetWrapper::new_tcp_socket()));
+
             SOCKET_SET.with_socket_mut::<tcp::Socket, _, _>(handle, |socket| {
                 socket.set_bound_endpoint(bound_endpoint);
             });
-
-            if !self.is_reuse_addr() {
-                SOCKET_SET.bind_check(local_endpoint.addr, local_endpoint.port)?;
-            }
             Ok(())
         })
         .unwrap_or_else(|_| Err(NetError::EINVAL))

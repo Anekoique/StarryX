@@ -10,9 +10,10 @@ use xcore::{fs::FileLike, task::with_uspace};
 
 use crate::{
     ctypes::{
-        AF_INET, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, SOCK_CLOEXEC, SOCK_DGRAM, SOCK_NONBLOCK,
-        SOCK_STREAM, sockaddr, socklen_t,
+        AF_INET, AF_INET6, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, SOCK_CLOEXEC,
+        SOCK_DGRAM, SOCK_NONBLOCK, SOCK_STREAM, sockaddr, socklen_t,
     },
+    fs::FileOps,
     net::{Socket, SocketAddrExt},
 };
 
@@ -30,7 +31,11 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
     let sock_type = ty & 0xFF;
     let sock_flags = ty & !0xFF;
 
-    if domain != AF_INET && domain != AF_UNIX {
+    if domain != AF_INET && domain != AF_INET6 && domain != AF_UNIX {
+        return Err(LinuxError::EAFNOSUPPORT);
+    }
+
+    if domain == AF_INET6 && sock_type == SOCK_STREAM {
         return Err(LinuxError::EAFNOSUPPORT);
     }
 
@@ -41,8 +46,8 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
             }
             Socket::Tcp(Mutex::new(TcpSocket::new()))
         }
-        (AF_INET, SOCK_DGRAM) => {
-            if proto != 0 && proto != IPPROTO_UDP as _ {
+        (AF_INET | AF_INET6, SOCK_DGRAM) => {
+            if proto != 0 && proto != IPPROTO_UDP as _ && proto != IPPROTO_UDPLITE as _ {
                 return Err(LinuxError::EPROTONOSUPPORT);
             }
             Socket::Udp(Mutex::new(UdpSocket::new()))
@@ -169,8 +174,7 @@ pub fn sys_accept(
 ) -> LinuxResult<isize> {
     debug!("sys_accept <= fd: {}", fd);
 
-    let socket = Socket::from_fd(fd)?;
-    let socket = socket.accept()?;
+    let socket = FileOps::accept(fd)?;
 
     let remote_addr = socket.local_addr()?;
     let fd = socket

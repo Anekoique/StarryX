@@ -309,6 +309,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         ),
         Sysno::capget => sys_capget(tf.arg0().into(), tf.arg1().into()),
         Sysno::capset => sys_capset(tf.arg0().into(), tf.arg1().into()),
+        Sysno::prctl => Ok(0),
 
         // task management
         Sysno::clone => sys_clone(
@@ -383,6 +384,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
 
         // sys
         Sysno::getuid => sys_getuid(),
+        Sysno::setuid => sys_setuid(tf.arg0() as _),
         Sysno::geteuid => sys_geteuid(),
         Sysno::getgid => sys_getgid(),
         Sysno::getegid => sys_getegid(),

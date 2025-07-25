@@ -83,7 +83,6 @@ impl<M: RawMutex> FsContext<M> {
         name: &str,
         follow_count: &mut usize,
     ) -> VfsResult<Location<M>> {
-        debug!("lookup: {:?}", name);
         let loc = dir.lookup_no_follow(name)?;
         if loc.node_type() != NodeType::Symlink {
             return Ok(loc);

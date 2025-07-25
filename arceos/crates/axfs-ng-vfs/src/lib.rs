@@ -27,9 +27,6 @@
 
 extern crate alloc;
 
-#[macro_use]
-extern crate log;
-
 /// Filesystem operations and abstractions
 mod fs;
 /// Mount point management and location handling

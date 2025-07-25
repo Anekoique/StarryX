@@ -1,8 +1,12 @@
-use alloc::sync::Arc;
-use axerrno::LinuxResult;
-use axfs_ng::FsContext;
+#![allow(dead_code)]
+use alloc::{format, sync::Arc};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::{FsContext, FsFile};
 use axfs_ng_vfs::{DeviceId, Filesystem, NodeType, VfsResult};
 use axsync::{Mutex, RawMutex};
+use linux_raw_sys::loop_device::loop_info;
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
 
 use crate::fs::{
@@ -33,7 +37,8 @@ pub fn init_devfs() -> LinuxResult<Filesystem<RawMutex>> {
 enum DeviceOps {
     Null,
     Zero,
-    Random(Arc<Mutex<SmallRng>>),
+    Full,
+    Random,
     Rtc,
 }
 
@@ -45,8 +50,13 @@ impl VirtDeviceOps for DeviceOps {
                 buf.fill(0);
                 Ok(buf.len())
             }
-            Self::Random(rng) => {
-                rng.lock().fill_bytes(buf);
+            Self::Full => {
+                buf.fill(0);
+                Ok(buf.len())
+            }
+            Self::Random => {
+                let mut rng = SmallRng::from_seed(*RANDOM_SEED);
+                rng.fill_bytes(buf);
                 Ok(buf.len())
             }
             Self::Rtc => Ok(0),
@@ -55,8 +65,9 @@ impl VirtDeviceOps for DeviceOps {
 
     fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
         match self {
-            Self::Null | Self::Random(_) => Ok(buf.len()),
+            Self::Null | Self::Random => Ok(buf.len()),
             Self::Zero | Self::Rtc => Ok(0),
+            Self::Full => Err(LinuxError::ENOSPC),
         }
     }
 }
@@ -71,6 +82,64 @@ macro_rules! device_spec {
             $ops,
         )
     };
+}
+
+/// /dev/loopX devices
+pub struct LoopDevice {
+    number: u32,
+    dev_id: DeviceId,
+    /// Underlying file for the loop device, if any.
+    pub file: Mutex<Option<Arc<Mutex<FsFile<RawMutex>>>>>,
+    /// Read-only flag for the loop device.
+    pub ro: AtomicBool,
+    /// Read-ahead size for the loop device, in bytes.
+    pub ra: AtomicU32,
+}
+impl LoopDevice {
+    fn new(number: u32, dev_id: DeviceId) -> Self {
+        Self {
+            number,
+            dev_id,
+            file: Mutex::new(None),
+            ro: AtomicBool::new(false),
+            ra: AtomicU32::new(512),
+        }
+    }
+
+    /// Get information about the loop device.
+    pub fn get_info(&self, dest: &mut loop_info) -> LinuxResult<()> {
+        if self.file.lock().is_none() {
+            return Err(LinuxError::ENXIO);
+        }
+        dest.lo_number = self.number as _;
+        dest.lo_rdevice = self.dev_id.0 as _;
+        Ok(())
+    }
+
+    /// Set information for the loop device.
+    pub fn set_info(&self, _src: &loop_info) -> LinuxResult<()> {
+        Ok(())
+    }
+
+    /// Clone the underlying file of the loop device.
+    pub fn clone_file(&self) -> VfsResult<Arc<Mutex<FsFile<RawMutex>>>> {
+        let file = self.file.lock().clone();
+        file.ok_or(LinuxError::ENXIO)
+    }
+}
+
+impl VirtDeviceOps for LoopDevice {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
+        let file = self.file.lock().clone();
+        file.ok_or(LinuxError::EPERM)?.lock().read_at(buf, offset)
+    }
+    fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
+        if self.ro.load(Ordering::Relaxed) {
+            return Err(LinuxError::EROFS);
+        }
+        let file = self.file.lock().clone();
+        file.ok_or(LinuxError::EPERM)?.lock().write_at(buf, offset)
+    }
 }
 
 /// Helper function to add a device to the virtual directory builder
@@ -92,31 +161,29 @@ fn create_dev_root(fs: Arc<VirtFs>) -> DirMaker {
     let devices = [
         device_spec!("null", 1, 3, DeviceOps::Null),
         device_spec!("zero", 1, 5, DeviceOps::Zero),
+        device_spec!("full", 1, 7, DeviceOps::Full),
+        device_spec!("random", 1, 8, DeviceOps::Random),
+        device_spec!("urandom", 1, 9, DeviceOps::Random),
         device_spec!("rtc0", 250, 0, DeviceOps::Rtc),
     ];
 
     for (name, node_type, device_id, ops) in devices {
         add_device(&mut root, &fs, name, node_type, device_id, ops);
     }
+    root.add("shm", VirtDir::builder(fs.clone()).build());
 
-    let random_devices = [
-        ("random", DeviceId::new(1, 8)),
-        ("urandom", DeviceId::new(1, 9)),
-    ];
-
-    for (name, device_id) in random_devices {
-        let rng = Arc::new(Mutex::new(SmallRng::from_seed(*RANDOM_SEED)));
-        add_device(
-            &mut root,
-            &fs,
-            name,
-            NodeType::CharacterDevice,
-            device_id,
-            DeviceOps::Random(rng),
+    for i in 0..16 {
+        let dev_id = DeviceId::new(7, i);
+        root.add(
+            format!("loop{i}"),
+            VirtDevice::new(
+                fs.clone(),
+                NodeType::BlockDevice,
+                dev_id,
+                LoopDevice::new(i, dev_id),
+            ),
         );
     }
-
-    root.add("shm", VirtDir::builder(fs).build());
 
     root.build()
 }

@@ -54,6 +54,7 @@ linux-raw-sys = { version = "0.9.3", default-features = false, features = [
     "net",
     "prctl",
     "system",
+    "loop_device",
 ] }
 page_table_multiarch = "0.5.5"
 memory_addr = "0.4"

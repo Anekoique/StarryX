@@ -62,12 +62,28 @@ run_ltp() {
     export LTP_SINGLE_FS_TYPE=tmpfs
 
     all_testcases="
-    accept03
     "
     passed_testcase="
     abort01
     abs01
     accept01
+    accept03
+    accept4_01
+    access01
+    access02
+    access04
+    alarm02
+    alarm03
+    alarm05
+    alarm06
+    alarm07
+    bind01
+    bind05
+    brk01
+    brk02
+    capget01
+    capset01
+    capset02
     "
 
     cd ltp/testcases/bin

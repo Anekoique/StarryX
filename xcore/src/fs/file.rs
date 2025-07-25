@@ -56,8 +56,12 @@ impl XFile {
         Self { file, flags }
     }
 
-    pub fn access(&self, cap: FileFlags) -> LinuxResult<&Arc<dyn FileLike>> {
-        if self.flags.contains(cap) && !self.flags.contains(FileFlags::PATH) {
+    pub fn validate(
+        &self,
+        required: FileFlags,
+        forbidden: FileFlags,
+    ) -> LinuxResult<&Arc<dyn FileLike>> {
+        if self.flags.contains(required) && !self.flags.contains(forbidden) {
             Ok(&self.file)
         } else {
             Err(LinuxError::EBADF)
@@ -68,10 +72,10 @@ impl XFile {
 #[inherit_methods(from = "self.file")]
 impl XFile {
     pub fn read(&self, buf: &mut [u8]) -> LinuxResult<usize> {
-        self.access(FileFlags::READ)?.read(buf)
+        self.validate(FileFlags::READ, FileFlags::PATH)?.read(buf)
     }
     pub fn write(&self, buf: &[u8]) -> LinuxResult<usize> {
-        self.access(FileFlags::WRITE)?.write(buf)
+        self.validate(FileFlags::WRITE, FileFlags::PATH)?.write(buf)
     }
     pub fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self.file.clone().into_any()

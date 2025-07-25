@@ -20,12 +20,20 @@ pub fn sys_getuid() -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Set real user ID of the calling process.
+///
+/// # Arguments
+/// * `uid` - User ID to set
+pub fn sys_setuid(_uid: u32) -> LinuxResult<isize> {
+    Ok(0)
+}
+
 /// Get effective user ID of the calling process.
 ///
 /// # Arguments
 /// None
 pub fn sys_geteuid() -> LinuxResult<isize> {
-    Ok(1)
+    Ok(0)
 }
 
 /// Get real group ID of the calling process.

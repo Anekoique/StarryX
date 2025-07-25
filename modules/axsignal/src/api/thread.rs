@@ -167,6 +167,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         let mut fatal_signals = SignalSet::default();
         fatal_signals.add(Signo::SIGKILL);
         fatal_signals.add(Signo::SIGSTOP);
+        fatal_signals.add(Signo::SIGSEGV);
 
         // Check if any of these fatal signals are pending
         // These signals cannot be blocked, so we don't need to check the blocked mask
@@ -177,6 +178,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
             let action = match sig.signo() {
                 Signo::SIGKILL => SignalOSAction::Terminate,
                 Signo::SIGSTOP => SignalOSAction::Stop,
+                Signo::SIGSEGV => SignalOSAction::CoreDump,
                 _ => unreachable!("Only SIGKILL and SIGSTOP should be in fatal_signals"),
             };
             Some((sig, action))

@@ -434,9 +434,12 @@ impl AddrSpace {
         // Populate the area first, which also checks the address range for us.
         self.validate_region(start, size, PageSize::Size4K)?;
 
-        self.areas
-            .protect(start, size, |_| Some(flags), &mut self.pt)
-            .map_err(mapping_err_to_ax_err)?;
+        // FIXME: real protect
+        if flags.intersects(MappingFlags::WRITE | MappingFlags::READ | MappingFlags::EXECUTE) {
+            self.areas
+                .protect(start, size, |_| Some(flags), &mut self.pt)
+                .map_err(mapping_err_to_ax_err)?;
+        }
 
         Ok(())
     }

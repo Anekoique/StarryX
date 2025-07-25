@@ -269,6 +269,7 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         vaddr: M::VirtAddr,
         size: usize,
         flags: MappingFlags,
+        allow_unmapped: bool,
         flush_tlb_by_page: bool,
     ) -> PagingResult<TlbFlushAll<M>> {
         let mut vaddr_usize: usize = vaddr.into();
@@ -282,17 +283,25 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         );
         while size > 0 {
             let vaddr = vaddr_usize.into();
-            let (page_size, tlb) = self
-                .protect(vaddr, flags)
-                .inspect_err(|e| error!("failed to protect page: {vaddr_usize:#x?}, {e:?}"))?;
-            if flush_tlb_by_page {
-                tlb.flush();
-            } else {
-                tlb.ignore();
-            }
+            let page_size = match self.protect(vaddr, flags) {
+                Ok((page_size, tlb)) => {
+                    if flush_tlb_by_page {
+                        tlb.flush();
+                    } else {
+                        tlb.ignore();
+                    }
 
-            assert!(page_size.is_aligned(vaddr_usize));
-            assert!(page_size as usize <= size);
+                    assert!(page_size.is_aligned(vaddr_usize));
+                    assert!(page_size as usize <= size);
+
+                    page_size
+                }
+                Err(PagingError::NotMapped) if allow_unmapped => PageSize::Size4K,
+                Err(e) => {
+                    error!("failed to protect page: {vaddr_usize:#x?}, {e:?}");
+                    return Err(e);
+                }
+            };
             vaddr_usize += page_size as usize;
             size -= page_size as usize;
         }

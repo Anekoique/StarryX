@@ -8,7 +8,7 @@ use lock_api::{Mutex, MutexGuard, RawMutex};
 
 use crate::{
     MetadataUpdate, Mountpoint, NodeOps, NodePermission, NodeType, VfsError, VfsResult,
-    path::{DOT, DOTDOT, verify_entry_name},
+    path::{DOT, DOTDOT, MAX_NAME_LEN, verify_entry_name},
 };
 
 use super::DirEntry;
@@ -50,6 +50,10 @@ pub trait DirNodeOps<M: RawMutex>: NodeOps<M> {
 
     /// Lookups a directory entry by name.
     fn lookup(&self, name: &str) -> VfsResult<DirEntry<M>>;
+
+    fn is_cacheable(&self) -> bool {
+        true
+    }
 
     /// Creates a directory entry.
     fn create(
@@ -143,7 +147,9 @@ impl<M: RawMutex> DirNode<M> {
             Entry::Occupied(e) => Ok(e.get().clone()),
             Entry::Vacant(e) => {
                 let node = self.ops.lookup(name)?;
-                e.insert(node.clone());
+                if self.ops.is_cacheable() {
+                    e.insert(node.clone());
+                }
                 Ok(node)
             }
         }
@@ -151,17 +157,32 @@ impl<M: RawMutex> DirNode<M> {
 
     /// Looks up a directory entry by name.
     pub fn lookup(&self, name: &str) -> VfsResult<DirEntry<M>> {
-        self.lookup_locked(name, &mut self.cache.lock())
+        if name.len() > MAX_NAME_LEN {
+            return Err(VfsError::ENAMETOOLONG);
+        }
+        if self.ops.is_cacheable() {
+            self.lookup_locked(name, &mut self.cache.lock())
+        } else {
+            self.ops.lookup(name)
+        }
     }
 
     /// Looks up a directory entry by name in cache.
     pub fn lookup_cache(&self, name: &str) -> Option<DirEntry<M>> {
-        self.cache.lock().get(name).cloned()
+        if self.ops.is_cacheable() {
+            self.cache.lock().get(name).cloned()
+        } else {
+            None
+        }
     }
 
     /// Inserts a directory entry into the cache.
     pub fn insert_cache(&self, name: String, entry: DirEntry<M>) -> Option<DirEntry<M>> {
-        self.cache.lock().insert(name, entry)
+        if self.ops.is_cacheable() {
+            self.cache.lock().insert(name, entry)
+        } else {
+            None
+        }
     }
 
     /// Reads directory entries using the provided sink
