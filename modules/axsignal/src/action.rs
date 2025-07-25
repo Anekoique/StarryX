@@ -4,8 +4,8 @@ use axerrno::LinuxError;
 use bitflags::bitflags;
 use linux_raw_sys::{
     general::{
-        __kernel_sighandler_t, __sigrestore_t, SA_NODEFER, SA_ONSTACK, SA_RESETHAND, SA_RESTART,
-        SA_SIGINFO, kernel_sigaction,
+        __kernel_sighandler_t, __sigrestore_t, SA_NODEFER, SA_ONSTACK,
+        SA_RESETHAND, SA_RESTART, SA_SIGINFO, kernel_sigaction,
     },
     signal_macros::sig_ign,
 };
@@ -73,6 +73,8 @@ bitflags! {
         const RESTART = SA_RESTART as _;
         /// Use alternate signal stack
         const ONSTACK = SA_ONSTACK as _;
+        /// Don't create zombie on child death
+        const NOCLDSTOP = 0x20000000;
         /// Custom restorer function is provided
         const RESTORER = 0x4000000;
     }

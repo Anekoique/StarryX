@@ -52,7 +52,12 @@ mkdir -v -p /var/tmp
 mkdir -v /etc/
 echo "root:x:0:0:root:/root:/bin/bash" >/etc/passwd
 echo "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" >>/etc/passwd
-
+cat > /etc/protocols <<EOF
+ip      0       IP      # internet protocol, pseudo protocol number
+icmp    1       ICMP    # internet control message protocol
+tcp     6       TCP     # transmission control protocol
+udp     17      UDP     # user datagram protocol
+EOF
 
 run_ltp() {
     echo "#### OS COMP TEST GROUP START ltp-$1 ####"
@@ -119,5 +124,5 @@ cd /glibc
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
-# ./netperf_testcode.sh
+./netperf_testcode.sh
 # ./cyclictest_testcode.sh
