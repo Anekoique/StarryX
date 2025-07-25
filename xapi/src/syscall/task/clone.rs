@@ -10,38 +10,30 @@ use spin::RwLock;
 use axprocess::Pid;
 use axsignal::Signo;
 use axuspace::{UserPtr, UserSpaceAccess};
+
 use xcore::{
     fs::FD_TABLE,
     mm::{XUserSpace, copy_from_kernel},
-    task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task},
+    task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task, with_uspace},
 };
 
 use crate::{
-    ctypes::{SIGCHLD, task::CloneFlags},
+    ctypes::{SIGCHLD, clone_args, task::CloneFlags},
     ipc::IPC_MANAGER,
 };
 
-/// Create a child process or thread.
-///
-/// # Arguments
-/// * `tf` - Trap frame containing register state
-/// * `flags` - Clone flags controlling behavior
-/// * `stack` - Stack pointer for the new task (0 for same stack)
-/// * `parent_tid` - Address to store parent thread ID
-/// * `child_tid` - Address to store child thread ID
-/// * `tls` - Thread-local storage pointer
-pub fn sys_clone(
+#[allow(clippy::too_many_arguments)]
+fn do_clone(
     tf: &TrapFrame,
     flags: u32,
     stack: usize,
+    pidfd: usize,
     parent_tid: usize,
-    #[cfg(any(target_arch = "x86_64", target_arch = "loongarch64"))] child_tid: usize,
+    child_tid: usize,
+    exit_signal: u32,
     tls: usize,
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "loongarch64")))] child_tid: usize,
 ) -> LinuxResult<isize> {
-    const FLAG_MASK: u32 = 0xff;
-    let exit_signal = flags & FLAG_MASK;
-    let flags = CloneFlags::from_bits_truncate(flags & !FLAG_MASK);
+    let flags = CloneFlags::from_bits_truncate(flags);
 
     let curr = current();
     let process = curr.task_ext().process();
@@ -56,9 +48,19 @@ pub fn sys_clone(
     if exit_signal != 0 && flags.contains(CloneFlags::THREAD | CloneFlags::PARENT) {
         return Err(LinuxError::EINVAL);
     }
+    if flags.contains(CloneFlags::SIGHAND) && !flags.contains(CloneFlags::VM) {
+        return Err(LinuxError::EINVAL);
+    }
     if flags.contains(CloneFlags::THREAD) && !flags.contains(CloneFlags::VM | CloneFlags::SIGHAND) {
         return Err(LinuxError::EINVAL);
     }
+    if flags.contains(CloneFlags::FS) && flags.contains(CloneFlags::NEWNS) {
+        return Err(LinuxError::EINVAL);
+    }
+    if flags.contains(CloneFlags::PIDFD) {
+        uspace.read(UserPtr::<u32>::from(pidfd))?;
+    }
+
     let exit_signal = Signo::from_repr(exit_signal as u8);
 
     let mut new_uctx = UspaceContext::from(tf);
@@ -171,10 +173,71 @@ pub fn sys_clone(
     Ok(tid as _)
 }
 
+/// Create a child process or thread.
+///
+/// # Arguments
+/// * `tf` - Trap frame containing register state
+/// * `flags` - Clone flags controlling behavior
+/// * `stack` - Stack pointer for the new task (0 for same stack)
+/// * `parent_tid` - Address to store parent thread ID
+/// * `child_tid` - Address to store child thread ID
+/// * `tls` - Thread-local storage pointer
+pub fn sys_clone(
+    tf: &TrapFrame,
+    flags: u32,
+    stack: usize,
+    parent_tid: usize,
+    #[cfg(any(target_arch = "x86_64", target_arch = "loongarch64"))] child_tid: usize,
+    tls: usize,
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "loongarch64")))] child_tid: usize,
+) -> LinuxResult<isize> {
+    do_clone(
+        tf,
+        flags,
+        stack,
+        0,
+        parent_tid,
+        child_tid,
+        flags & 0xff,
+        tls,
+    )
+}
+
 /// Create a child process (fork).
 ///
 /// # Arguments
 /// * `tf` - Trap frame containing register state
 pub fn sys_fork(tf: &TrapFrame) -> LinuxResult<isize> {
     sys_clone(tf, SIGCHLD, 0, 0, 0, 0)
+}
+
+pub fn sys_clone3(tf: &TrapFrame, args: UserPtr<clone_args>, size: usize) -> LinuxResult<isize> {
+    let args = with_uspace(|uspace| uspace.read(args))?;
+    if size < size_of::<clone_args>() {
+        return Err(LinuxError::EINVAL);
+    }
+    if size > size_of::<clone_args>() {
+        return Err(LinuxError::EFAULT);
+    }
+    if args.exit_signal > 64 {
+        return Err(LinuxError::EINVAL);
+    }
+    if args.stack != 0 && args.stack_size == 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    if args.stack == 0 && args.stack_size != 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    debug!("sys_clone3 <= args: {:?}, size: {}", args, size);
+
+    do_clone(
+        tf,
+        args.flags as _,
+        args.stack as _,
+        args.pidfd as _,
+        args.parent_tid as _,
+        args.child_tid as _,
+        args.exit_signal as _,
+        args.tls as _,
+    )
 }

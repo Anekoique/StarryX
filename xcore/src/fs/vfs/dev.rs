@@ -165,6 +165,7 @@ fn create_dev_root(fs: Arc<VirtFs>) -> DirMaker {
         device_spec!("random", 1, 8, DeviceOps::Random),
         device_spec!("urandom", 1, 9, DeviceOps::Random),
         device_spec!("rtc0", 250, 0, DeviceOps::Rtc),
+        device_spec!("rtc", 251, 0, DeviceOps::Rtc),
     ];
 
     for (name, node_type, device_id, ops) in devices {

@@ -46,6 +46,28 @@ bitflags::bitflags! {
     /// Permissions are organized into owner, group, and other categories.
     #[derive(Debug, Clone, Copy)]
     pub struct NodePermission: u16 {
+        /// Socket.
+        const SOCKET = 0o140000;
+        /// Whiteout.
+        const SYMLINK = 0o120000;
+        /// Regular file.
+        const REGULAR_FILE = 0o10000;
+        /// Block device.
+        const BLOCK_DEVICE = 0o60000;
+        /// Directory.
+        const DIRECTORY = 0o40000;
+        /// Character device.
+        const CHARACTER_DEVICE = 0o20000;
+        /// FIFO.
+        const FIFO = 0o10000;
+
+        /// Set user ID on execution.
+        const SET_UID = 0o4000;
+        /// Set group ID on execution.
+        const SET_GID = 0o2000;
+        /// Sticky bit.
+        const STICKY = 0o1000;
+
         /// Owner has read permission.
         const OWNER_READ = 0o400;
         /// Owner has write permission.

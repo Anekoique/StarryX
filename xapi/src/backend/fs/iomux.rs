@@ -70,7 +70,7 @@ impl PollFd {
 pub fn poll(fds: &mut [PollFd], timeout: Option<TimeValue>) -> LinuxResult<isize> {
     debug!("do_poll fds={:?} timeout={:?}", fds, timeout);
 
-    let deadline = timeout.map(|t| wall_time() + t);
+    let deadline = timeout.map(|t| wall_time().saturating_add(t));
 
     loop {
         axnet::poll_interfaces();

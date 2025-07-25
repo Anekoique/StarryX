@@ -102,7 +102,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::dup => sys_dup(tf.arg0() as _),
         #[cfg(target_arch = "x86_64")]
         Sysno::dup2 => sys_dup2(tf.arg0() as _, tf.arg1() as _),
-        Sysno::dup3 => sys_dup2(tf.arg0() as _, tf.arg1() as _),
+        Sysno::dup3 => sys_dup3(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         Sysno::fcntl => sys_fcntl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
 
         // io
@@ -320,6 +320,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg3(),
             tf.arg4(),
         ),
+        Sysno::clone3 => sys_clone3(tf, tf.arg0().into(), tf.arg1() as _),
         #[cfg(target_arch = "x86_64")]
         Sysno::fork => sys_fork(tf),
         Sysno::exit => sys_exit(tf.arg0() as _),
@@ -386,13 +387,21 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::getuid => sys_getuid(),
         Sysno::setuid => sys_setuid(tf.arg0() as _),
         Sysno::geteuid => sys_geteuid(),
+        Sysno::setreuid => sys_setreuid(tf.arg0() as _, tf.arg1() as _),
+        Sysno::getresuid => Ok(0),
+        Sysno::setresuid => sys_setresuid(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::setresgid => Ok(0),
+        Sysno::setgroups => Ok(0),
         Sysno::getgid => sys_getgid(),
+        Sysno::setgid => Ok(0),
         Sysno::getegid => sys_getegid(),
         Sysno::getrandom => sys_getrandom(tf.arg0().into(), tf.arg1() as _, tf.arg2() as _),
         Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
         Sysno::uname => sys_uname(tf.arg0().into()),
         Sysno::sysinfo => sys_sysinfo(tf.arg0().into()),
         Sysno::syslog => sys_syslog(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
+        Sysno::personality => Ok(0),
+        Sysno::chroot => Err(LinuxError::EPERM),
 
         // time
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),
@@ -403,6 +412,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::clock_gettime => sys_clock_gettime(tf.arg0() as _, tf.arg1().into()),
         Sysno::clock_settime => sys_clock_settime(tf.arg0() as _, tf.arg1().into()),
         Sysno::clock_getres => sys_clock_getres(tf.arg0() as _, tf.arg1().into()),
+        Sysno::clock_adjtime => Ok(0),
 
         // shm
         Sysno::shmget => sys_shmget(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),

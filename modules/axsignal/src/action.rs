@@ -4,8 +4,8 @@ use axerrno::LinuxError;
 use bitflags::bitflags;
 use linux_raw_sys::{
     general::{
-        __kernel_sighandler_t, __sigrestore_t, SA_NODEFER, SA_ONSTACK,
-        SA_RESETHAND, SA_RESTART, SA_SIGINFO, kernel_sigaction,
+        __kernel_sighandler_t, __sigrestore_t, SA_NODEFER, SA_ONSTACK, SA_RESETHAND, SA_RESTART,
+        SA_SIGINFO, kernel_sigaction,
     },
     signal_macros::sig_ign,
 };

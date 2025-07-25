@@ -1,44 +1,15 @@
-# ./busybox mkdir -v /bin
-# ./busybox ln -v -s /musl/busybox /bin/busybox
-# cd /bin
-# export PATH=/bin
-# busybox ln -v -s busybox ln
-# busybox ln -v -s busybox cp
-# busybox ln -v -s busybox stat
-# busybox ln -v -s busybox mkdir
-# mkdir -v /lib
-# cp -v /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib
-# 
-# stat /lib/ld-linux-riscv64-lp64d.so.1
-# stat /glibc/lib/ld-linux-riscv64-lp64d.so.1
-
-
-./busybox mkdir -v /bin
-./busybox ln -v -s /musl/busybox /bin/busybox
-cd /bin
+/musl/busybox mkdir -v /bin
+/musl/busybox --install -s /bin
 export PATH=/bin
-busybox ln -v -s busybox ln
-ln -v -s busybox cp
-ln -v -s busybox mv
-ln -v -s busybox rm
-ln -v -s busybox cat
-ln -v -s busybox touch
-ln -v -s busybox sh
-ln -v -s busybox ls
-ln -v -s busybox env
-ln -v -s busybox mkdir
-ln -v -s busybox sleep
-ln -v -s busybox basename
-ln -v -s busybox stat
 
 mkdir -v /lib
 mkdir -v /usr
 cp -v /glibc/lib/* /lib
 if [[ $ARCH == loongarch64 ]]; then
-    ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
 else
-    ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH.so.1
-    ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH-sf.so.1
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH.so.1
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH-sf.so.1
 fi
 
 ln -v -s /lib /lib64
@@ -52,23 +23,23 @@ mkdir -v -p /var/tmp
 mkdir -v /etc/
 echo "root:x:0:0:root:/root:/bin/bash" >/etc/passwd
 echo "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" >>/etc/passwd
-cat > /etc/protocols <<EOF
-ip      0       IP      # internet protocol, pseudo protocol number
-icmp    1       ICMP    # internet control message protocol
-tcp     6       TCP     # transmission control protocol
-udp     17      UDP     # user datagram protocol
+cat >/etc/protocols <<EOF
+ip      0       IP
+icmp    1       ICMP
+tcp     6       TCP
+udp     17      UDP
 EOF
 
 run_ltp() {
-    echo "#### OS COMP TEST GROUP START ltp-$1 ####"
+  echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
-    export LTP_TIMEOUT_MUL=0.5
-    export LTP_DEV_FS_TYPE=tmpfs
-    export LTP_SINGLE_FS_TYPE=tmpfs
+  export LTP_TIMEOUT_MUL=0.5
+  export LTP_DEV_FS_TYPE=tmpfs
+  export LTP_SINGLE_FS_TYPE=tmpfs
 
-    all_testcases="
-    "
-    passed_testcase="
+  all_testcases="
+  "
+  passed_testcase="
     abort01
     abs01
     accept01
@@ -89,21 +60,163 @@ run_ltp() {
     capget01
     capset01
     capset02
+    chmod01
+    chmod03
+    chown01
+    chown02
+    chown03
+    chown04
+    chown05
+    chroot01
+    clock_adjtime01
+    clock_getres01
+    clock_gettime02
+    clock_nanosleep01
+    clock_nanosleep04
+    clone01
+    clone03
+    clone06
+    clone07
+    clone08
+    clone301
+    clone302
+    close01
+    close02
+    confstr01
+    crash01
+    crash02
+    creat01
+    creat03
+    creat05
+    connect01
+    data_space
+    diotest1
+    dup01
+    dup02
+    dup03
+    dup04
+    dup07
+    dup201
+    dup202
+    dup203
+    dup204
+    dup205
+    dup206
+    dup207
+    dup3_01
+    dup3_02
+    faccessat01
+    faccessat02
+    faccessat201
+    faccessat202
+    fchmod01
+    fchmod03
+    fchmod04
+    fchmodat01
+    fchmodat02
+    fchown01
+    fchown02
+    fchown03
+    fchown05
+    fchownat01
+    fchownat02
+    fork01
+    fork03
+    fork07
+    fork08
+    fork09
+    fork10
+    getrandom01
+    getrandom02
+    getrandom03
+    getrandom04
+    getrlimit01
+    getrlimit02
+    getrusage01
+    getrusage02
+    getsid01
+    getsockname01
+    getsockopt01
+    gettid01
+    gettid02
+    getuid01
+    getuid03
+    kill06
+    kill07
+    kill08
+    kill09
+    kill11
+    recv01
+    recvfrom01
+    rt_sigaction01
+    rt_sigaction02
+    rt_sigaction03
+    rt_sigprocmask01
+    rt_sigprocmask02
+    rtc01
+    poll01
+    sbrk01
+    sbrk02
+    sched_yield01
+    select03
+    sem_nstest
+    semop01
+    semget01
+    semget02
+    semctl01
+    semctl03
+    semctl05
+    semctl07
+    send01
+    setreuid01
+    setreuid03
+    setreuid04
+    setreuid05
+    setreuid07
+    setrlimit01
+    setrlimit02
+    setrlimit03
+    setrlimit04
+    setrlimit05
+    setsockopt01
+    setsockopt03
+    setsockopt04
+    setuid01
+    sigaction02
+    sigaltstack02
+    signal01
+    signal02
+    signal03
+    signal04
+    signal05
+    sigpending02
+    sigprocmask01
+    times01
+    tkill01
+    uname01
+    uname02
+    uname04
+    utime06
+    utime07
+    wait01
+    wait02
+    waitpid03
+    waitpid04
     "
 
-    cd ltp/testcases/bin
-    for f in $all_testcases; do
-        echo "RUN LTP CASE $f"
-        ./$f
-        echo "FAIL LTP CASE $f : 0"
-    done
-    cd ../../..
+  cd ltp/testcases/bin
+  for f in $all_testcases; do
+    echo "RUN LTP CASE $f"
+    ./$f
+    echo "FAIL LTP CASE $f : 0"
+  done
+  cd ../../..
 
-    echo "#### OS COMP TEST GROUP END ltp-$1 ####"
+  echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
 cd /musl
-# run_ltp musl
+run_ltp musl
 # ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh
@@ -124,5 +237,5 @@ cd /glibc
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
-./netperf_testcode.sh
+# ./netperf_testcode.sh
 # ./cyclictest_testcode.sh

@@ -8,8 +8,9 @@ use xcore::{
 
 use crate::{
     ctypes::{
-        __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, ITIMER_PROF, ITIMER_REAL,
-        ITIMER_VIRTUAL, itimerval, sigevent, sys::Tms, timespec, timeval,
+        __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_MONOTONIC_RAW, CLOCK_PROCESS_CPUTIME_ID,
+        CLOCK_REALTIME, CLOCK_THREAD_CPUTIME_ID, ITIMER_PROF, ITIMER_REAL, ITIMER_VIRTUAL,
+        itimerval, sigevent, sys::Tms, timespec, timeval,
     },
     time::{TimeValueLike, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time},
 };
@@ -25,7 +26,9 @@ pub fn sys_clock_gettime(
 ) -> LinuxResult<isize> {
     let now = match clock_id as u32 {
         CLOCK_REALTIME => wall_time(),
-        CLOCK_MONOTONIC => monotonic_time(),
+        CLOCK_MONOTONIC | CLOCK_MONOTONIC_RAW => monotonic_time(),
+        CLOCK_PROCESS_CPUTIME_ID => wall_time(),
+        CLOCK_THREAD_CPUTIME_ID => wall_time(),
         _ => {
             warn!(
                 "Called sys_clock_gettime for unsupported clock {}",
@@ -61,14 +64,10 @@ pub fn sys_clock_getres(
     clock_id: __kernel_clockid_t,
     res: UserPtr<timespec>,
 ) -> LinuxResult<isize> {
-    if clock_id as u32 != CLOCK_MONOTONIC && clock_id as u32 != CLOCK_REALTIME {
-        warn!(
-            "Called sys_clock_gettime for unsupported clock {}",
-            clock_id
-        );
+    if clock_id < 0 {
         return Err(LinuxError::EINVAL);
-    };
-    with_uspace(|uspace| uspace.write(res, timespec::from_nanos(1)))?;
+    }
+    with_uspace(|uspace| nullable!(uspace.write(res, timespec::from_nanos(1))))?;
     Ok(0)
 }
 

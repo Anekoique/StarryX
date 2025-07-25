@@ -1,13 +1,14 @@
 use axerrno::{LinuxError, LinuxResult};
-use axtask::{AxCpuMask, current, set_affinity, with_task};
+use axtask::{AxCpuMask, set_affinity, with_task};
 
 use axprocess::Pid;
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::task::{XTaskExt, with_uspace};
+use xcore::task::with_uspace;
 
 use crate::{
-    ctypes::{CLOCK_MONOTONIC, CLOCK_REALTIME, SCHED_FIFO, timespec},
-    utils::time::TimeValueLike,
+    ctypes::{CLOCK_MONOTONIC, CLOCK_REALTIME, SCHED_FIFO, TIMER_ABSTIME, timespec},
+    have_signals,
+    utils::time::{TimeValue, TimeValueLike},
 };
 
 /// Yield the processor to other threads.
@@ -150,35 +151,41 @@ pub fn sys_sched_getscheduler_min(
     Ok(0)
 }
 
+fn sleep(clock: impl Fn() -> TimeValue, dur: TimeValue) -> TimeValue {
+    let start = clock();
+    while clock() < start + dur {
+        if have_signals() {
+            break;
+        }
+        axtask::yield_now();
+    }
+    clock() - start
+}
+
 /// Sleep for a specified time.
 ///
 /// # Arguments
 /// * `req` - Time to sleep
 /// * `rem` - Remaining time if interrupted (NULL if not needed)
 pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> LinuxResult<isize> {
-    let uspace = XTaskExt::from_task(&current()).xprocess_ref().uspace();
-    let req = uspace.read(req)?;
+    with_uspace(|uspace| {
+        let req = uspace.read(req)?;
 
-    if req.tv_nsec < 0 || req.tv_nsec > 999_999_999 || req.tv_sec < 0 {
-        return Err(LinuxError::EINVAL);
-    }
+        if req.tv_nsec < 0 || req.tv_nsec > 999_999_999 || req.tv_sec < 0 {
+            return Err(LinuxError::EINVAL);
+        }
+        let dur = timespec::to_time_value(req);
+        trace!("sys_nanosleep <= {:?}", dur);
 
-    let dur = timespec::to_time_value(req);
-    trace!("sys_nanosleep <= {:?}", dur);
+        let actual = sleep(axhal::time::monotonic_time, dur);
 
-    let now = axhal::time::monotonic_time();
-
-    axtask::sleep(dur);
-
-    let after = axhal::time::monotonic_time();
-    let actual = after - now;
-
-    if let Some(diff) = dur.checked_sub(actual) {
-        nullable!(uspace.write(rem, timespec::from_time_value(diff)))?;
-        Err(LinuxError::EINTR)
-    } else {
-        Ok(0)
-    }
+        if let Some(diff) = dur.checked_sub(actual) {
+            nullable!(uspace.write(rem, timespec::from_time_value(diff)))?;
+            Err(LinuxError::EINTR)
+        } else {
+            Ok(0)
+        }
+    })
 }
 
 /// Sleep for a specified time using a specific clock.
@@ -194,14 +201,31 @@ pub fn sys_clock_nanosleep(
     req: UserConstPtr<timespec>,
     rem: UserPtr<timespec>,
 ) -> LinuxResult<isize> {
-    if clock_id as u32 != CLOCK_MONOTONIC && clock_id as u32 != CLOCK_REALTIME {
-        warn!("sys_clock_nanosleep: invalid clock_id {}", clock_id);
-        return Err(LinuxError::EINVAL);
-    }
-
-    if flags != 0 {
-        warn!("sys_clock_nanosleep: invalid flags {}", flags);
-    }
-
-    sys_nanosleep(req, rem)
+    let clock = match clock_id as u32 {
+        CLOCK_MONOTONIC => axhal::time::monotonic_time,
+        CLOCK_REALTIME => axhal::time::wall_time,
+        _ => {
+            warn!("sys_clock_nanosleep: invalid clock_id {}", clock_id);
+            return Err(LinuxError::EOPNOTSUPP);
+        }
+    };
+    with_uspace(|uspace| {
+        let req = uspace.read(req)?;
+        if req.tv_nsec < 0 || req.tv_nsec > 999_999_999 || req.tv_sec < 0 {
+            return Err(LinuxError::EINVAL);
+        }
+        let req = timespec::to_time_value(req);
+        let dur = if flags & TIMER_ABSTIME as usize != 0 {
+            req.saturating_sub(clock())
+        } else {
+            req
+        };
+        let actual = sleep(clock, dur);
+        if let Some(diff) = dur.checked_sub(actual) {
+            nullable!(uspace.write(rem, timespec::from_time_value(diff)))?;
+            Err(LinuxError::EINTR)
+        } else {
+            Ok(0)
+        }
+    })
 }

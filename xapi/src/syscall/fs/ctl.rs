@@ -375,7 +375,7 @@ pub fn sys_readlinkat(
 /// * `path` - Path to the file
 /// * `uid` - New user ID
 /// * `gid` - New group ID
-pub fn sys_chown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
+pub fn sys_chown(path: UserConstPtr<c_char>, uid: i32, gid: i32) -> LinuxResult<isize> {
     sys_fchownat(AT_FDCWD, path, uid, gid, 0)
 }
 /// Change ownership of a symbolic link itself.
@@ -384,7 +384,7 @@ pub fn sys_chown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<
 /// * `path` - Path to the symbolic link
 /// * `uid` - New user ID
 /// * `gid` - New group ID
-pub fn sys_lchown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult<isize> {
+pub fn sys_lchown(path: UserConstPtr<c_char>, uid: i32, gid: i32) -> LinuxResult<isize> {
     use linux_raw_sys::general::AT_SYMLINK_NOFOLLOW;
     sys_fchownat(AT_FDCWD, path, uid, gid, AT_SYMLINK_NOFOLLOW)
 }
@@ -395,7 +395,7 @@ pub fn sys_lchown(path: UserConstPtr<c_char>, uid: u32, gid: u32) -> LinuxResult
 /// * `fd` - File descriptor
 /// * `uid` - New user ID
 /// * `gid` - New group ID
-pub fn sys_fchown(fd: i32, uid: u32, gid: u32) -> LinuxResult<isize> {
+pub fn sys_fchown(fd: i32, uid: i32, gid: i32) -> LinuxResult<isize> {
     sys_fchownat(fd, 0.into(), uid, gid, AT_EMPTY_PATH)
 }
 
@@ -410,11 +410,13 @@ pub fn sys_fchown(fd: i32, uid: u32, gid: u32) -> LinuxResult<isize> {
 pub fn sys_fchownat(
     dirfd: i32,
     path: UserConstPtr<c_char>,
-    uid: u32,
-    gid: u32,
+    uid: i32,
+    gid: i32,
     flags: u32,
 ) -> LinuxResult<isize> {
     let path = with_uspace(|uspace| nullable!(uspace.read_str(path)))?;
+    let uid = if uid < 0 { 0 } else { uid as u32 };
+    let gid = if gid < 0 { 0 } else { gid as u32 };
 
     with_location(dirfd, path, flags, |location| {
         location.update_metadata(MetadataUpdate {

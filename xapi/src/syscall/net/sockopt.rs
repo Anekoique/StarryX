@@ -9,7 +9,7 @@ use crate::{
     ctypes::{
         IP_RECVERR, L_IP, L_SOCKET, L_TCP, L_UDP, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP,
         SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF,
-        TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY, socklen_t,
+        SO_SNDBUFFORCE, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY, socklen_t,
     },
     net::Socket,
 };
@@ -100,6 +100,7 @@ pub fn sys_setsockopt(
             SO_RCVBUF => return Ok(0),
             SO_SNDBUF => return Ok(0),
             SO_DONTROUTE => return Ok(0),
+            SO_SNDBUFFORCE => return Ok(0),
             _ => return Err(LinuxError::ENOPROTOOPT),
         },
         L_TCP => match optname {

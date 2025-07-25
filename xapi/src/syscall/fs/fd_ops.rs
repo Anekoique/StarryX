@@ -1,7 +1,4 @@
-use core::{
-    ffi::{c_char, c_int},
-    panic,
-};
+use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FileFlags, OpenResult};
@@ -125,9 +122,25 @@ pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> LinuxResult<isize> {
         FD_TABLE.remove(new_fd as _);
         FD_TABLE
             .add_at(new_fd as _, f)
-            .unwrap_or_else(|_| panic!("new_fd should be valid"));
+            .map_err(|_| LinuxError::EBADF)?;
     }
 
+    Ok(new_fd as _)
+}
+
+pub fn sys_dup3(old_fd: c_int, new_fd: c_int, flags: c_int) -> LinuxResult<isize> {
+    trace!(
+        "sys_dup3 <= old_fd: {}, new_fd: {}, flags: {}",
+        old_fd, new_fd, flags
+    );
+    if flags < 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    if old_fd == new_fd {
+        return Err(LinuxError::EINVAL);
+    }
+    sys_dup2(old_fd, new_fd)?;
+    FD_TABLE.set_cloexec(new_fd as usize, flags == O_CLOEXEC as _);
     Ok(new_fd as _)
 }
 

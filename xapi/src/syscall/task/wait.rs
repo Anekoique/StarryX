@@ -36,7 +36,9 @@ impl WaitPid {
 /// * `exit_code_ptr` - Buffer to store exit status (NULL if not needed)
 /// * `options` - Wait options (WNOHANG, WUNTRACED, etc.)
 pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxResult<isize> {
-    let options = WaitOptions::from_bits_truncate(options);
+    let Some(options) = WaitOptions::from_bits(options) else {
+        return Err(LinuxError::EINVAL);
+    };
     info!("sys_wait4 <= pid: {:?}, options: {:?}", pid, options);
 
     let process = current().task_ext().process();
@@ -50,6 +52,9 @@ pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxRe
     } else if pid > 0 {
         WaitPid::Pid(pid as _)
     } else {
+        if pid == i32::MIN {
+            return Err(LinuxError::ESRCH);
+        }
         WaitPid::Pgid(-pid as _)
     };
 

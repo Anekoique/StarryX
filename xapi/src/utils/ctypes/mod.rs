@@ -10,11 +10,11 @@ pub use linux_raw_sys::{
     general::*,
     ioctl::RTC_RD_TIME,
     net::{
-        __kernel_sa_family_t, AF_INET, AF_INET6, AF_UNIX, IP_RECVERR, IPPROTO_IP, IPPROTO_TCP,
-        IPPROTO_UDP, IPPROTO_UDPLITE, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP, SO_DONTROUTE,
-        SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, SOCK_DGRAM, SOCK_STREAM,
-        SOL_SOCKET, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG, TCP_NODELAY, in_addr, in6_addr, sockaddr,
-        sockaddr_in, sockaddr_in6, socklen_t,
+        __kernel_sa_family_t, AF_INET, AF_INET6, AF_UNIX, IP_RECVERR, IPPROTO_ICMP, IPPROTO_IP,
+        IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP,
+        SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF,
+        SO_SNDBUFFORCE, SOCK_DGRAM, SOCK_STREAM, SOL_SOCKET, TCP_CONGESTION, TCP_INFO, TCP_MAXSEG,
+        TCP_NODELAY, in_addr, in6_addr, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
     },
     select_macros::*,
     system::{new_utsname, sysinfo},
@@ -27,6 +27,7 @@ pub const L_SOCKET: i32 = SOL_SOCKET as _;
 pub const L_IP: i32 = IPPROTO_IP as _;
 pub const L_TCP: i32 = IPPROTO_TCP as _;
 pub const L_UDP: i32 = IPPROTO_UDP as _;
+pub const L_ICMP: i32 = IPPROTO_ICMP as _;
 
 // fs
 pub const O_EXEC: u32 = O_PATH;

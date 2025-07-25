@@ -69,6 +69,10 @@ pub fn check_fatal_signals() {
     }
 }
 
+pub fn have_signals() -> bool {
+    with_xthread(|xthread| !xthread.signal.pending().is_empty())
+}
+
 #[register_trap_handler(POST_TRAP)]
 fn post_trap_callback(tf: &mut TrapFrame, from_user: bool) {
     if !from_user {

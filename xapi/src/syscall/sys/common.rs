@@ -36,6 +36,25 @@ pub fn sys_geteuid() -> LinuxResult<isize> {
     Ok(0)
 }
 
+/// Set real and effective user IDs of the calling process.
+///
+/// # Arguments
+/// * `uid` - User ID to set
+/// * `euid` - Effective user ID to set
+pub fn sys_setreuid(_uid: u32, _euid: u32) -> LinuxResult<isize> {
+    Ok(0)
+}
+
+/// Set real, effective, and saved user IDs of the calling process.
+///
+/// # Arguments
+/// * `uid` - User ID to set
+/// * `euid` - Effective user ID to set
+/// * `suid` - Saved user ID to set
+pub fn sys_setresuid(_uid: u32, _euid: u32, _suid: u32) -> LinuxResult<isize> {
+    Ok(0)
+}
+
 /// Get real group ID of the calling process.
 ///
 /// # Arguments
@@ -63,7 +82,7 @@ const fn pad_str(info: &str) -> [c_char; 65] {
 }
 
 const UTSNAME: new_utsname = new_utsname {
-    sysname: pad_str("StarryX"),
+    sysname: pad_str("Linux"),
     nodename: pad_str("StarryX - machine[0]"),
     release: pad_str("10.0.0"),
     version: pad_str("10.0.0"),
