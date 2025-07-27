@@ -38,15 +38,15 @@ static TASK_TABLE: SpinNoIrq<WeakMap<u64, WeakAxTaskRef>> = SpinNoIrq::new(WeakM
 cfg_if::cfg_if! {
     if #[cfg(feature = "sched_rr")] {
         const MAX_TIME_SLICE: usize = 5;
-        pub(crate) type AxTask = scheduler::RRTask<TaskInner, MAX_TIME_SLICE>;
-        pub(crate) type Scheduler = scheduler::RRScheduler<TaskInner, MAX_TIME_SLICE>;
+        pub(crate) type AxTask = axsched::RRTask<TaskInner, MAX_TIME_SLICE>;
+        pub(crate) type Scheduler = axsched::RRScheduler<TaskInner, MAX_TIME_SLICE>;
     } else if #[cfg(feature = "sched_cfs")] {
-        pub(crate) type AxTask = scheduler::CFSTask<TaskInner>;
-        pub(crate) type Scheduler = scheduler::CFScheduler<TaskInner>;
+        pub(crate) type AxTask = axsched::CFSTask<TaskInner>;
+        pub(crate) type Scheduler = axsched::CFScheduler<TaskInner>;
     } else {
         // If no scheduler features are set, use FIFO as the default.
-        pub(crate) type AxTask = scheduler::FifoTask<TaskInner>;
-        pub(crate) type Scheduler = scheduler::FifoScheduler<TaskInner>;
+        pub(crate) type AxTask = axsched::FifoTask<TaskInner>;
+        pub(crate) type Scheduler = axsched::FifoScheduler<TaskInner>;
     }
 }
 
@@ -92,7 +92,6 @@ pub fn init_scheduler() {
     #[cfg(feature = "irq")]
     crate::timers::init();
 
-    info!("  use {} scheduler.", Scheduler::scheduler_name());
 }
 
 /// Initializes the task scheduler for secondary CPUs.

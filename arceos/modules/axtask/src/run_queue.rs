@@ -8,7 +8,7 @@ use alloc::sync::Weak;
 use kernel_guard::{BaseGuard, NoPreemptIrqSave};
 use kspin::SpinRaw;
 use lazyinit::LazyInit;
-use scheduler::BaseScheduler;
+use axsched::BaseScheduler;
 
 use axhal::cpu::this_cpu_id;
 

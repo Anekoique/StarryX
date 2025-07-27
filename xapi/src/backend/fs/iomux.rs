@@ -9,6 +9,7 @@ use xcore::fs::{FileLike, Kstat, get_file_like};
 use crate::{
     collections::BTreeMap,
     ctypes::{epoll_event, fs::IoEvents},
+    task::check_fatal_signals,
     time::{TimeValue, wall_time},
 };
 
@@ -112,6 +113,7 @@ pub fn poll(fds: &mut [PollFd], timeout: Option<TimeValue>) -> LinuxResult<isize
             return Ok(0);
         }
 
+        check_fatal_signals();
         axtask::yield_now();
     }
 }
