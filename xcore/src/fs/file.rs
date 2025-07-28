@@ -23,11 +23,13 @@ pub trait FileLike: Send + Sync {
         false
     }
 
-    fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>>
+    fn from_fd(fd: c_int, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>>
     where
         Self: Sized + 'static,
     {
         get_file_like(fd)?
+            .validate(required, forbidden)?
+            .clone()
             .into_any()
             .downcast::<Self>()
             .map_err(|_| LinuxError::EINVAL)

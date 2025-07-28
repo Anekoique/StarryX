@@ -149,7 +149,9 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
         2 => SeekFrom::End(offset as _),
         _ => return Err(LinuxError::EINVAL),
     };
-    let off = File::from_fd(fd)?.inner().seek(pos)?;
+    let off = File::from_fd(fd, FileFlags::empty(), FileFlags::empty())?
+        .inner()
+        .seek(pos)?;
     Ok(off as _)
 }
 
@@ -160,7 +162,7 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 /// * `length` - New length for the file
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     trace!("sys_ftruncate <= {} {}", fd, length);
-    with_file(fd, |file| {
+    with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
         file.inner().access(FileFlags::WRITE)?.set_len(length as _)
     })
     .map(|_| 0)
@@ -172,7 +174,7 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
 /// * `fd` - File descriptor
 pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fsync <= {}", fd);
-    with_file(fd, |file| {
+    with_file(fd, FileFlags::empty(), FileFlags::empty(), |file| {
         PAGE_CACHE_MANAGER.sync_file(file.inner().inode()?)?;
         file.inner().sync(false)
     })
@@ -185,7 +187,10 @@ pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
 /// * `fd` - File descriptor
 pub fn sys_fdatasync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fdatasync <= {}", fd);
-    with_file(fd, |file| file.inner().sync(true)).map(|_| 0)
+    with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
+        file.inner().sync(true)
+    })
+    .map(|_| 0)
 }
 
 /// Read from a file descriptor at a given offset.
@@ -203,7 +208,9 @@ pub fn sys_pread64(
 ) -> LinuxResult<isize> {
     let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
     trace!("sys_pread64 <= {}", fd);
-    with_file(fd, |file| file.read_at(buf, offset as _)).map(|read| read as isize)
+    File::from_fd(fd, FileFlags::READ, FileFlags::PATH)?
+        .read_at(buf, offset as _)
+        .map(|read| read as isize)
 }
 
 /// Write to a file descriptor at a given offset.
@@ -221,7 +228,9 @@ pub fn sys_pwrite64(
 ) -> LinuxResult<isize> {
     let buf = with_uspace(|uspace| uspace.read_slice(buf, len))?;
     trace!("sys_pwrite64 <= {}", fd);
-    with_file(fd, |file| file.write_at(buf, offset as _)).map(|written| written as isize)
+    File::from_fd(fd, FileFlags::WRITE, FileFlags::PATH)?
+        .write_at(buf, offset as _)
+        .map(|written| written as isize)
 }
 
 /// Read data into multiple buffers from a file descriptor at a given offset.
@@ -271,7 +280,7 @@ pub fn sys_preadv2(
     mut offset: __kernel_off_t,
     _flags: u32,
 ) -> LinuxResult<isize> {
-    with_file(fd, |file| {
+    with_file(fd, FileFlags::READ, FileFlags::PATH, |file| {
         readv_impl(iov, iocnt, |buf| {
             let read = file.read_at(buf, offset as _)?;
             offset += read as __kernel_off_t;
@@ -295,7 +304,7 @@ pub fn sys_pwritev2(
     mut offset: __kernel_off_t,
     _flags: u32,
 ) -> LinuxResult<isize> {
-    with_file(fd, |file| {
+    with_file(fd, FileFlags::WRITE, FileFlags::PATH, |file| {
         writev_impl(iov, iocnt, |buf| {
             let write = file.write_at(buf, offset as _)?;
             offset += write as __kernel_off_t;
@@ -348,25 +357,24 @@ pub fn sys_sendfile(
         len
     );
 
-    let dest = get_file_like(out_fd)?;
-    let offset = with_uspace(|uspace| nullable!(uspace.read(offset)))?;
+    with_file(out_fd, FileFlags::WRITE, FileFlags::PATH, |dest| {
+        let offset = with_uspace(|uspace| nullable!(uspace.read(offset)))?;
 
-    let result = match offset {
-        Some(mut offset) => with_file(in_fd, |src_file| {
-            do_sendfile(
-                |buf| {
-                    let bytes_read = src_file.read_at(buf, offset)?;
-                    offset += bytes_read as u64;
-                    Ok(bytes_read)
-                },
-                dest.file.as_ref(),
-            )
-        }),
-        None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.file.as_ref()),
-    }?;
+        let result = match offset {
+            Some(mut offset) => with_file(in_fd, FileFlags::READ, FileFlags::PATH, |src_file| {
+                do_sendfile(
+                    |buf| {
+                        let bytes_read = src_file.read_at(buf, offset)?;
+                        offset += bytes_read as u64;
+                        Ok(bytes_read)
+                    },
+                    dest.as_ref(),
+                )
+            }),
+            None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.as_ref()),
+        }?;
 
-    with_file(out_fd, |dest_file| {
-        PAGE_CACHE_MANAGER.sync_file(dest_file.inner().inode()?)
-    })?;
-    Ok(result as isize)
+        PAGE_CACHE_MANAGER.sync_file(dest.inner().inode()?)?;
+        Ok(result as isize)
+    })
 }

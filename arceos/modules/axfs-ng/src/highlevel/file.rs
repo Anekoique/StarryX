@@ -10,9 +10,10 @@ bitflags::bitflags! {
     pub struct FileFlags: u32 {
         const READ = 1;
         const WRITE = 2;
-        const APPEND = 4;
-        const DIRECT = 8;
-        const PATH = 16;
+        const EXEC = 4;
+        const APPEND = 8;
+        const DIRECT = 16;
+        const PATH = 32;
     }
 }
 
@@ -232,6 +233,9 @@ impl OpenOptions {
         }
         if self.write {
             flags |= FileFlags::WRITE;
+        }
+        if self.execute {
+            flags |= FileFlags::EXEC;
         }
         if self.append {
             flags |= FileFlags::APPEND;

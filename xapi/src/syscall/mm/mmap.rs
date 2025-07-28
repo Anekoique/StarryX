@@ -1,6 +1,7 @@
 use alloc::vec;
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axhal::paging::PageSize;
 use axtask::current;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
@@ -114,7 +115,7 @@ pub fn sys_mmap(
     }
 
     if populate || map_flags.contains(MmapFlags::SHARED) {
-        let file = File::from_fd(fd)?;
+        let file = File::from_fd(fd, FileFlags::READ, FileFlags::empty())?;
         let file = file.inner();
         let file_size = file.inner().len()? as usize;
         if offset < 0 || offset as usize >= file_size {
@@ -129,7 +130,7 @@ pub fn sys_mmap(
         // Create and add VMA mapping region
         xprocess.add_region(MmapRegion::new(
             VirtAddrRange::from_start_size(start_addr, aligned_length),
-            FileWrapper(File::from_fd(fd)?.clone_inner()),
+            FileWrapper(File::from_fd(fd, FileFlags::READ, FileFlags::empty())?.clone_inner()),
             if offset < 0 { 0 } else { offset },
             page_size,
         ))?;

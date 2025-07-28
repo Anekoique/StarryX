@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use core::net::{Ipv4Addr, SocketAddr};
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axio::{PollState, Read};
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
@@ -209,11 +210,13 @@ impl FileLike for Socket {
         }
     }
 
-    fn from_fd(fd: i32) -> LinuxResult<Arc<Self>>
+    fn from_fd(fd: i32, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>>
     where
         Self: Sized + 'static,
     {
         get_file_like(fd)?
+            .validate(required, forbidden)?
+            .clone()
             .into_any()
             .downcast::<Self>()
             .map_err(|_| LinuxError::ENOTSOCK)

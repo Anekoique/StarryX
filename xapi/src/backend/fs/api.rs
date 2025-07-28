@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::ffi::c_int;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, FsContext};
+use axfs_ng::{FS_CONTEXT, FileFlags, FsContext};
 use axfs_ng_vfs::Location;
 use axsync::RawMutex;
 
@@ -20,16 +20,20 @@ pub fn with_fs<R>(
     if dirfd == AT_FDCWD || path.starts_with('/') {
         f(&mut fs)
     } else {
-        let dir = Directory::from_fd(dirfd)?.inner().clone();
+        let dir = Directory::from_fd(dirfd, FileFlags::empty(), FileFlags::empty())?
+            .inner()
+            .clone();
         f(&mut fs.with_current_dir(dir)?)
     }
 }
 
 pub fn with_file<R>(
     dirfd: c_int,
+    required: FileFlags,
+    forbidden: FileFlags,
     f: impl FnOnce(&mut Arc<File>) -> LinuxResult<R>,
 ) -> LinuxResult<R> {
-    f(&mut File::from_fd(dirfd)?)
+    f(&mut File::from_fd(dirfd, required, forbidden)?)
 }
 
 pub fn with_location<R>(

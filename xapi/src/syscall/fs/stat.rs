@@ -1,7 +1,7 @@
 use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FS_CONTEXT;
+use axfs_ng::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{Location, NodePermission};
 use axsync::RawMutex;
 
@@ -234,5 +234,8 @@ pub fn sys_statfs(path: UserConstPtr<c_char>, buf: UserPtr<statfs>) -> LinuxResu
 /// * `fd` - File descriptor
 /// * `buf` - Buffer to write filesystem statistics
 pub fn sys_fstatfs(fd: i32, buf: UserPtr<statfs>) -> LinuxResult<isize> {
-    with_file(fd, |file| statfs(file.inner().inner(), buf)).map(|_| 0)
+    with_file(fd, FileFlags::empty(), FileFlags::empty(), |file| {
+        statfs(file.inner().inner(), buf)
+    })
+    .map(|_| 0)
 }

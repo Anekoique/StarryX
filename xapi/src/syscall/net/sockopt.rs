@@ -1,6 +1,7 @@
 use core::mem::size_of;
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 
 use axuspace::{UserPtr, UserSpaceAccess};
 use xcore::{fs::FileLike, task::with_uspace};
@@ -35,7 +36,7 @@ pub fn sys_getsockopt(
     );
 
     let optname = optname as u32;
-    let socket = Socket::from_fd(fd)?;
+    let socket = Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
     with_uspace(|uspace| match level {
         L_SOCKET => match optname {
             SO_RCVBUF => {
@@ -85,7 +86,7 @@ pub fn sys_setsockopt(
     );
 
     let optname = optname as u32;
-    let socket = Socket::from_fd(fd)?;
+    let socket = Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
     match level {
         L_SOCKET => match optname {
             SO_REUSEADDR => {

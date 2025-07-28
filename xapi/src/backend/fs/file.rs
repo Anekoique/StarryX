@@ -108,8 +108,10 @@ impl FileLike for File {
         Ok(())
     }
 
-    fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {
+    fn from_fd(fd: c_int, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>> {
         get_file_like(fd)?
+            .validate(required, forbidden)?
+            .clone()
             .into_any()
             .downcast::<Self>()
             .map_err(|_| LinuxError::EBADF)
@@ -168,8 +170,10 @@ impl FileLike for Directory {
         Ok(())
     }
 
-    fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {
+    fn from_fd(fd: c_int, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>> {
         get_file_like(fd)?
+            .validate(required, forbidden)?
+            .clone()
             .into_any()
             .downcast::<Self>()
             .map_err(|_| LinuxError::ENOTDIR)

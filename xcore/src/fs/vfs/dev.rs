@@ -10,11 +10,10 @@ use linux_raw_sys::loop_device::loop_info;
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
 
 use crate::fs::{
-    virt_file::{DirMaker, VirtDir, VirtDirBuilder},
+    virt_file::{DirMaker, VirtDir},
     virt_fs::{VirtDevice, VirtDeviceOps, VirtFs},
 };
 
-/// The device ID for /dev/rtc0
 pub const RTC0_DEVICE_ID: DeviceId = DeviceId::new(250, 0);
 
 const RANDOM_SEED: &[u8; 32] = b"0123456789abcdef0123456789abcdef";
@@ -24,7 +23,6 @@ pub fn init_devfs() -> LinuxResult<Filesystem<RawMutex>> {
     let fs = VirtFs::new_with("devtmpfs".into(), 0x01021994, create_dev_root);
     let mp = axfs_ng_vfs::Mountpoint::new_root(&fs);
 
-    // Mount /dev/shm as memory filesystem
     FsContext::new(mp.root_location())
         .resolve("/shm")?
         .mount(&super::tmp::init_tmpfs())?;
@@ -32,56 +30,66 @@ pub fn init_devfs() -> LinuxResult<Filesystem<RawMutex>> {
     Ok(fs)
 }
 
-/// Device operations enumeration for all supported device types
-#[derive(Clone)]
-enum DeviceOps {
-    Null,
-    Zero,
-    Full,
-    Random,
-    Rtc,
-}
-
-impl VirtDeviceOps for DeviceOps {
-    fn read_at(&self, buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
-        match self {
-            Self::Null => Ok(0),
-            Self::Zero => {
-                buf.fill(0);
-                Ok(buf.len())
-            }
-            Self::Full => {
-                buf.fill(0);
-                Ok(buf.len())
-            }
-            Self::Random => {
-                let mut rng = SmallRng::from_seed(*RANDOM_SEED);
-                rng.fill_bytes(buf);
-                Ok(buf.len())
-            }
-            Self::Rtc => Ok(0),
-        }
+struct Null;
+impl VirtDeviceOps for Null {
+    fn read_at(&self, _buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        Ok(0)
     }
-
     fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
-        match self {
-            Self::Null | Self::Random => Ok(buf.len()),
-            Self::Zero | Self::Rtc => Ok(0),
-            Self::Full => Err(LinuxError::ENOSPC),
-        }
+        Ok(buf.len())
     }
 }
 
-/// Macro to simplify device specification with name, major, minor, and operations
-macro_rules! device_spec {
-    ($name:literal, $major:expr, $minor:expr, $ops:expr) => {
-        (
-            $name,
-            NodeType::CharacterDevice,
-            DeviceId::new($major, $minor),
-            $ops,
-        )
-    };
+struct Zero;
+impl VirtDeviceOps for Zero {
+    fn read_at(&self, buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        buf.fill(0);
+        Ok(buf.len())
+    }
+    fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Ok(0)
+    }
+}
+
+struct Full;
+impl VirtDeviceOps for Full {
+    fn read_at(&self, buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        buf.fill(0);
+        Ok(buf.len())
+    }
+    fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Ok(buf.len())
+    }
+}
+
+struct Random {
+    rng: Mutex<SmallRng>,
+}
+impl Random {
+    pub fn new() -> Self {
+        Self {
+            rng: Mutex::new(SmallRng::from_seed(*RANDOM_SEED)),
+        }
+    }
+}
+impl VirtDeviceOps for Random {
+    fn read_at(&self, buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        self.rng.lock().fill_bytes(buf);
+        Ok(buf.len())
+    }
+    fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Ok(buf.len())
+    }
+}
+
+struct Rtc;
+impl VirtDeviceOps for Rtc {
+    fn read_at(&self, _buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        Ok(0)
+    }
+    fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Ok(0)
+    }
 }
 
 /// /dev/loopX devices
@@ -142,39 +150,63 @@ impl VirtDeviceOps for LoopDevice {
     }
 }
 
-/// Helper function to add a device to the virtual directory builder
-fn add_device(
-    root: &mut VirtDirBuilder<()>,
-    fs: &Arc<VirtFs>,
-    name: &str,
-    node_type: NodeType,
-    device_id: DeviceId,
-    ops: DeviceOps,
-) {
-    root.add(name, VirtDevice::new(fs.clone(), node_type, device_id, ops));
-}
-
 /// Create the root directory structure for /dev filesystem
 fn create_dev_root(fs: Arc<VirtFs>) -> DirMaker {
     let mut root = VirtDir::<()>::builder(fs.clone(), None);
 
-    let devices = [
-        device_spec!("null", 1, 3, DeviceOps::Null),
-        device_spec!("zero", 1, 5, DeviceOps::Zero),
-        device_spec!("full", 1, 7, DeviceOps::Full),
-        device_spec!("random", 1, 8, DeviceOps::Random),
-        device_spec!("urandom", 1, 9, DeviceOps::Random),
-        device_spec!("rtc0", 250, 0, DeviceOps::Rtc),
-        device_spec!("rtc", 251, 0, DeviceOps::Rtc),
-    ];
-
-    for (name, node_type, device_id, ops) in devices {
-        add_device(&mut root, &fs, name, node_type, device_id, ops);
-    }
-    root.add("shm", VirtDir::<()>::builder(fs.clone(), None).build());
+    root.add(
+        "null",
+        VirtDevice::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(1, 3),
+            Null,
+        ),
+    )
+    .add(
+        "zero",
+        VirtDevice::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(1, 5),
+            Zero,
+        ),
+    )
+    .add(
+        "full",
+        VirtDevice::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(1, 7),
+            Full,
+        ),
+    )
+    .add(
+        "random",
+        VirtDevice::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(1, 8),
+            Random::new(),
+        ),
+    )
+    .add(
+        "urandom",
+        VirtDevice::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(1, 9),
+            Random::new(),
+        ),
+    )
+    .add(
+        "rtc0",
+        VirtDevice::new(fs.clone(), NodeType::CharacterDevice, RTC0_DEVICE_ID, Rtc),
+    )
+    .add("shm", VirtDir::<()>::builder(fs.clone(), None).build());
 
     for i in 0..16 {
-        let dev_id = DeviceId::new(7, i);
+        let dev_id = DeviceId::new(7, 0);
         root.add(
             format!("loop{i}"),
             VirtDevice::new(

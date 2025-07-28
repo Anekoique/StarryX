@@ -13,7 +13,6 @@ use crate::{
         AF_INET, AF_INET6, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, SOCK_CLOEXEC,
         SOCK_DGRAM, SOCK_NONBLOCK, SOCK_STREAM, sockaddr, socklen_t,
     },
-    fs::FileOps,
     net::{Socket, SocketAddrExt},
 };
 
@@ -82,7 +81,7 @@ pub fn sys_bind(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> LinuxRes
     let addr = SocketAddr::read_from_user(addr, addrlen)?;
     debug!("sys_bind <= fd: {}, addr: {:?}", fd, addr);
 
-    Socket::from_fd(fd)?.bind(addr)?;
+    Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?.bind(addr)?;
 
     Ok(0)
 }
@@ -97,7 +96,7 @@ pub fn sys_connect(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> Linux
     let addr = SocketAddr::read_from_user(addr, addrlen)?;
     debug!("sys_connect <= fd: {}, addr: {:?}", fd, addr);
 
-    Socket::from_fd(fd)?.connect(addr)?;
+    Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?.connect(addr)?;
 
     Ok(0)
 }
@@ -113,7 +112,7 @@ pub fn sys_getsockname(
     addr: UserPtr<sockaddr>,
     addrlen: UserPtr<socklen_t>,
 ) -> LinuxResult<isize> {
-    let socket = Socket::from_fd(fd)?;
+    let socket = Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
     let local_addr = socket.local_addr()?;
     debug!("sys_getsockname <= fd: {}, addr: {:?}", fd, local_addr);
 
@@ -134,7 +133,7 @@ pub fn sys_getpeername(
     addr: UserPtr<sockaddr>,
     addrlen: UserPtr<socklen_t>,
 ) -> LinuxResult<isize> {
-    let socket = Socket::from_fd(fd)?;
+    let socket = Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
     let peer_addr = socket.peer_addr()?;
     debug!("sys_getpeername <= fd: {}, addr: {:?}", fd, peer_addr);
 
@@ -156,7 +155,7 @@ pub fn sys_listen(fd: i32, backlog: i32) -> LinuxResult<isize> {
         return Err(LinuxError::EINVAL);
     }
 
-    Socket::from_fd(fd)?.listen()?;
+    Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?.listen()?;
 
     Ok(0)
 }
@@ -174,7 +173,7 @@ pub fn sys_accept(
 ) -> LinuxResult<isize> {
     debug!("sys_accept <= fd: {}", fd);
 
-    let socket = FileOps::accept(fd)?;
+    let socket = Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?.accept()?;
 
     let remote_addr = socket.local_addr()?;
     let fd = socket
@@ -219,7 +218,7 @@ pub fn sys_sendto(
     );
 
     let bytes = with_uspace(|uspace| uspace.read_slice(buf, len))?;
-    let socket = Socket::from_fd(fd)?;
+    let socket = Socket::from_fd(fd, FileFlags::WRITE, FileFlags::empty())?;
 
     let sent = if let Some(addr) = addr {
         socket.sendto(bytes, addr)?
@@ -250,7 +249,7 @@ pub fn sys_recvfrom(
     debug!("sys_recvfrom <= fd: {}, len: {}, flags: {}", fd, len, flags);
 
     with_uspace(|uspace| {
-        let socket = Socket::from_fd(fd)?;
+        let socket = Socket::from_fd(fd, FileFlags::READ, FileFlags::empty())?;
         let buf = uspace.raw_slice(buf, len)?;
         let (recv, remote_addr) = socket.recvfrom(buf)?;
 
@@ -268,7 +267,7 @@ pub fn sys_recvfrom(
 
 pub fn sys_shutdown(fd: i32, how: i32) -> LinuxResult<isize> {
     debug!("sys_shutdown <= fd: {}, how: {}", fd, how);
-    Socket::from_fd(fd)?.shutdown()?;
+    Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?.shutdown()?;
     Ok(0)
 }
 

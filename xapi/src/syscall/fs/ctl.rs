@@ -5,6 +5,7 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
 use chrono::{Datelike, Timelike};
 
@@ -20,7 +21,7 @@ use crate::{
         sys::{rtc_time, utimbuf},
         timespec, timeval,
     },
-    fs::{Directory, with_fs, with_location},
+    fs::{Directory, Stdin, Stdout, with_fs, with_location},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
@@ -34,23 +35,28 @@ use crate::{
 /// * `argp` - The argument to the request. It is a pointer to a memory location
 pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
     trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
-
     let f = get_file_like(fd)?;
+
+    if f.clone().into_any().is::<Stdin>() || f.clone().into_any().is::<Stdout>() {
+        return Ok(0);
+    }
+
     let stat = f.stat()?;
     if op == RTC_RD_TIME as _ && stat.rdev == RTC0_DEVICE_ID {
         let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
-        let rtc_data = rtc_time {
-            tm_sec: wall.second() as _,
-            tm_min: wall.minute() as _,
-            tm_hour: wall.hour() as _,
-            tm_mday: wall.day() as _,
-            tm_mon: wall.month0() as _,
-            tm_year: (wall.year() - 1900) as _,
-            tm_wday: 0,
-            tm_yday: 0,
-            tm_isdst: 0,
-        };
-        with_uspace(|uspace| uspace.write(argp.cast::<rtc_time>(), rtc_data))?;
+        with_uspace(|uspace| {
+            uspace.write(argp.cast::<rtc_time>(), rtc_time {
+                tm_sec: wall.second() as _,
+                tm_min: wall.minute() as _,
+                tm_hour: wall.hour() as _,
+                tm_mday: wall.day() as _,
+                tm_mon: wall.month0() as _,
+                tm_year: (wall.year() - 1900) as _,
+                tm_wday: 0,
+                tm_yday: 0,
+                tm_isdst: 0,
+            })
+        })?;
     }
 
     Ok(0)
@@ -158,7 +164,7 @@ pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isiz
 
     let mut buffer = DirBuffer::new(buf);
 
-    let dir = Directory::from_fd(fd)?;
+    let dir = Directory::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
     let mut dir_offset = dir.offset.lock();
 
     dir.inner()
