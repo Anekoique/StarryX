@@ -136,12 +136,12 @@ pub type DirMaker =
     Arc<dyn Fn(WeakDirEntry<RawMutex>) -> Arc<dyn DirNodeOps<RawMutex>> + Send + Sync>;
 
 pub trait VirtDirOps: Send + Sync {
-    fn read_dir(&self) -> impl Iterator<Item = String>;
+    fn read_dir(&self) -> impl Iterator<Item = Cow<str>>;
     fn lookup(&self, name: &str) -> Option<VirtNodeOps>;
 }
 
 impl VirtDirOps for () {
-    fn read_dir(&self) -> impl Iterator<Item = String> {
+    fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
         iter::empty()
     }
 
@@ -197,10 +197,10 @@ impl<O: VirtDirOps + 'static> DirNodeOps<RawMutex> for VirtDir<O> {
         let this_entry = self.this.upgrade().unwrap();
         let this_dir = this_entry.as_dir()?;
 
-        let entries: Vec<(usize, String)> = [DOT, DOTDOT]
+        let entries = [DOT, DOTDOT]
             .into_iter()
-            .map(|s| s.to_owned())
-            .chain(self.children.keys().cloned())
+            .map(Cow::Borrowed)
+            .chain(self.children.keys().map(String::as_str).map(Cow::Borrowed))
             .chain(
                 self.ops
                     .as_ref()
@@ -209,20 +209,20 @@ impl<O: VirtDirOps + 'static> DirNodeOps<RawMutex> for VirtDir<O> {
                     .flatten(),
             )
             .enumerate()
-            .skip(offset as usize)
-            .collect();
+            .skip(offset as usize);
 
         let mut count = 0;
         for (i, name) in entries {
-            let metadata = match name.as_str() {
+            let name_str = name.as_ref();
+            let metadata = match name_str {
                 DOT => this_entry.metadata()?,
                 DOTDOT => this_entry
                     .parent()
                     .map_or_else(|| this_entry.metadata(), |parent| parent.metadata())?,
-                _ => this_dir.lookup(&name)?.metadata()?,
+                _ => this_dir.lookup(name_str)?.metadata()?,
             };
 
-            if !sink.accept(&name, metadata.inode, metadata.node_type, i as u64 + 1) {
+            if !sink.accept(name_str, metadata.inode, metadata.node_type, i as u64 + 1) {
                 break;
             }
             count += 1;

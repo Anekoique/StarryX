@@ -1,4 +1,4 @@
-use alloc::{string::String, string::ToString, sync::Arc};
+use alloc::{borrow::Cow, string::ToString, sync::Arc};
 
 use axfs_ng_vfs::Filesystem;
 use axprocess::Process;
@@ -103,8 +103,10 @@ pub fn init_procfs() -> Filesystem<RawMutex> {
 struct ProcOps(Arc<VirtFs>);
 
 impl VirtDirOps for ProcOps {
-    fn read_dir(&self) -> impl Iterator<Item = String> {
-        processes().into_iter().map(|proc| proc.pid().to_string())
+    fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
+        processes()
+            .into_iter()
+            .map(|proc| Cow::Owned(proc.pid().to_string()))
     }
 
     fn lookup(&self, name: &str) -> Option<VirtNodeOps> {
