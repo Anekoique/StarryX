@@ -11,11 +11,11 @@ mod file;
 pub use fd::*;
 pub use file::*;
 
-mod vfs;
-mod virt_file;
-mod virt_fs;
+pub mod vfs;
+pub mod virt_file;
+pub mod virt_fs;
 
-pub use vfs::dev::RTC0_DEVICE_ID;
+pub use vfs::dev::*;
 
 use axerrno::LinuxResult;
 use axfs_ng::FS_CONTEXT;

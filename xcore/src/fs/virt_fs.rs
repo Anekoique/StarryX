@@ -183,6 +183,7 @@ impl NodeOps<RawMutex> for VirtNode {
 pub trait VirtDeviceOps: Send + Sync {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize>;
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<F> VirtDeviceOps for F
@@ -195,6 +196,10 @@ where
 
     fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Err(VfsError::EBADF)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -215,6 +220,11 @@ impl VirtDevice {
             node,
             ops: Arc::new(ops),
         })
+    }
+
+    /// Returns the inner device operations.
+    pub fn inner(&self) -> &Arc<dyn VirtDeviceOps> {
+        &self.ops
     }
 }
 

@@ -1120,7 +1120,7 @@ dependencies = [
 [[package]]
 name = "lwext4_rust"
 version = "0.2.0"
-source = "git+https://github.com/Anekoique/lwext4_rust?rev=0643200#064320082967233e383ae074a3e5ad977589f173"
+source = "git+https://github.com/Anekoique/lwext4_rust?rev=54f3b7d#54f3b7d08b771afdefe993fbee95f2342efeac7d"
 dependencies = [
  "bindgen",
  "lock_api",

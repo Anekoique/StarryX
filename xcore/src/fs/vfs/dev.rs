@@ -1,6 +1,8 @@
-#![allow(dead_code)]
 use alloc::{format, sync::Arc};
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use core::{
+    any::Any,
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
+};
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FsContext, FsFile};
@@ -38,6 +40,9 @@ impl VirtDeviceOps for Null {
     fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Ok(buf.len())
     }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 struct Zero;
@@ -49,6 +54,9 @@ impl VirtDeviceOps for Zero {
     fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Ok(0)
     }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 struct Full;
@@ -59,6 +67,9 @@ impl VirtDeviceOps for Full {
     }
     fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Ok(buf.len())
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -80,15 +91,21 @@ impl VirtDeviceOps for Random {
     fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Ok(buf.len())
     }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
-struct Rtc;
+pub struct Rtc;
 impl VirtDeviceOps for Rtc {
     fn read_at(&self, _buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
         Ok(0)
     }
     fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Ok(0)
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -147,6 +164,9 @@ impl VirtDeviceOps for LoopDevice {
         }
         let file = self.file.lock().clone();
         file.ok_or(LinuxError::EPERM)?.lock().write_at(buf, offset)
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

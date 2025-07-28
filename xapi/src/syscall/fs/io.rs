@@ -168,6 +168,34 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     .map(|_| 0)
 }
 
+/// Allocate space in a file.
+///
+/// # Arguments
+/// * `fd` - File descriptor
+/// * `mode` - Allocation mode (currently unused)
+/// * `offset` - Offset to allocate from
+/// * `len` - Length of the allocation
+pub fn sys_fallocate(
+    fd: c_int,
+    mode: u32,
+    offset: __kernel_off_t,
+    len: __kernel_off_t,
+) -> LinuxResult<isize> {
+    debug!(
+        "sys_fallocate <= fd: {}, mode: {}, offset: {}, len: {}",
+        fd, mode, offset, len
+    );
+    if mode != 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
+        file.inner()
+            .access(FileFlags::WRITE)?
+            .set_len(offset as u64 + len as u64)
+    })
+    .map(|_| 0)
+}
+
 /// Synchronize a file's in-core state with storage device.
 ///
 /// # Arguments

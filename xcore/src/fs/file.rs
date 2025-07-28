@@ -63,7 +63,7 @@ impl XFile {
         required: FileFlags,
         forbidden: FileFlags,
     ) -> LinuxResult<&Arc<dyn FileLike>> {
-        if self.flags.contains(required) && !self.flags.contains(forbidden) {
+        if self.flags.contains(required) && !self.flags.intersects(forbidden) {
             Ok(&self.file)
         } else {
             Err(LinuxError::EBADF)

@@ -2,6 +2,7 @@ use alloc::ffi::CString;
 use core::{
     ffi::{c_char, c_int, c_void},
     mem::offset_of,
+    sync::atomic::Ordering,
 };
 
 use axerrno::{LinuxError, LinuxResult};
@@ -11,17 +12,19 @@ use chrono::{Datelike, Timelike};
 
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
-    fs::{FileLike, RTC0_DEVICE_ID, get_file_like},
+    fs::{FileLike, get_file_like, vfs::dev, virt_fs::VirtDevice},
     task::with_uspace,
 };
 
 use crate::{
     ctypes::{
-        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, RTC_RD_TIME, UTIME_NOW, UTIME_OMIT, linux_dirent64,
+        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, BLKGETSIZE, BLKGETSIZE64, BLKRAGET, BLKRASET,
+        BLKROGET, BLKROSET, LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_SET_FD, LOOP_SET_STATUS, UTIME_NOW,
+        UTIME_OMIT, linux_dirent64,
         sys::{rtc_time, utimbuf},
         timespec, timeval,
     },
-    fs::{Directory, Stdin, Stdout, with_fs, with_location},
+    fs::{Directory, File, with_fs, with_location},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
@@ -35,16 +38,23 @@ use crate::{
 /// * `argp` - The argument to the request. It is a pointer to a memory location
 pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
     trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
-    let f = get_file_like(fd)?;
 
-    if f.clone().into_any().is::<Stdin>() || f.clone().into_any().is::<Stdout>() {
-        return Ok(0);
-    }
+    let device = get_file_like(fd)?
+        .into_any()
+        .downcast::<File>()
+        .and_then(|file| {
+            file.inner()
+                .get_file_node()
+                .into_any()
+                .downcast::<VirtDevice>()
+        })
+        .map_err(|_| LinuxError::ENOTTY)?;
 
-    let stat = f.stat()?;
-    if op == RTC_RD_TIME as _ && stat.rdev == RTC0_DEVICE_ID {
-        let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
-        with_uspace(|uspace| {
+    let ops = device.inner().as_any();
+
+    with_uspace(|uspace| {
+        if ops.downcast_ref::<dev::Rtc>().is_some() {
+            let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
             uspace.write(argp.cast::<rtc_time>(), rtc_time {
                 tm_sec: wall.second() as _,
                 tm_min: wall.minute() as _,
@@ -55,11 +65,73 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
                 tm_wday: 0,
                 tm_yday: 0,
                 tm_isdst: 0,
-            })
-        })?;
-    }
+            })?;
+        } else if let Some(device) = ops.downcast_ref::<dev::LoopDevice>() {
+            match op as u32 {
+                LOOP_SET_FD => {
+                    let fd = argp.address().as_usize() as i32;
+                    if fd < 0 {
+                        return Err(LinuxError::EBADF);
+                    }
+                    let f = get_file_like(fd)?;
+                    let Ok(file) = f.into_any().downcast::<File>() else {
+                        return Err(LinuxError::EINVAL);
+                    };
+                    let mut guard = device.file.lock();
+                    if guard.is_some() {
+                        return Err(LinuxError::EBUSY);
+                    }
+                    *guard = Some(file.clone_inner());
+                }
+                LOOP_CLR_FD => {
+                    let mut guard = device.file.lock();
+                    if guard.is_none() {
+                        return Err(LinuxError::ENXIO);
+                    }
+                    *guard = None;
+                }
+                LOOP_GET_STATUS => {
+                    device.get_info(uspace.raw_ptr(argp.cast())?)?;
+                }
+                LOOP_SET_STATUS => {
+                    device.set_info(uspace.raw_ptr(argp.cast())?)?;
+                }
+                BLKGETSIZE | BLKGETSIZE64 => {
+                    let file = device.clone_file()?;
+                    let sectors = file.lock().inner().len()? / 512;
+                    if op as u32 == BLKGETSIZE {
+                        uspace.write(argp.cast::<u32>(), sectors as u32)?;
+                    } else {
+                        uspace.write(argp.cast::<u64>(), sectors * 512)?;
+                    }
+                }
+                BLKROGET => {
+                    uspace.write(argp.cast::<u32>(), device.ro.load(Ordering::Relaxed) as u32)?;
+                }
+                BLKROSET => {
+                    let ro = uspace.read(argp.cast::<u32>())?;
+                    if ro != 0 && ro != 1 {
+                        return Err(LinuxError::EINVAL);
+                    }
+                    device.ro.store(ro != 0, Ordering::Relaxed);
+                }
+                BLKRAGET => {
+                    uspace.write(argp.cast::<u32>(), device.ra.load(Ordering::Relaxed))?;
+                }
+                BLKRASET => {
+                    device
+                        .ra
+                        .store(argp.address().as_usize() as _, Ordering::Relaxed);
+                }
+                _ => {
+                    warn!("unknown ioctl for loop device: {op}");
+                    return Err(LinuxError::ENOTTY);
+                }
+            }
+        }
 
-    Ok(0)
+        Ok(0)
+    })
 }
 
 /// Change the current working directory.

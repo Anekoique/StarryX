@@ -9,6 +9,8 @@ pub use linux_raw_sys::{
     ctypes::*,
     general::*,
     ioctl::RTC_RD_TIME,
+    ioctl::{BLKGETSIZE, BLKGETSIZE64, BLKRAGET, BLKRASET, BLKROGET, BLKROSET},
+    loop_device::{LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_SET_FD, LOOP_SET_STATUS},
     net::{
         __kernel_sa_family_t, AF_INET, AF_INET6, AF_UNIX, IP_RECVERR, IPPROTO_ICMP, IPPROTO_IP,
         IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP,
