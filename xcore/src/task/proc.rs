@@ -195,8 +195,16 @@ impl XProcess {
         process.data().unwrap()
     }
 
+    pub fn from_process_static(process: &Arc<Process>) -> &'static XProcess {
+        unsafe { &*(process.data::<XProcess>().unwrap() as *const XProcess) }
+    }
+
     pub fn from_thread(thread: &Arc<Thread>) -> &XProcess {
         thread.process().data().unwrap()
+    }
+
+    pub fn from_thread_static(thread: &Arc<Thread>) -> &'static XProcess {
+        unsafe { &*(thread.process().data::<XProcess>().unwrap() as *const XProcess) }
     }
 
     pub fn is_clone_child(&self) -> bool {

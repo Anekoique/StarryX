@@ -1,48 +1,26 @@
-use core::{any::Any, cmp::Ordering};
+use alloc::{
+    borrow::{Cow, ToOwned},
+    collections::btree_map::BTreeMap,
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
+use core::{any::Any, cmp::Ordering, iter};
 
-use alloc::{borrow::Cow, sync::Arc, vec::Vec};
 use axfs_ng_vfs::{
-    DeviceId, FileNodeOps, FilesystemOps, Metadata, MetadataUpdate, NodeOps, NodePermission,
-    NodeType, VfsError, VfsResult,
+    DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, FilesystemOps, Metadata,
+    MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, VfsError, VfsResult,
+    WeakDirEntry,
+    path::{DOT, DOTDOT},
 };
 use axsync::RawMutex;
 use inherit_methods_macro::inherit_methods;
 
-use super::virt_fs::{VirtFs, VirtNode};
+use super::virt_fs::{VirtFs, VirtNode, VirtNodeOps};
 
 pub trait VirtFileOps: Send + Sync {
     fn read_all(&self) -> VfsResult<Cow<[u8]>>;
     fn write_all(&self, data: &[u8]) -> VfsResult<()>;
-}
-
-pub enum VirtFileOperation<'a> {
-    Read,
-    Write(&'a [u8]),
-}
-
-pub struct RwFile<F>(F);
-impl<F, R> RwFile<F>
-where
-    F: Fn(VirtFileOperation) -> VfsResult<Option<R>> + Send + Sync,
-    R: Into<Vec<u8>>,
-{
-    pub fn new(imp: F) -> Self {
-        Self(imp)
-    }
-}
-
-impl<F, R> VirtFileOps for RwFile<F>
-where
-    F: Fn(VirtFileOperation) -> VfsResult<Option<R>> + Send + Sync,
-    R: Into<Vec<u8>>,
-{
-    fn read_all(&self) -> VfsResult<Cow<[u8]>> {
-        (self.0)(VirtFileOperation::Read).map(|it| Cow::Owned(it.unwrap().into()))
-    }
-
-    fn write_all(&self, data: &[u8]) -> VfsResult<()> {
-        (self.0)(VirtFileOperation::Write(data)).map(|_| ())
-    }
 }
 
 impl<F, R> VirtFileOps for F
@@ -115,17 +93,16 @@ impl FileNodeOps<RawMutex> for VirtFile {
 
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
         let data = self.ops.read_all()?;
-        let mut data = data.to_vec();
-
-        let end_pos = offset as usize + buf.len();
-        if data.len() < end_pos {
-            data.resize(end_pos, 0);
+        if offset == 0 && buf.len() >= data.len() {
+            self.ops.write_all(buf)?;
+            return Ok(buf.len());
         }
-
-        // safe to copy
-        data[offset as usize..offset as usize + buf.len()].copy_from_slice(buf);
-
-        self.ops.write_all(&data)?;
+        let mut data = data.to_vec();
+        let end_pos = offset + buf.len() as u64;
+        if end_pos > data.len() as u64 {
+            data.resize(end_pos as usize, 0);
+        }
+        data[offset as usize..].copy_from_slice(buf);
         Ok(buf.len())
     }
 
@@ -154,46 +131,57 @@ impl FileNodeOps<RawMutex> for VirtFile {
     }
 }
 
-pub trait VirtDeviceOps: Send + Sync {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
-    fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize>;
+/// Type alias for directory maker function
+pub type DirMaker =
+    Arc<dyn Fn(WeakDirEntry<RawMutex>) -> Arc<dyn DirNodeOps<RawMutex>> + Send + Sync>;
+
+pub trait VirtDirOps: Send + Sync {
+    fn read_dir(&self) -> impl Iterator<Item = String>;
+    fn lookup(&self, name: &str) -> Option<VirtNodeOps>;
 }
 
-impl<F> VirtDeviceOps for F
-where
-    F: Fn(&mut [u8], u64) -> VfsResult<usize> + Send + Sync + 'static,
-{
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
-        (self)(buf, offset)
+impl VirtDirOps for () {
+    fn read_dir(&self) -> impl Iterator<Item = String> {
+        iter::empty()
     }
 
-    fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
-        Err(VfsError::EBADF)
+    fn lookup(&self, _name: &str) -> Option<VirtNodeOps> {
+        None
     }
 }
 
-pub struct VirtDevice {
+/// Virtual directory node
+pub struct VirtDir<O: VirtDirOps + 'static> {
     node: VirtNode,
-    ops: Arc<dyn VirtDeviceOps>,
+    this: WeakDirEntry<RawMutex>,
+    children: Arc<BTreeMap<String, VirtNodeOps>>,
+    ops: Option<Arc<O>>,
 }
-impl VirtDevice {
-    pub fn new(
-        fs: Arc<VirtFs>,
-        node_type: NodeType,
-        device_id: DeviceId,
-        ops: impl VirtDeviceOps + 'static,
-    ) -> Arc<Self> {
-        let node = VirtNode::new(fs, node_type, NodePermission::default());
-        node.metadata.lock().rdev = device_id;
+
+impl<O: VirtDirOps + 'static> VirtDir<O> {
+    /// Create a new virtual directory
+    fn new(
+        node: VirtNode,
+        children: Arc<BTreeMap<String, VirtNodeOps>>,
+        this: WeakDirEntry<RawMutex>,
+        ops: Option<Arc<O>>,
+    ) -> Arc<VirtDir<O>> {
         Arc::new(Self {
             node,
-            ops: Arc::new(ops),
+            this,
+            children,
+            ops,
         })
+    }
+
+    /// Create a new directory builder
+    pub fn builder(fs: Arc<VirtFs>, ops: Option<Arc<O>>) -> VirtDirBuilder<O> {
+        VirtDirBuilder::new(fs, ops)
     }
 }
 
 #[inherit_methods(from = "self.node")]
-impl NodeOps<RawMutex> for VirtDevice {
+impl<O: VirtDirOps + 'static> NodeOps<RawMutex> for VirtDir<O> {
     fn inode(&self) -> u64;
     fn metadata(&self) -> VfsResult<Metadata>;
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
@@ -202,30 +190,143 @@ impl NodeOps<RawMutex> for VirtDevice {
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
     }
+}
 
-    fn len(&self) -> VfsResult<u64> {
-        Ok(0)
+impl<O: VirtDirOps + 'static> DirNodeOps<RawMutex> for VirtDir<O> {
+    fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
+        let this_entry = self.this.upgrade().unwrap();
+        let this_dir = this_entry.as_dir()?;
+
+        let entries: Vec<(usize, String)> = [DOT, DOTDOT]
+            .into_iter()
+            .map(|s| s.to_owned())
+            .chain(self.children.keys().cloned())
+            .chain(
+                self.ops
+                    .as_ref()
+                    .map(|ops| ops.read_dir())
+                    .into_iter()
+                    .flatten(),
+            )
+            .enumerate()
+            .skip(offset as usize)
+            .collect();
+
+        let mut count = 0;
+        for (i, name) in entries {
+            let metadata = match name.as_str() {
+                DOT => this_entry.metadata()?,
+                DOTDOT => this_entry
+                    .parent()
+                    .map_or_else(|| this_entry.metadata(), |parent| parent.metadata())?,
+                _ => this_dir.lookup(&name)?.metadata()?,
+            };
+
+            if !sink.accept(&name, metadata.inode, metadata.node_type, i as u64 + 1) {
+                break;
+            }
+            count += 1;
+        }
+
+        Ok(count)
+    }
+
+    fn lookup(&self, name: &str) -> VfsResult<DirEntry<RawMutex>> {
+        let reference = Reference::new(self.this.upgrade(), name.to_owned());
+
+        if let Some(ops) = self.children.get(name) {
+            return Ok(match ops {
+                VirtNodeOps::Dir(maker) => {
+                    DirEntry::new_dir(|this| DirNode::new(maker(this)), reference)
+                }
+                VirtNodeOps::File(ops) => {
+                    let node_type = ops.metadata()?.node_type;
+                    DirEntry::new_file(FileNode::new(ops.clone()), node_type, reference)
+                }
+            });
+        }
+
+        if let Some(ops) = self.ops.as_ref().and_then(|ops| ops.lookup(name)) {
+            return Ok(match &ops {
+                VirtNodeOps::Dir(maker) => {
+                    DirEntry::new_dir(|this| DirNode::new(maker(this)), reference)
+                }
+                VirtNodeOps::File(ops) => {
+                    let node_type = ops.metadata()?.node_type;
+                    DirEntry::new_file(FileNode::new(ops.clone()), node_type, reference)
+                }
+            });
+        }
+
+        Err(VfsError::ENOENT)
+    }
+
+    fn create(
+        &self,
+        _name: &str,
+        _node_type: NodeType,
+        _permission: NodePermission,
+    ) -> VfsResult<DirEntry<RawMutex>> {
+        Err(VfsError::EROFS) // Read-only filesystem
+    }
+
+    fn link(&self, _name: &str, _node: &DirEntry<RawMutex>) -> VfsResult<DirEntry<RawMutex>> {
+        Err(VfsError::EROFS)
+    }
+
+    fn unlink(&self, _name: &str) -> VfsResult<()> {
+        Err(VfsError::EROFS)
+    }
+
+    fn rename(
+        &self,
+        _src_name: &str,
+        _dst_dir: &DirNode<RawMutex>,
+        _dst_name: &str,
+    ) -> VfsResult<()> {
+        Err(VfsError::EROFS)
     }
 }
 
-impl FileNodeOps<RawMutex> for VirtDevice {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
-        self.ops.read_at(buf, offset)
+/// Builder for virtual directories
+pub struct VirtDirBuilder<O: VirtDirOps + 'static> {
+    fs: Arc<VirtFs>,
+    children: BTreeMap<String, VirtNodeOps>,
+    ops: Option<Arc<O>>,
+}
+
+impl<O: VirtDirOps + 'static> VirtDirBuilder<O> {
+    /// Create a new directory builder
+    pub fn new(fs: Arc<VirtFs>, ops: Option<Arc<O>>) -> Self {
+        Self {
+            fs,
+            children: BTreeMap::new(),
+            ops,
+        }
     }
 
-    fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
-        self.ops.write_at(buf, offset)
+    /// Add a child entry to the directory
+    pub fn add(&mut self, name: impl Into<String>, ops: impl Into<VirtNodeOps>) -> &mut Self {
+        self.children.insert(name.into(), ops.into());
+        self
     }
 
-    fn append(&self, _buf: &[u8]) -> VfsResult<(usize, u64)> {
-        Err(VfsError::ENOTTY)
-    }
+    /// Build the directory maker
+    pub fn build(self) -> DirMaker {
+        let children = Arc::new(self.children);
+        let fs = self.fs;
 
-    fn set_len(&self, _len: u64) -> VfsResult<()> {
-        Err(VfsError::ENOTTY)
-    }
-
-    fn set_symlink(&self, _target: &str) -> VfsResult<()> {
-        Err(VfsError::ENOTTY)
+        Arc::new(move |this| {
+            VirtDir::new(
+                VirtNode::new(
+                    fs.clone(),
+                    NodeType::Directory,
+                    NodePermission::from_bits_truncate(0o755),
+                ),
+                children.clone(),
+                this,
+                self.ops.clone(),
+            )
+        })
     }
 }

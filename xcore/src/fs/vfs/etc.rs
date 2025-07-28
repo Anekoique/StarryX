@@ -1,11 +1,11 @@
-use crate::alloc::string::ToString;
-use alloc::sync::Arc;
+use alloc::{string::ToString, sync::Arc};
+
 use axfs_ng_vfs::Filesystem;
 use axsync::RawMutex;
 
 use crate::fs::{
-    virt_file::VirtFile,
-    virt_fs::{DirMaker, VirtDir, VirtFs},
+    virt_file::{DirMaker, VirtDir, VirtFile},
+    virt_fs::VirtFs,
 };
 
 const PASSWD_CONTENT: &str = "nobody:x:0:0::/musl:/bin/sh\n";
@@ -23,7 +23,7 @@ fn create_static_file(fs: Arc<VirtFs>, content: &'static str) -> Arc<VirtFile> {
 
 /// Create the root /etc directory structure.
 fn create_etc_root(fs: Arc<VirtFs>) -> DirMaker {
-    let mut root = VirtDir::builder(fs.clone());
+    let mut root = VirtDir::<()>::builder(fs.clone(), None);
     root.add("passwd", create_static_file(fs.clone(), PASSWD_CONTENT));
     root.build()
 }

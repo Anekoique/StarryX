@@ -1,22 +1,15 @@
+use alloc::{string::String, sync::Arc};
 use core::{any::Any, time::Duration};
 
-use alloc::borrow::ToOwned;
-use alloc::{collections::btree_map::BTreeMap, string::String, sync::Arc};
 use axfs_ng_vfs::{
-    DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, Filesystem,
-    FilesystemOps, Metadata, MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, StatFs,
-    VfsError, VfsResult, WeakDirEntry,
-    path::{DOT, DOTDOT},
+    DeviceId, DirEntry, DirNode, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate,
+    NodeOps, NodePermission, NodeType, Reference, StatFs, VfsError, VfsResult,
 };
 use axsync::{Mutex, RawMutex};
 use inherit_methods_macro::inherit_methods;
 use slab::Slab;
 
-use super::dummy_stat;
-
-/// Type alias for directory maker function
-pub type DirMaker =
-    Arc<dyn Fn(WeakDirEntry<RawMutex>) -> Arc<dyn DirNodeOps<RawMutex>> + Send + Sync>;
+use super::{dummy_stat, virt_file::DirMaker};
 
 /// Virtual filesystem implementation
 pub struct VirtFs {
@@ -187,35 +180,46 @@ impl NodeOps<RawMutex> for VirtNode {
     }
 }
 
-/// Virtual directory node
-pub struct VirtDir {
-    node: VirtNode,
-    this: WeakDirEntry<RawMutex>,
-    children: Arc<BTreeMap<String, VirtNodeOps>>,
+pub trait VirtDeviceOps: Send + Sync {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
+    fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize>;
 }
 
-impl VirtDir {
-    /// Create a new virtual directory
-    fn new(
-        node: VirtNode,
-        children: Arc<BTreeMap<String, VirtNodeOps>>,
-        this: WeakDirEntry<RawMutex>,
-    ) -> Arc<VirtDir> {
-        Arc::new(Self {
-            node,
-            this,
-            children,
-        })
+impl<F> VirtDeviceOps for F
+where
+    F: Fn(&mut [u8], u64) -> VfsResult<usize> + Send + Sync + 'static,
+{
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
+        (self)(buf, offset)
     }
 
-    /// Create a new directory builder
-    pub fn builder(fs: Arc<VirtFs>) -> VirtDirBuilder {
-        VirtDirBuilder::new(fs)
+    fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Err(VfsError::EBADF)
+    }
+}
+
+pub struct VirtDevice {
+    node: VirtNode,
+    ops: Arc<dyn VirtDeviceOps>,
+}
+impl VirtDevice {
+    pub fn new(
+        fs: Arc<VirtFs>,
+        node_type: NodeType,
+        device_id: DeviceId,
+        ops: impl VirtDeviceOps + 'static,
+    ) -> Arc<Self> {
+        let node = VirtNode::new(fs, node_type, NodePermission::default());
+        node.metadata.lock().rdev = device_id;
+        Arc::new(Self {
+            node,
+            ops: Arc::new(ops),
+        })
     }
 }
 
 #[inherit_methods(from = "self.node")]
-impl NodeOps<RawMutex> for VirtDir {
+impl NodeOps<RawMutex> for VirtDevice {
     fn inode(&self) -> u64;
     fn metadata(&self) -> VfsResult<Metadata>;
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
@@ -224,116 +228,30 @@ impl NodeOps<RawMutex> for VirtDir {
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
     }
-}
 
-impl DirNodeOps<RawMutex> for VirtDir {
-    fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
-        let this_entry = self.this.upgrade().unwrap();
-        let this_dir = this_entry.as_dir()?;
-
-        let entries = [DOT, DOTDOT]
-            .into_iter()
-            .chain(self.children.keys().map(String::as_str))
-            .enumerate()
-            .skip(offset as usize);
-
-        let mut count = 0;
-        for (i, name) in entries {
-            let metadata = match name {
-                DOT => this_entry.metadata()?,
-                DOTDOT => this_entry
-                    .parent()
-                    .map_or_else(|| this_entry.metadata(), |parent| parent.metadata())?,
-                _ => this_dir.lookup(name)?.metadata()?,
-            };
-
-            if !sink.accept(name, metadata.inode, metadata.node_type, i as u64 + 1) {
-                break;
-            }
-            count += 1;
-        }
-
-        Ok(count)
-    }
-
-    fn lookup(&self, name: &str) -> VfsResult<DirEntry<RawMutex>> {
-        let ops = self.children.get(name).ok_or(VfsError::ENOENT)?;
-        let reference = Reference::new(self.this.upgrade(), name.to_owned());
-
-        Ok(match ops {
-            VirtNodeOps::Dir(maker) => {
-                DirEntry::new_dir(|this| DirNode::new(maker(this)), reference)
-            }
-            VirtNodeOps::File(ops) => {
-                let node_type = ops.metadata()?.node_type;
-                DirEntry::new_file(FileNode::new(ops.clone()), node_type, reference)
-            }
-        })
-    }
-
-    fn create(
-        &self,
-        _name: &str,
-        _node_type: NodeType,
-        _permission: NodePermission,
-    ) -> VfsResult<DirEntry<RawMutex>> {
-        Err(VfsError::EROFS) // Read-only filesystem
-    }
-
-    fn link(&self, _name: &str, _node: &DirEntry<RawMutex>) -> VfsResult<DirEntry<RawMutex>> {
-        Err(VfsError::EROFS)
-    }
-
-    fn unlink(&self, _name: &str) -> VfsResult<()> {
-        Err(VfsError::EROFS)
-    }
-
-    fn rename(
-        &self,
-        _src_name: &str,
-        _dst_dir: &DirNode<RawMutex>,
-        _dst_name: &str,
-    ) -> VfsResult<()> {
-        Err(VfsError::EROFS)
+    fn len(&self) -> VfsResult<u64> {
+        Ok(0)
     }
 }
 
-/// Builder for virtual directories
-pub struct VirtDirBuilder {
-    fs: Arc<VirtFs>,
-    children: BTreeMap<String, VirtNodeOps>,
-}
-
-impl VirtDirBuilder {
-    /// Create a new directory builder
-    pub fn new(fs: Arc<VirtFs>) -> Self {
-        Self {
-            fs,
-            children: BTreeMap::new(),
-        }
+impl FileNodeOps<RawMutex> for VirtDevice {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
+        self.ops.read_at(buf, offset)
     }
 
-    /// Add a child entry to the directory
-    pub fn add(&mut self, name: impl Into<String>, ops: impl Into<VirtNodeOps>) -> &mut Self {
-        self.children.insert(name.into(), ops.into());
-        self
+    fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
+        self.ops.write_at(buf, offset)
     }
 
-    /// Build the directory maker
-    pub fn build(self) -> DirMaker {
-        let children = Arc::new(self.children);
-        let fs = self.fs;
+    fn append(&self, _buf: &[u8]) -> VfsResult<(usize, u64)> {
+        Err(VfsError::ENOTTY)
+    }
 
-        Arc::new(move |this| {
-            VirtDir::new(
-                VirtNode::new(
-                    fs.clone(),
-                    NodeType::Directory,
-                    NodePermission::from_bits_truncate(0o755),
-                ),
-                children.clone(),
-                this,
-            )
-        })
+    fn set_len(&self, _len: u64) -> VfsResult<()> {
+        Err(VfsError::ENOTTY)
+    }
+
+    fn set_symlink(&self, _target: &str) -> VfsResult<()> {
+        Err(VfsError::ENOTTY)
     }
 }

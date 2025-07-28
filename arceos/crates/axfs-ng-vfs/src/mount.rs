@@ -188,6 +188,11 @@ impl<M: RawMutex> Location<M> {
         self.mountpoint.is_root() && self.entry.is_root_of_mount()
     }
 
+    /// Returns true if this location is a symbolic link
+    pub fn is_symlink(&self) -> bool {
+        self.node_type() == NodeType::Symlink
+    }
+
     /// Checks that this location is a directory, returning an error if not
     pub fn check_is_dir(&self) -> VfsResult<()> {
         self.entry.as_dir().map(|_| ())

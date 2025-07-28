@@ -40,34 +40,7 @@ run_ltp() {
   all_testcases="
   "
   passed_testcase="
-    abort01
-    abs01
-    accept01
-    accept03
-    accept4_01
-    access01
-    access02
-    access04
-    alarm02
-    alarm03
-    alarm05
-    alarm06
-    alarm07
-    bind01
-    bind05
-    brk01
-    brk02
-    capget01
-    capset01
-    capset02
-    chmod01
-    chmod03
-    chown01
-    chown02
-    chown03
-    chown04
-    chown05
-    chroot01
+    chroot0
     clock_adjtime01
     clock_getres01
     clock_gettime02
@@ -83,11 +56,8 @@ run_ltp() {
     close01
     close02
     confstr01
-    crash01
-    crash02
     creat01
     creat03
-    creat05
     connect01
     data_space
     diotest1
@@ -216,17 +186,17 @@ run_ltp() {
 }
 
 cd /musl
+# sh
 # run_ltp musl
-# ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
-# ./libctest_testcode.sh
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./busybox_testcode.sh
-# ./iozone_testcode.sh
-# ./lmbench_testcode.sh
-# ./libcbench_testcode.sh
-#./iperf_testcode.sh
+./libctest_testcode.sh
+./basic_testcode.sh
+./lua_testcode.sh
+./busybox_testcode.sh
+./iozone_testcode.sh
+./lmbench_testcode.sh
+./libcbench_testcode.sh
+./iperf_testcode.sh
 ./netperf_testcode.sh
 
 cd /glibc
@@ -236,6 +206,6 @@ cd /glibc
 # ./iozone_testcode.sh
 # ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
-#./iperf_testcode.sh
-./netperf_testcode.sh
+# ./iperf_testcode.sh
+# ./netperf_testcode.sh
 # ./cyclictest_testcode.sh

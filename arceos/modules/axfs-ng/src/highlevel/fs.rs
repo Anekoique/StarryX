@@ -303,15 +303,20 @@ impl<M: RawMutex> FsContext<M> {
 
         // Resolve the file location
         let loc = match self.resolve_parent(path) {
-            Ok((parent, name)) => parent
-                .open_file_or_create(
+            Ok((parent, name)) => {
+                let loc = parent.open_file_or_create(
                     &name,
                     options.get_create(),
                     options.get_create_new(),
                     NodePermission::from_bits_truncate(options.get_mode() as _),
                     options.get_user(),
-                )?
-                .clone(),
+                )?;
+                if options.get_directory() && loc.is_symlink() {
+                    self.resolve(path)?
+                } else {
+                    loc.clone()
+                }
+            }
             Err(VfsError::EINVAL) => {
                 // root directory
                 self.root_dir().clone()

@@ -10,8 +10,8 @@ use linux_raw_sys::loop_device::loop_info;
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
 
 use crate::fs::{
-    virt_file::{VirtDevice, VirtDeviceOps},
-    virt_fs::{DirMaker, VirtDir, VirtDirBuilder, VirtFs},
+    virt_file::{DirMaker, VirtDir, VirtDirBuilder},
+    virt_fs::{VirtDevice, VirtDeviceOps, VirtFs},
 };
 
 /// The device ID for /dev/rtc0
@@ -144,7 +144,7 @@ impl VirtDeviceOps for LoopDevice {
 
 /// Helper function to add a device to the virtual directory builder
 fn add_device(
-    root: &mut VirtDirBuilder,
+    root: &mut VirtDirBuilder<()>,
     fs: &Arc<VirtFs>,
     name: &str,
     node_type: NodeType,
@@ -156,7 +156,7 @@ fn add_device(
 
 /// Create the root directory structure for /dev filesystem
 fn create_dev_root(fs: Arc<VirtFs>) -> DirMaker {
-    let mut root = VirtDir::builder(fs.clone());
+    let mut root = VirtDir::<()>::builder(fs.clone(), None);
 
     let devices = [
         device_spec!("null", 1, 3, DeviceOps::Null),
@@ -171,7 +171,7 @@ fn create_dev_root(fs: Arc<VirtFs>) -> DirMaker {
     for (name, node_type, device_id, ops) in devices {
         add_device(&mut root, &fs, name, node_type, device_id, ops);
     }
-    root.add("shm", VirtDir::builder(fs.clone()).build());
+    root.add("shm", VirtDir::<()>::builder(fs.clone(), None).build());
 
     for i in 0..16 {
         let dev_id = DeviceId::new(7, i);
