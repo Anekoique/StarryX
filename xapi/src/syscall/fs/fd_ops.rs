@@ -14,7 +14,7 @@ use xcore::{
 use crate::{
     ctypes::{
         __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
-        FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, fs::flags_to_options,
+        F_SETLK, FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, fs::flags_to_options,
     },
     fs::{Directory, File, with_fs},
     sys_getegid, sys_geteuid,
@@ -152,6 +152,9 @@ pub fn sys_dup3(old_fd: c_int, new_fd: c_int, flags: c_int) -> LinuxResult<isize
 /// * `arg` - Command argument
 pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
     debug!("sys_fcntl <= fd: {} cmd: {} arg: {}", fd, cmd, arg);
+    if !FD_TABLE.is_assigned(fd as usize) {
+        return Err(LinuxError::EBADF);
+    }
 
     match cmd as u32 {
         F_DUPFD => dup_fd(fd),
@@ -182,6 +185,7 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             let nonblock = get_file_like(fd)?.is_nonblocking();
             Ok(if nonblock { O_NONBLOCK as _ } else { 0 })
         }
+        F_SETLK => Err(LinuxError::EINVAL),
         _ => {
             warn!("unsupported fcntl parameters: cmd: {}", cmd);
             Ok(0)

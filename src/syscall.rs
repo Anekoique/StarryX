@@ -51,6 +51,8 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg3().into(),
             tf.arg4() as _,
         ),
+        Sysno::fchdir => sys_fchdir(tf.arg0() as _),
+        Sysno::flock => Ok(0),
 
         // file ops
         Sysno::fchown => sys_fchown(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
@@ -165,7 +167,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg3() as _,
         ),
 
-        // io mpx
+        // iomux
         #[cfg(target_arch = "x86_64")]
         Sysno::poll => sys_poll(tf.arg0().into(), tf.arg1() as _, tf.arg2() as _),
         Sysno::ppoll => sys_ppoll(
@@ -190,6 +192,8 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg4().into(),
             tf.arg5().into(),
         ),
+        #[cfg(target_arch = "x86_64")]
+        Sysno::epoll_create => sys_epoll_create(tf.arg0() as _),
         Sysno::epoll_create1 => sys_epoll_create1(tf.arg0() as _),
         Sysno::epoll_ctl => sys_epoll_ctl(
             tf.arg0() as _,
@@ -218,6 +222,11 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::pipe2 => sys_pipe2(tf.arg0().into(), tf.arg1() as _),
         #[cfg(target_arch = "x86_64")]
         Sysno::pipe => sys_pipe2(tf.arg0().into(), 0),
+
+        // eventfd
+        Sysno::eventfd2 => sys_eventfd2(tf.arg0() as _, tf.arg1() as _),
+        #[cfg(target_arch = "x86_64")]
+        Sysno::eventfd => Ok(0),
 
         // fs stat
         #[cfg(target_arch = "x86_64")]

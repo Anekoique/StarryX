@@ -65,8 +65,12 @@ impl File {
         let inner = self.inner();
         Ok(PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
-            .map(|cache| cache.get_size() as u64)
+            .map(|cache| cache.get_size())
             .unwrap_or(inner.len()?))
+    }
+
+    pub fn is_empty(&self) -> LinuxResult<bool> {
+        Ok(self.len()? == 0)
     }
 }
 

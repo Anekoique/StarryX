@@ -163,9 +163,9 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     trace!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
-        PAGE_CACHE_MANAGER
-            .get_cache(file.inner().inode()?)
-            .map(|cache| cache.set_size(length as _));
+        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(file.inner().inode()?) {
+            cache.set_size(length as _);
+        }
         file.inner().access(FileFlags::WRITE)?.set_len(length as _)
     })
     .map(|_| 0)
@@ -184,12 +184,12 @@ pub fn sys_fallocate(
     offset: __kernel_off_t,
     len: __kernel_off_t,
 ) -> LinuxResult<isize> {
-    debug!(
+    trace!(
         "sys_fallocate <= fd: {}, mode: {}, offset: {}, len: {}",
         fd, mode, offset, len
     );
     if mode != 0 {
-        return Err(LinuxError::EINVAL);
+        return Ok(0);
     }
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
         file.inner()
@@ -204,7 +204,7 @@ pub fn sys_fallocate(
 /// # Arguments
 /// * `fd` - File descriptor
 pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
-    debug!("sys_fsync <= {}", fd);
+    trace!("sys_fsync <= {}", fd);
     with_file(fd, FileFlags::empty(), FileFlags::empty(), |file| {
         PAGE_CACHE_MANAGER.sync_file(file.inner().inode()?)?;
         file.inner().sync(false)

@@ -69,6 +69,10 @@ impl XFile {
             Err(LinuxError::EBADF)
         }
     }
+
+    pub fn check_type<T: FileLike + 'static>(&self) -> bool {
+        self.file.clone().into_any().downcast::<T>().is_ok()
+    }
 }
 
 #[inherit_methods(from = "self.file")]

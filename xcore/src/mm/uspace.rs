@@ -100,6 +100,10 @@ impl UserSpaceAccess for &XUserSpace {
     ) -> LinuxResult<()> {
         let aspace = self.aspace.lock();
         if !aspace.check_region_access(range, access_flags) {
+            warn!(
+                "check_region_access: range={:?}, access_flags={:?}",
+                range, access_flags
+            );
             return Err(LinuxError::EFAULT);
         }
         Ok(())
@@ -158,7 +162,7 @@ impl VmFile for FileWrapper {
         let inner = self.0.lock();
         Ok(PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
-            .map(|cache| cache.get_size() as u64)
+            .map(|cache| cache.get_size())
             .unwrap_or(inner.len()?))
     }
 }

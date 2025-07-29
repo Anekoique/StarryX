@@ -37,14 +37,12 @@ run_ltp() {
   export LTP_DEV_FS_TYPE=tmpfs
   export LTP_SINGLE_FS_TYPE=tmpfs
 
-# copy_file_range01
-# copy_file_range02
-# copy_file_range03
-# dirtypipe
+  # copy_file_range01
+  # copy_file_range02
+  # copy_file_range03
+  # dirtypipe
 
   all_testcases="
-  epoll_create01
-  epoll_create02
   "
   passed_testcase="
     abort01
@@ -113,10 +111,32 @@ run_ltp() {
     dup207
     dup3_01
     dup3_02
+    epoll_create01
+    epoll_create02
+    epoll_create1_01
+    epoll_create1_02
+    epoll_ctl01
+    epoll_ctl02
+    epoll_ctl03
+    epoll_wait03
+    epoll_wait04
+    epoll_wait07
+    epoll_pwait02
+    eventfd2_01
+    eventfd2_02
+    eventfd2_03
+    execve03
+    exit01
+    exit02
+    exit_group01
     faccessat01
     faccessat02
     faccessat201
     faccessat202
+    fallocate03
+    fallocate04
+    fchdir01
+    fchdir02
     fchmod01
     fchmod03
     fchmod04
@@ -128,12 +148,44 @@ run_ltp() {
     fchown05
     fchownat01
     fchownat02
+    fcntl02
+    fcntl03
+    fcntl05
+    fcntl08
+    fcntl09
+    fcntl02_64
+    fcntl03_64
+    fcntl05_64
+    fcntl08_64
+    fcntl09_64
+    fcntl10
+    fcntl10_64
+    fcntl13
+    fcntl13_64
+    fcntl29
+    fcntl29_64
+    fdatasync01
+    fdatasync02
+    flock01
+    flock04
+    flock06
     fork01
     fork03
     fork07
     fork08
     fork09
     fork10
+    fstat02
+    fstat02_64
+    fstat03
+    fstat03_64
+    fstatfs01
+    fstatfs01_64
+    fstatfs02
+    fstatfs02_64
+    fsync01
+    ftruncate01
+    ftruncate01_64
     getrandom01
     getrandom02
     getrandom03
@@ -236,14 +288,14 @@ run_ltp() {
 
 cd /musl
 # sh
-run_ltp musl
+# run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
-# ./lmbench_testcode.sh
+./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
 # ./netperf_testcode.sh

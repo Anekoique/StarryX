@@ -113,6 +113,9 @@ pub trait UserSpaceAccess: Sized {
     fn read_str_array(&self, ptr: UserConstPtr<UserConstPtr<c_char>>) -> LinuxResult<Vec<String>> {
         let mut strings = Vec::new();
         let mut offset = 0;
+        if ptr.is_null() {
+            return Ok(strings);
+        }
 
         loop {
             let str_ptr = self.read(ptr.offset(offset))?;

@@ -6,7 +6,7 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs_ng::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
 use chrono::{Datelike, Timelike};
 
@@ -24,7 +24,7 @@ use crate::{
         sys::{rtc_time, utimbuf},
         timespec, timeval,
     },
-    fs::{Stdin, Stdout, Directory, File, with_fs, with_location},
+    fs::{Directory, File, Stdin, Stdout, with_fs, with_location},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
@@ -154,6 +154,18 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     .map(|_| 0)
 }
 
+/// Change to the directory represented by the given file descriptor
+///
+/// # Arguments
+/// * `fd` - File descriptor
+pub fn sys_fchdir(fd: i32) -> LinuxResult<isize> {
+    debug!("sys_fchdir <= fd: {}", fd);
+    let dir = Directory::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?
+        .inner()
+        .clone();
+    FS_CONTEXT.lock().set_current_dir(dir).map(|_| 0)
+}
+
 /// Create a directory.
 ///
 /// # Arguments
@@ -279,6 +291,9 @@ pub fn sys_linkat(
         "sys_linkat <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
+    let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
+        fs.resolve_nonexistent(new_path.into())
+    })?;
 
     with_location(old_dirfd, old_path, flags, |location| {
         if flags != 0 {
@@ -287,9 +302,6 @@ pub fn sys_linkat(
         if location.is_dir() {
             return Err(LinuxError::EPERM);
         }
-        let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
-            fs.resolve_nonexistent(new_path.into())
-        })?;
         new_dir.link(new_name, location)
     })
     .map(|_| 0)

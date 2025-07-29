@@ -11,7 +11,7 @@ use axuspace::is_accessing_user_memory;
 use linux_raw_sys::general::{RLIMIT_STACK, SI_KERNEL, SIGSEGV};
 use xcore::task::{XTaskExt, send_signal_process};
 
-fn mm_trace(vaddr: VirtAddr, len: usize) {
+fn _mm_trace(vaddr: VirtAddr, len: usize) {
     let xtask = XTaskExt::from_task(&current());
     let xprocess = xtask.xprocess();
 
@@ -109,7 +109,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
             virt_to_phys(vaddr),
         );
 
-        mm_trace(VirtAddr::from_usize(0x3fffffb00), 1024);
+        // mm_trace(VirtAddr::from_usize(0x3fffffb00), 1024);
 
         let _ = send_signal_process(
             xtask.thread_ref().process(),
