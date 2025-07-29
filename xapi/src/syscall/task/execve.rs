@@ -8,7 +8,7 @@ use axtask::{TaskExtRef, current};
 
 use axuspace::{UserConstPtr, UserSpaceAccess};
 use xcore::{
-    mm::{load_app, map_trampoline},
+    mm::{load_app, load_file},
     task::XProcess,
 };
 
@@ -56,17 +56,11 @@ pub fn sys_execve(
         return Err(LinuxError::EAGAIN);
     }
 
-    let mut aspace = uspace.aspace.lock();
-    aspace.unmap_user_areas()?;
-    uspace.vma_manager.write().clear();
-    map_trampoline(&mut aspace)?;
-    axhal::arch::flush_tlb(None);
+    let (file_data, new_args) = load_file(Some(&path), &args)?;
 
-    let (entry_point, user_stack_base) =
-        load_app(&mut aspace, Some(&path), &args, &envs).map_err(|_| {
-            error!("Failed to load app {}", path);
-            LinuxError::ENOENT
-        })?;
+    let mut aspace = uspace.aspace.lock();
+    let (entry_point, user_stack_base) = load_app(&mut aspace, file_data, &new_args, &envs, false)?;
+    uspace.vma_manager.write().clear();
     drop(aspace);
 
     let name = path

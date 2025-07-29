@@ -1,4 +1,5 @@
 mod ctl;
+mod event;
 mod fd_ops;
 mod io;
 mod iomux;
@@ -7,6 +8,7 @@ mod pipe;
 mod stat;
 
 pub use self::ctl::*;
+pub use self::event::*;
 pub use self::fd_ops::*;
 pub use self::io::*;
 pub use self::iomux::*;

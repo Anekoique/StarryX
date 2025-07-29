@@ -83,20 +83,15 @@ pub fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [Au
     ))
 }
 
-pub fn load_app(
-    uspace: &mut AddrSpace,
-    path: Option<&str>,
-    args: &[String],
-    envs: &[String],
-) -> LinuxResult<(VirtAddr, VirtAddr)> {
+pub fn load_file(path: Option<&str>, args: &[String]) -> LinuxResult<(Vec<u8>, Vec<String>)> {
     let path = path
         .or_else(|| args.first().map(String::as_str))
-        .ok_or(AxError::InvalidInput)?;
+        .ok_or(LinuxError::EINVAL)?;
 
     if path.ends_with(".sh") {
         let mut new_args = vec!["/musl/busybox".to_string(), "sh".to_string()];
         new_args.extend_from_slice(args);
-        return load_app(uspace, None, &new_args, envs);
+        return load_file(None, &new_args);
     }
 
     let file_data = FS_CONTEXT.lock().read(path)?;
@@ -111,10 +106,20 @@ pub fn load_app(
             .map(|s| s.trim_ascii().to_owned())
             .chain(args.iter().cloned())
             .collect();
-        return load_app(uspace, None, &new_args, envs);
+        return load_file(None, &new_args);
     }
 
-    let elf = ElfFile::new(&file_data).map_err(|_| AxError::InvalidData)?;
+    Ok((file_data, args.to_vec()))
+}
+
+pub fn load_app(
+    uspace: &mut AddrSpace,
+    file_data: Vec<u8>,
+    args: &[String],
+    envs: &[String],
+    init: bool,
+) -> LinuxResult<(VirtAddr, VirtAddr)> {
+    let elf = ElfFile::new(&file_data).map_err(|_| LinuxError::ENOEXEC)?;
 
     if let Some(interp) = elf
         .program_iter()
@@ -141,7 +146,14 @@ pub fn load_app(
 
         let mut new_args = vec![interp_path.to_owned()];
         new_args.extend_from_slice(args);
-        return load_app(uspace, None, &new_args, envs);
+        let (file_data, new_args) = load_file(None, &new_args)?;
+        return load_app(uspace, file_data, &new_args, envs, init);
+    }
+
+    if !init {
+        uspace.unmap_user_areas()?;
+        map_trampoline(uspace)?;
+        axhal::arch::flush_tlb(None);
     }
 
     let (entry, mut auxv) = map_elf(uspace, &elf)?;

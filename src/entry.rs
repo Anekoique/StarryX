@@ -10,7 +10,7 @@ use spin::RwLock;
 use xapi::{fs::with_fs, ipc::IPC_MANAGER};
 use xcore::{
     fs::FD_TABLE,
-    mm::{XUserSpace, copy_from_kernel, load_app, map_trampoline, new_aspace},
+    mm::{XUserSpace, copy_from_kernel, load_app, load_file, map_trampoline, new_aspace},
     task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task},
 };
 
@@ -32,7 +32,9 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     })
     .expect("Failed to resolve executable path");
 
-    let (entry_vaddr, ustack_top) = load_app(&mut uspace, None, args, envs)
+    let (file_data, new_args) =
+        load_file(None, args).unwrap_or_else(|e| panic!("Failed to load file: {}", e));
+    let (entry_vaddr, ustack_top) = load_app(&mut uspace, file_data, &new_args, envs, true)
         .unwrap_or_else(|e| panic!("Failed to load user app: {}", e));
 
     let uctx = UspaceContext::new(entry_vaddr.into(), ustack_top, 2333);
