@@ -66,3 +66,8 @@ pub const SEMMNS: usize = 32000;
 pub const SEMOPM: usize = 32;
 pub const SEMMNI: usize = 128;
 pub const SEMVMX: usize = 32767;
+
+// eventfd
+pub const EFD_CLOEXEC: u32 = O_CLOEXEC;
+pub const EFD_NONBLOCK: u32 = O_NONBLOCK;
+pub const EFD_SEMAPHORE: u32 = 0o1;
