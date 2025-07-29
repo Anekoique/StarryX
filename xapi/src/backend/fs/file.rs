@@ -60,6 +60,14 @@ impl File {
             inner.write_at(buf, offset)
         }
     }
+
+    pub fn len(&self) -> LinuxResult<u64> {
+        let inner = self.inner();
+        Ok(PAGE_CACHE_MANAGER
+            .get_cache(inner.inode()?)
+            .map(|cache| cache.get_size() as u64)
+            .unwrap_or(inner.len()?))
+    }
 }
 
 impl FileLike for File {

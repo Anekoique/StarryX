@@ -163,6 +163,9 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     trace!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
+        PAGE_CACHE_MANAGER
+            .get_cache(file.inner().inode()?)
+            .map(|cache| cache.set_size(length as _));
         file.inner().access(FileFlags::WRITE)?.set_len(length as _)
     })
     .map(|_| 0)

@@ -2,6 +2,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axfs_ng_vfs::FileNodeOps;
 use axmm::{AddrSpace, PageIter4K};
 use axsync::{Mutex, RawMutex};
@@ -11,6 +12,8 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 use page_cache::{InodeOps, PageOps};
 use page_table_multiarch::{MappingFlags, PageSize};
 use spin::RwLock;
+
+use super::PAGE_CACHE_MANAGER;
 
 pub struct XUserSpace {
     pub aspace: Arc<Mutex<AddrSpace>>,
@@ -141,11 +144,22 @@ impl PageOps for XUserSpace {
 pub struct FileWrapper(pub Arc<Mutex<axfs_ng::FsFile<RawMutex>>>);
 impl VmFile for FileWrapper {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
-        self.0.lock().read_at(buf, offset)
+        let inner = self.0.lock();
+        if !inner.get_flags().contains(FileFlags::DIRECT)
+            && let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?)
+        {
+            cache.read_at(buf, offset)
+        } else {
+            inner.read_at(buf, offset)
+        }
     }
 
     fn len(&self) -> LinuxResult<u64> {
-        self.0.lock().len()
+        let inner = self.0.lock();
+        Ok(PAGE_CACHE_MANAGER
+            .get_cache(inner.inode()?)
+            .map(|cache| cache.get_size() as u64)
+            .unwrap_or(inner.len()?))
     }
 }
 

@@ -282,4 +282,8 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     pub fn get_size(&self) -> u64 {
         self.file_size.load(Ordering::Relaxed)
     }
+
+    pub fn set_size(&self, size: u64) {
+        self.file_size.store(size, Ordering::Relaxed);
+    }
 }

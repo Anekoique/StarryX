@@ -79,6 +79,5 @@ fn post_trap_callback(tf: &mut TrapFrame, from_user: bool) {
         return;
     }
 
-    check_fatal_signals();
     check_signals(tf, None);
 }

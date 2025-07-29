@@ -24,7 +24,7 @@ use crate::{
         sys::{rtc_time, utimbuf},
         timespec, timeval,
     },
-    fs::{Directory, File, with_fs, with_location},
+    fs::{Stdin, Stdout, Directory, File, with_fs, with_location},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
@@ -38,6 +38,11 @@ use crate::{
 /// * `argp` - The argument to the request. It is a pointer to a memory location
 pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
     trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
+    let f = get_file_like(fd)?;
+
+    if f.clone().into_any().is::<Stdin>() || f.clone().into_any().is::<Stdout>() {
+        return Ok(0);
+    }
 
     let device = get_file_like(fd)?
         .into_any()

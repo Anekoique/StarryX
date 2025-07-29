@@ -3,7 +3,7 @@ use axhal::paging::MappingFlags;
 use super::{
     MAP_ANONYMOUS, MAP_FIXED, MAP_HUGE_1GB, MAP_HUGETLB, MAP_NORESERVE, MAP_POPULATE, MAP_PRIVATE,
     MAP_SHARED, MAP_SHARED_VALIDATE, MAP_STACK, MAP_TYPE, PROT_EXEC, PROT_GROWSDOWN, PROT_GROWSUP,
-    PROT_READ, PROT_WRITE,
+    PROT_READ, PROT_WRITE, MAP_FIXED_NOREPLACE,
 };
 
 bitflags::bitflags! {
@@ -18,6 +18,8 @@ bitflags::bitflags! {
         const PRIVATE = MAP_PRIVATE;
         /// Map address must be exactly as requested, no matter whether it is available.
         const FIXED = MAP_FIXED;
+        /// Map address must be exactly as requested, no matter whether it is available.
+        const FIXED_NOREPLACE = MAP_FIXED_NOREPLACE;
         /// Don't use a file.
         const ANONYMOUS = MAP_ANONYMOUS;
         /// Don't check for reservations.

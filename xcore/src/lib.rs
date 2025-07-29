@@ -21,6 +21,7 @@
 //! - **Synchronization**: Futex-based userspace synchronization primitives
 
 #![no_std]
+#![feature(let_chains)]
 
 #[macro_use]
 extern crate axlog;
