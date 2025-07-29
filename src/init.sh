@@ -38,6 +38,35 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   all_testcases="
+
+msg_comm
+msgctl01
+msgctl02
+msgctl03
+msgctl04
+msgctl05
+msgctl06
+msgctl12
+msgget01
+msgget02
+msgget03
+msgget04
+msgget05
+msgrcv01
+msgrcv02
+msgrcv03
+msgrcv05
+msgrcv06
+msgrcv07
+msgrcv08
+msgsnd01
+msgsnd02
+msgsnd05
+msgsnd06
+msgstress01
+
+
+
   "
   passed_testcase="
     abort01
@@ -217,6 +246,7 @@ run_ltp() {
 
 cd /musl
 run_ltp musl
+sh
 # ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh

@@ -523,7 +523,7 @@ fn create_proc_pid_dir(fs: Arc<VirtFs>, is_self: bool) -> DirMaker {
         )
         .add("maps", create_static_file(fs.clone(), "0\n"))
         .add("task", create_static_file(fs.clone(), "0\n"))
-        .add("stat", create_static_file(fs.clone(), "0\n"))
+        .add("stat", create_dynamic_file(fs.clone(), get_current_status))
         .add(
             "statm",
             create_static_file(fs.clone(), "1024 512 256 128 0 896 0\n"),

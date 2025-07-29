@@ -42,6 +42,9 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
     info!("sys_msgget: key = {}, msgflg = {}", key, msgflg);
     let current_pid = current_pid();
 
+    // Acquire the limits before acquiring the msg lock.
+    let limits = *IPC_MANAGER.lock().get_limits();
+
     IPC_MANAGER.with_msg(|msg_manager| {
         // Check if key already exists
         if key != IPC_PRIVATE {
@@ -74,7 +77,6 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
         }
 
         // Check system limits
-        let limits = *IPC_MANAGER.lock().get_limits();
         if msg_manager.queue_count() >= limits.msgmni {
             return Err(LinuxError::ENOSPC);
         }
