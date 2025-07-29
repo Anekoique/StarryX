@@ -44,7 +44,10 @@ run_ltp() {
   #
 
   all_testcases="
-  llseek03
+
+
+
+
   "
   passed_testcase="
     abort01
@@ -264,6 +267,15 @@ run_ltp() {
     mmap16
     mmap17
     mmap19
+    msgctl01
+    msgctl04
+    msgget01
+    msgget02
+    msgrcv01
+    msgrcv02
+    msgrcv07
+    msgrcv08
+    msgsnd02
     recv01
     recvfrom01
     rt_sigaction01
@@ -334,8 +346,9 @@ run_ltp() {
 }
 
 cd /musl
-# sh
-# run_ltp musl
+run_ltp musl
+sh
+# ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 ./libctest_testcode.sh
 ./basic_testcode.sh
