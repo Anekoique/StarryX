@@ -7,7 +7,7 @@ use axprocess::Pid;
 use axuspace::{UserPtr, UserSpaceAccess, nullable};
 use xcore::{
     fs::FD_TABLE,
-    task::{XProcess, XThread, send_signal_process, send_signal_thread},
+    task::{FutexKey, XProcess, XThread, send_signal_process, send_signal_thread},
 };
 
 use crate::{
@@ -30,7 +30,8 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
     if let Ok(clear_tid) = uspace.raw_ptr(clear_child_tid) {
         *clear_tid = 0;
 
-        let guard = xprocess.futex_table.get(clear_tid as *const _ as usize);
+        let key = FutexKey::new(clear_tid as *const _ as usize);
+        let guard = xprocess.futex_table_for(&key).get(&key);
         if let Some(futex) = guard {
             futex.wq.notify_one(false);
         }

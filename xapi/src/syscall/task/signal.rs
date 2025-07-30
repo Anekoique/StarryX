@@ -1,5 +1,5 @@
 use alloc::sync::Arc;
-use core::{mem, time::Duration};
+use core::mem;
 
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::TrapFrame;
@@ -293,8 +293,9 @@ pub fn sys_rt_sigtimedwait(
         let xthread = XThread::from_thread(thread);
         let uspace = XProcess::from_thread(thread).uspace();
         let set = uspace.read(set)?;
-        let timeout: Option<Duration> =
-            nullable!(uspace.read(timeout))?.map(timespec::to_time_value);
+        let timeout = nullable!(uspace.read(timeout))?
+            .map(timespec::to_time_value)
+            .transpose()?;
 
         let Some(sig) = xthread.signal.wait_timeout(set, timeout) else {
             return Err(LinuxError::EAGAIN);
