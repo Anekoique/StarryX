@@ -174,7 +174,7 @@ pub fn sys_nanosleep(req: UserConstPtr<timespec>, rem: UserPtr<timespec>) -> Lin
         if req.tv_nsec < 0 || req.tv_nsec > 999_999_999 || req.tv_sec < 0 {
             return Err(LinuxError::EINVAL);
         }
-        let dur = timespec::to_time_value(req);
+        let dur = timespec::to_time_value(req)?;
         trace!("sys_nanosleep <= {:?}", dur);
 
         let actual = sleep(axhal::time::monotonic_time, dur);
@@ -214,7 +214,7 @@ pub fn sys_clock_nanosleep(
         if req.tv_nsec < 0 || req.tv_nsec > 999_999_999 || req.tv_sec < 0 {
             return Err(LinuxError::EINVAL);
         }
-        let req = timespec::to_time_value(req);
+        let req = timespec::to_time_value(req)?;
         let dur = if flags & TIMER_ABSTIME as usize != 0 {
             req.saturating_sub(clock())
         } else {

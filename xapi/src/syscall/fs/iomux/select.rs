@@ -110,7 +110,9 @@ pub fn sys_select(
             readfds,
             writefds,
             exceptfds,
-            nullable!(uspace.read(timeout))?.map(timeval::to_time_value),
+            nullable!(uspace.read(timeout))?
+                .map(timeval::to_time_value)
+                .transpose()?,
         )
     })
 }
@@ -130,7 +132,9 @@ pub fn sys_pselect6(
             readfds,
             writefds,
             exceptfds,
-            nullable!(uspace.read(timeout))?.map(timespec::to_time_value),
+            nullable!(uspace.read(timeout))?
+                .map(timespec::to_time_value)
+                .transpose()?,
         )
     })
 }

@@ -7,7 +7,7 @@ use alloc::{
 };
 use core::{
     alloc::Layout,
-    sync::atomic::{AtomicI32, AtomicUsize, Ordering},
+    sync::atomic::{AtomicI32, AtomicU32, AtomicUsize, Ordering},
 };
 
 use axerrno::{LinuxError, LinuxResult};
@@ -30,7 +30,7 @@ use weak_map::WeakMap;
 use crate::{
     mm::{FileWrapper, XUserSpace},
     resources::Rlimits,
-    task::{FutexTable, ProcessSignal, ThreadSignal, with_current},
+    task::{FutexKey, FutexTable, ProcessSignal, ThreadSignal, with_current},
     time::{TimeStat, time_stat_switch_from_old_task},
 };
 
@@ -118,6 +118,7 @@ pub struct XThread {
     pub robust_list_head: AtomicUsize,
     pub signal: ThreadSignal,
     pub oom_score_adj: AtomicI32,
+    pub futex_bitset: AtomicU32,
 }
 
 impl XThread {
@@ -128,6 +129,7 @@ impl XThread {
             robust_list_head: AtomicUsize::new(0),
             signal: ThreadSignalManager::new(proc.signal.clone()),
             oom_score_adj: AtomicI32::new(200),
+            futex_bitset: AtomicU32::new(0),
         }
     }
 
@@ -214,6 +216,13 @@ impl XProcess {
     pub fn uspace(&self) -> &XUserSpace {
         &self.uspace
     }
+
+    pub fn futex_table_for(&self, key: &FutexKey) -> &FutexTable {
+        match key {
+            FutexKey::Private { .. } => &self.futex_table,
+            FutexKey::Shared { .. } => &SHARED_FUTEX_TABLE,
+        }
+    }
 }
 
 #[inherit_methods(from = "self.uspace")]
@@ -263,6 +272,7 @@ impl AxNamespaceIf for AxNamespaceImpl {
     }
 }
 
+static SHARED_FUTEX_TABLE: FutexTable = FutexTable::new();
 static THREAD_TABLE: RwLock<WeakMap<Pid, Weak<Thread>>> = RwLock::new(WeakMap::new());
 static PROCESS_TABLE: RwLock<WeakMap<Pid, Weak<Process>>> = RwLock::new(WeakMap::new());
 static PROCESS_GROUP_TABLE: RwLock<WeakMap<Pid, Weak<ProcessGroup>>> = RwLock::new(WeakMap::new());

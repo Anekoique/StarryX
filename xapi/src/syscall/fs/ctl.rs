@@ -601,8 +601,13 @@ pub fn sys_utime(path: UserConstPtr<c_char>, times: UserConstPtr<utimbuf>) -> Li
 /// * `times` - Array of two timeval structures for access and modification times (NULL for current time)
 pub fn sys_utimes(path: UserConstPtr<c_char>, times: UserConstPtr<timeval>) -> LinuxResult<isize> {
     let times = with_uspace(|uspace| nullable!(uspace.read_slice(times, 2)))?;
-    let atime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[0]));
-    let mtime = times.map_or_else(wall_time, |it| timeval::to_time_value(it[1]));
+    let (atime, mtime) = match times {
+        Some(times) => (
+            timeval::to_time_value(times[0])?,
+            timeval::to_time_value(times[1])?,
+        ),
+        None => (wall_time(), wall_time()),
+    };
     update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
     Ok(0)
 }
@@ -623,16 +628,16 @@ pub fn sys_utimensat(
     if path.is_null() {
         flags |= AT_EMPTY_PATH;
     }
-    fn utime_to_duration(time: &timespec) -> Option<TimeValue> {
+    fn utime_to_duration(time: &timespec) -> LinuxResult<Option<TimeValue>> {
         match time.tv_nsec {
-            val if val == UTIME_OMIT as _ => None,
-            val if val == UTIME_NOW as _ => Some(wall_time()),
-            _ => Some(timespec::to_time_value(*time)),
+            val if val == UTIME_OMIT as _ => Ok(None),
+            val if val == UTIME_NOW as _ => Ok(Some(wall_time())),
+            _ => Ok(Some(timespec::to_time_value(*time)?)),
         }
     }
     let times = with_uspace(|uspace| nullable!(uspace.read_slice(times, 2)))?;
     let (atime, mtime) = match times {
-        Some([atime, mtime]) => (utime_to_duration(atime), utime_to_duration(mtime)),
+        Some([atime, mtime]) => (utime_to_duration(atime)?, utime_to_duration(mtime)?),
         None => (Some(wall_time()), Some(wall_time())),
         _ => unreachable!(),
     };

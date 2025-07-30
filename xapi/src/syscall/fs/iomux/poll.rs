@@ -36,7 +36,9 @@ pub fn sys_ppoll(
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
         let fds = uspace.raw_slice(fds, nfds as usize)?;
-        let timeout = nullable!(uspace.read(timeout))?.map(timespec::to_time_value);
+        let timeout = nullable!(uspace.read(timeout))?
+            .map(timespec::to_time_value)
+            .transpose()?;
         // TODO: handle signal
         poll(fds, timeout)
     })

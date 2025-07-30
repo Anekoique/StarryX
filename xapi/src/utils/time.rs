@@ -1,3 +1,4 @@
+use axerrno::{LinuxError, LinuxResult};
 pub use axhal::time::{
     NANOS_PER_MICROS, NANOS_PER_MILLIS, NANOS_PER_SEC, TimeValue, monotonic_time,
     monotonic_time_nanos, nanos_to_ticks, wall_time, wall_time_nanos,
@@ -8,13 +9,18 @@ pub use crate::ctypes::{
     timespec, timeval,
 };
 
+/// A helper trait for converting from and to `TimeValue`.
 pub trait TimeValueLike {
+    /// Converts from `TimeValue`.
     fn from_time_value(tv: TimeValue) -> Self;
 
-    fn to_time_value(self) -> TimeValue;
+    /// Tries to convert into `TimeValue`.
+    fn to_time_value(self) -> LinuxResult<TimeValue>;
 
+    /// Converts from nanoseconds.
     fn from_nanos(nanos: u64) -> Self;
 
+    /// Converts to nanoseconds.
     fn to_nanos(self) -> u64;
 }
 
@@ -30,8 +36,11 @@ macro_rules! impl_timevaluelike_for_timespec {
                     }
                 }
 
-                fn to_time_value(self) -> TimeValue {
-                    TimeValue::new(self.tv_sec as u64, self.tv_nsec as u32)
+                fn to_time_value(self) -> LinuxResult<TimeValue> {
+                    if self.tv_nsec < 0 || self.tv_nsec > 999_999_999 || self.tv_sec < 0 {
+                        return Err(LinuxError::EINVAL);
+                    }
+                    Ok(TimeValue::new(self.tv_sec as u64, self.tv_nsec as u32))
                 }
 
                 fn from_nanos(nanos: u64) -> Self {
@@ -61,8 +70,14 @@ macro_rules! impl_timevaluelike_for_timeval {
                     }
                 }
 
-                fn to_time_value(self) -> TimeValue {
-                    TimeValue::new(self.tv_sec as u64, self.tv_usec as u32 * 1000)
+                fn to_time_value(self) -> LinuxResult<TimeValue> {
+                    if self.tv_usec < 0 || self.tv_usec > 999_999 || self.tv_sec < 0 {
+                        return Err(LinuxError::EINVAL);
+                    }
+                    Ok(TimeValue::new(
+                        self.tv_sec as u64,
+                        self.tv_usec as u32 * 1000,
+                    ))
                 }
 
                 fn from_nanos(nanos: u64) -> Self {
@@ -86,8 +101,8 @@ impl TimeValueLike for TimeValue {
         tv
     }
 
-    fn to_time_value(self) -> TimeValue {
-        self
+    fn to_time_value(self) -> LinuxResult<TimeValue> {
+        Ok(self)
     }
 
     fn from_nanos(nanos: u64) -> Self {

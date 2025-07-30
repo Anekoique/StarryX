@@ -674,6 +674,10 @@ impl AddrSpace {
             },
         }
     }
+
+    pub fn find_area(&self, vaddr: VirtAddr) -> Option<&MemoryArea<Backend>> {
+        self.areas.find(vaddr)
+    }
 }
 
 impl fmt::Debug for AddrSpace {

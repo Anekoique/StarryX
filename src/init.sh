@@ -43,6 +43,14 @@ run_ltp() {
   # dirtypipe
 
   all_testcases="
+    futex_cmp_requeue02
+    futex_wait01
+    futex_wait02
+    futex_wait04
+    futex_wake01
+    futex_wake02
+    futex_wake03
+    futex_wake04
   "
   passed_testcase="
     abort01
@@ -288,14 +296,14 @@ run_ltp() {
 
 cd /musl
 # sh
-# run_ltp musl
+run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
-./lmbench_testcode.sh
+# ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
 # ./netperf_testcode.sh
