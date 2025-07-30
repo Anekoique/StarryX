@@ -39,33 +39,42 @@ run_ltp() {
 
   all_testcases="
 
-msg_comm
-msgctl01
-msgctl02
-msgctl03
-msgctl04
-msgctl05
-msgctl06
-msgctl12
-msgget01
-msgget02
-msgget03
-msgget04
-msgget05
-msgrcv01
-msgrcv02
-msgrcv03
-msgrcv05
-msgrcv06
-msgrcv07
-msgrcv08
-msgsnd01
-msgsnd02
-msgsnd05
-msgsnd06
-msgstress01
 
 
+
+
+
+shmat01
+shmat02
+shmat03
+shmat04
+shmat1
+shmctl01
+shmctl02
+shmctl03
+shmctl04
+shmctl05
+shmctl06
+shmctl07
+shmctl08
+shmdt01
+shmdt02
+shmem_2nstest
+shmget02
+shmget03
+shmget04
+shmget05
+shmget06
+shmnstest
+shmt02
+shmt03
+shmt04
+shmt05
+shmt06
+shmt07
+shmt08
+shmt09
+shmt10
 
   "
   passed_testcase="
@@ -189,13 +198,20 @@ msgstress01
     sched_yield01
     select03
     sem_nstest
-    semop01
-    semget01
-    semget02
-    semctl01
+    semctl02
     semctl03
+    semctl04
     semctl05
     semctl07
+    semctl08
+    semctl09
+    semget01
+    semget02
+    semget05
+    semop01
+    semop02
+    semop05
+    semtest_2ns
     send01
     setreuid01
     setreuid03
@@ -246,7 +262,7 @@ msgstress01
 
 cd /musl
 run_ltp musl
-sh
+
 # ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh

@@ -7,6 +7,7 @@
 
 mod fd;
 mod file;
+mod proc_stat;
 
 pub use fd::*;
 pub use file::*;

@@ -5,7 +5,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-
+use crate::alloc::borrow::ToOwned;
 use axfs_ng_vfs::{
     DirEntry, DirEntrySink, DirNode, DirNodeOps, Filesystem, FilesystemOps, Metadata,
     MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, VfsError, VfsResult,
@@ -13,14 +13,17 @@ use axfs_ng_vfs::{
 use axsync::RawMutex;
 use core::{str::FromStr, sync::atomic::Ordering};
 use inherit_methods_macro::inherit_methods;
+use axtask::TaskState;
+use axsignal::Signo;
 
 use crate::fs::{
     virt_file::{RwFile, VirtFile, VirtFileOperation},
     virt_fs::{DirMaker, VirtDir, VirtFs, VirtNode, VirtNodeOps},
+    proc_stat::ProcStat,
 };
 use crate::task::{
     api::{with_current, with_thread, with_xprocess},
-    proc::XThread,
+    proc::{XThread, XProcess, processes, get_process}, 
 };
 
 /// Dummy memory information (Linux-style /proc/meminfo)
@@ -77,7 +80,7 @@ DirectMap2M:           0 kB
 DirectMap1G:           0 kB
 "#;
 
-/// Dummy CPU information (Linux-style /proc/cpuinfo)
+/// Dummy CPU information (Linux-style /proc/cpuinfo)  
 const DUMMY_CPUINFO: &str = r#"processor	: 0
 vendor_id	: StarryOS
 cpu family	: 6
@@ -106,7 +109,7 @@ power management:
 
 "#;
 
-/// Trait for getting process information - should be implemented by your process management system
+/// Trait for getting process information
 pub trait ProcessInfo {
     fn get_all_pids() -> Vec<u64>;
     fn get_process_name(pid: u64) -> Option<String>;
@@ -119,46 +122,66 @@ pub trait ProcessInfo {
     fn process_exists(pid: u64) -> bool;
 }
 
-/// Default implementation for current process - you should replace this with actual process management
-pub struct DefaultProcessInfo;
+/// Implementation that integrates the actual process management system
+pub struct IntegratedProcessInfo;
 
-impl ProcessInfo for DefaultProcessInfo {
+impl ProcessInfo for IntegratedProcessInfo {
     fn get_all_pids() -> Vec<u64> {
-        // Return current process ID and some dummy PIDs for demonstration
-        vec![1, with_current(|curr| curr.id().as_u64())]
+        // Get all process PIDs
+        processes()
+            .iter()
+            .map(|proc| proc.pid() as u64)
+            .collect()
     }
 
     fn get_process_name(pid: u64) -> Option<String> {
-        if Self::process_exists(pid) {
-            Some(if pid == 1 {
-                "init".to_string()
+        // Get process by PID, then get process name
+        if let Ok(process) = get_process(pid as axprocess::Pid) {
+            // Extract process name from exe_path, or use default name
+            let exe_path = XProcess::from_process(&process).exe_path.read();
+            if exe_path.is_empty() {
+                Some(format!("process_{}", pid))
             } else {
-                "starry_kernel".to_string()
-            })
+                // Extract file name from path
+                Some(
+                    exe_path
+                        .split('/')
+                        .last()
+                        .unwrap_or("unknown")
+                        .to_string()
+                )
+            }
         } else {
             None
         }
     }
 
     fn get_process_exe_path(pid: u64) -> Option<String> {
-        if Self::process_exists(pid) {
-            Some(if pid == 1 {
-                "/sbin/init".to_string()
+        if let Ok(process) = get_process(pid as axprocess::Pid) {
+            let exe_path = XProcess::from_process(&process).exe_path.read().clone();
+            if exe_path.is_empty() {
+                Some("/usr/bin/unknown".to_string())
             } else {
-                get_current_exe()
-            })
+                Some(exe_path)
+            }
         } else {
             None
         }
     }
 
     fn get_process_cmdline(pid: u64) -> Option<String> {
-        if Self::process_exists(pid) {
-            Some(if pid == 1 {
-                "init\0".to_string()
+        if let Ok(process) = get_process(pid as axprocess::Pid) {
+            let exe_path = XProcess::from_process(&process).exe_path.read();
+            if exe_path.is_empty() {
+                Some(format!("process_{}\0", pid))
             } else {
-                get_current_cmdline()
-            })
+                // Extract file name as command line
+                let name = exe_path
+                    .split('/')
+                    .last()
+                    .unwrap_or("unknown");
+                Some(format!("{}\0", name))
+            }
         } else {
             None
         }
@@ -173,8 +196,7 @@ impl ProcessInfo for DefaultProcessInfo {
     }
 
     fn process_exists(pid: u64) -> bool {
-        // Simple check - in real implementation, check your process table
-        pid == 1 || pid == with_current(|curr| curr.id().as_u64())
+        get_process(pid as axprocess::Pid).is_ok()
     }
 }
 
@@ -193,6 +215,11 @@ fn create_static_file(fs: Arc<VirtFs>, content: &'static str) -> Arc<VirtFile> {
     VirtFile::new(fs, move || content)
 }
 
+/// Create a dynamic file that takes a PID parameter
+fn create_pid_dynamic_file(fs: Arc<VirtFs>, content_fn: fn(u64) -> String, pid: u64) -> Arc<VirtFile> {
+    VirtFile::new(fs, move || content_fn(pid))
+}
+
 /// Get current process executable path
 fn get_current_exe() -> String {
     with_xprocess(|proc| proc.exe_path.read().clone())
@@ -200,12 +227,16 @@ fn get_current_exe() -> String {
 
 /// Get current process command line  
 fn get_current_cmdline() -> String {
-    "starry_kernel\0".to_string()
+    let current_pid = with_current(|curr| curr.id().as_u64());
+    IntegratedProcessInfo::get_process_cmdline(current_pid)
+        .unwrap_or_else(|| "unknown\0".to_string())
 }
 
 /// Get current process name
 fn get_current_name() -> String {
-    "starry_kernel".to_string()
+    let current_pid = with_current(|curr| curr.id().as_u64());
+    IntegratedProcessInfo::get_process_name(current_pid)
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 /// Get current process status
@@ -214,13 +245,43 @@ fn get_current_status() -> String {
     get_process_status_for_pid(pid)
 }
 
+fn get_current_stat() -> String {
+    let pid = with_current(|curr| curr.id().as_u64());
+    get_process_stat_for_pid(pid)
+}
+
+/// Get process status for a specific PID (based on the passed PID)
+fn get_process_status_for_pid_param(pid: u64) -> String {
+    get_process_status_for_pid(pid)
+}
+
+/// Get process cmdline for a specific PID
+fn get_process_cmdline_for_pid(pid: u64) -> String {
+    IntegratedProcessInfo::get_process_cmdline(pid)
+        .unwrap_or_else(|| format!("process_{}\0", pid))
+}
+
+/// Get process name for a specific PID
+fn get_process_name_for_pid(pid: u64) -> String {
+    IntegratedProcessInfo::get_process_name(pid)
+        .unwrap_or_else(|| format!("process_{}", pid))
+}
+
 /// Get process status for a specific PID
 fn get_process_status_for_pid(pid: u64) -> String {
-    let name = DefaultProcessInfo::get_process_name(pid).unwrap_or_else(|| "unknown".to_string());
+    let name = IntegratedProcessInfo::get_process_name(pid)
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Try to get actual process status
+    let state = if let Ok(_process) = get_process(pid as axprocess::Pid) {
+        "R (running)"
+    } else {
+        "Z (zombie)"
+    };
 
     format!(
         "Name:\t{}\n\
-         State:\tR (running)\n\
+         State:\t{}\n\
          Tgid:\t{}\n\
          Ngid:\t0\n\
          Pid:\t{}\n\
@@ -261,9 +322,125 @@ fn get_process_status_for_pid(pid: u64) -> String {
          Mems_allowed_list:\t0\n\
          voluntary_ctxt_switches:\t0\n\
          nonvoluntary_ctxt_switches:\t0\n",
-        name, pid, pid
+        name, state, pid, pid
     )
 }
+
+fn get_process_stat_for_pid(pid: u64) -> String {
+    if let Ok(process) = get_process(pid as axprocess::Pid) {
+        return build_proc_stat_from_process(pid, &process);
+    }
+    
+    build_default_proc_stat_for_pid(pid)
+}
+
+fn build_proc_stat_from_process(pid: u64, process: &axprocess::Process) -> String {
+    let comm = IntegratedProcessInfo::get_process_name(pid)
+        .unwrap_or_else(|| "unknown".to_string());
+    let comm = comm[..comm.len().min(16)].to_owned();
+
+    let state = {
+        let threads = process.threads();
+        if let Some(thread) = threads.first() {
+            if let Some(xthread) = thread.data::<XThread>() {
+                if let Ok(task) = xthread.get_task() {
+                    match task.state() {
+                        TaskState::Running | TaskState::Ready => 'R',
+                        TaskState::Blocked => 'S',
+                        TaskState::Exited => 'Z',
+                    }
+                } else {
+                    'R' 
+                }
+            } else {
+                'R' 
+            }
+        } else {
+            'R' 
+        }
+    };
+    
+    let ppid = process.parent().map_or(0, |p| p.pid());
+    let pgrp = process.group().pgid();
+    let session = process.group().session().sid();
+    
+    let exit_signal = if let Some(proc_data) = process.data::<XProcess>() {
+        proc_data.exit_signal.unwrap_or(Signo::SIGCHLD) as u8
+    } else {
+        Signo::SIGCHLD as u8
+    };
+    
+    let proc_stat = ProcStat {
+        pid: pid as u32,
+        comm: comm.to_owned(),
+        state,
+        ppid,
+        pgrp,
+        session,
+        num_threads: process.threads().len() as u32,
+        exit_signal,
+        exit_code: process.exit_code(),
+        ..Default::default()
+    };
+
+    format!(
+        "{} ({}) {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+        proc_stat.pid, proc_stat.comm, proc_stat.state, proc_stat.ppid, proc_stat.pgrp,
+        proc_stat.session, proc_stat.tty_nr, proc_stat.tpgid, proc_stat.flags,
+        proc_stat.minflt, proc_stat.cminflt, proc_stat.majflt, proc_stat.cmajflt,
+        proc_stat.utime, proc_stat.stime, proc_stat.cutime, proc_stat.cstime,
+        proc_stat.priority, proc_stat.nice, proc_stat.num_threads, proc_stat.itrealvalue,
+        proc_stat.starttime, proc_stat.vsize, proc_stat.rss, proc_stat.rsslim,
+        proc_stat.start_code, proc_stat.end_code, proc_stat.start_stack,
+        proc_stat.kstk_esp, proc_stat.kstk_eip, proc_stat.signal, proc_stat.blocked,
+        proc_stat.sigignore, proc_stat.sigcatch, proc_stat.wchan, proc_stat.nswap,
+        proc_stat.cnswap, proc_stat.exit_signal, proc_stat.processor,
+        proc_stat.rt_priority, proc_stat.policy, proc_stat.delayacct_blkio_ticks,
+        proc_stat.guest_time, proc_stat.cguest_time, proc_stat.start_data,
+        proc_stat.end_data, proc_stat.start_brk, proc_stat.arg_start,
+        proc_stat.arg_end, proc_stat.env_start, proc_stat.env_end, proc_stat.exit_code,
+    )
+}
+
+fn build_default_proc_stat_for_pid(pid: u64) -> String {
+    let comm = IntegratedProcessInfo::get_process_name(pid)
+        .unwrap_or_else(|| "unknown".to_string());
+    let comm = comm[..comm.len().min(16)].to_owned();
+
+    let proc_stat = ProcStat {
+        pid: pid as u32,
+        comm: comm.to_owned(),
+        state: 'R', 
+        ppid: 1,    
+        pgrp: pid as u32,
+        session: pid as u32,
+        num_threads: 1,
+        exit_signal: Signo::SIGCHLD as u8,
+        exit_code: 0,
+        ..Default::default()
+    };
+
+    format!(
+        "{} ({}) {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+        proc_stat.pid, proc_stat.comm, proc_stat.state, proc_stat.ppid, proc_stat.pgrp,
+        proc_stat.session, proc_stat.tty_nr, proc_stat.tpgid, proc_stat.flags,
+        proc_stat.minflt, proc_stat.cminflt, proc_stat.majflt, proc_stat.cmajflt,
+        proc_stat.utime, proc_stat.stime, proc_stat.cutime, proc_stat.cstime,
+        proc_stat.priority, proc_stat.nice, proc_stat.num_threads, proc_stat.itrealvalue,
+        proc_stat.starttime, proc_stat.vsize, proc_stat.rss, proc_stat.rsslim,
+        proc_stat.start_code, proc_stat.end_code, proc_stat.start_stack,
+        proc_stat.kstk_esp, proc_stat.kstk_eip, proc_stat.signal, proc_stat.blocked,
+        proc_stat.sigignore, proc_stat.sigcatch, proc_stat.wchan, proc_stat.nswap,
+        proc_stat.cnswap, proc_stat.exit_signal, proc_stat.processor,
+        proc_stat.rt_priority, proc_stat.policy, proc_stat.delayacct_blkio_ticks,
+        proc_stat.guest_time, proc_stat.cguest_time, proc_stat.start_data,
+        proc_stat.end_data, proc_stat.start_brk, proc_stat.arg_start,
+        proc_stat.arg_end, proc_stat.env_start, proc_stat.env_end, proc_stat.exit_code,
+    )
+}
+
+
+
 
 /// Dynamic directory that shows all process PIDs
 pub struct DynamicProcRoot {
@@ -325,7 +502,7 @@ impl DynamicProcRoot {
             ),
             (
                 "self",
-                VirtNodeOps::from(create_proc_pid_dir(self.fs.clone(), true)),
+                VirtNodeOps::from(create_proc_pid_dir(self.fs.clone(), true, None)),
             ),
         ]
     }
@@ -388,7 +565,7 @@ impl DirNodeOps<RawMutex> for DynamicProcRoot {
         }
 
         // Add PID entries
-        for pid in DefaultProcessInfo::get_all_pids() {
+        for pid in IntegratedProcessInfo::get_all_pids() {
             let pid_name = pid.to_string();
 
             match self.lookup(&pid_name) {
@@ -434,9 +611,9 @@ impl DirNodeOps<RawMutex> for DynamicProcRoot {
         // Check if it's a PID
         if Self::is_pid_name(name) {
             if let Ok(pid) = u64::from_str(name) {
-                if DefaultProcessInfo::process_exists(pid) {
+                if IntegratedProcessInfo::process_exists(pid) {
                     let reference = Reference::new(self.this.upgrade(), name.to_string());
-                    let maker = create_proc_pid_dir(self.fs.clone(), false);
+                    let maker = create_proc_pid_dir(self.fs.clone(), false, Some(pid));
                     return Ok(DirEntry::new_dir(
                         |this| DirNode::new(maker(this)),
                         reference,
@@ -481,76 +658,86 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
 }
 
 /// Create the /proc/[pid] directory structure
-fn create_proc_pid_dir(fs: Arc<VirtFs>, is_self: bool) -> DirMaker {
+fn create_proc_pid_dir(fs: Arc<VirtFs>, is_self: bool, specific_pid: Option<u64>) -> DirMaker {
     let mut pid_dir = VirtDir::builder(fs.clone());
 
-    // 公共文件
     pid_dir
-        .add(
-            "status",
-            create_dynamic_file(fs.clone(), get_current_status),
-        )
-        .add(
-            "oom_score_adj",
-            VirtFile::new(
-                fs.clone(),
-                RwFile::new(move |req| {
-                    let thread = with_thread(|thread| thread.clone());
-                    let Some(thr_data) = thread.data::<XThread>() else {
-                        return Err(VfsError::EBADF);
-                    };
-                    match req {
-                        VirtFileOperation::Read => Ok(Some(
-                            thr_data
-                                .oom_score_adj
-                                .load(Ordering::SeqCst)
-                                .to_string()
-                                .into_bytes(),
-                        )),
-                        VirtFileOperation::Write(data) => {
-                            if !data.is_empty() {
-                                let value = core::str::from_utf8(data)
-                                    .ok()
-                                    .and_then(|s| s.trim().parse::<i32>().ok())
-                                    .ok_or(VfsError::EINVAL)?;
-                                thr_data.oom_score_adj.store(value, Ordering::SeqCst);
-                            }
-                            Ok(None)
-                        }
-                    }
-                }),
-            ),
-        )
+        .add("status", match (is_self, specific_pid) {
+            (true, _) => create_dynamic_file(fs.clone(), get_current_status),
+            (_, Some(pid)) => create_pid_dynamic_file(fs.clone(), get_process_status_for_pid_param, pid),
+            _ => create_dynamic_file(fs.clone(), get_current_status),
+        })
+        .add("oom_score_adj", make_oom_score_adj_file(&fs))
         .add("maps", create_static_file(fs.clone(), "0\n"))
         .add("task", create_static_file(fs.clone(), "0\n"))
-        .add("stat", create_dynamic_file(fs.clone(), get_current_status))
-        .add(
-            "statm",
-            create_static_file(fs.clone(), "1024 512 256 128 0 896 0\n"),
-        )
-        .add(
-            "cmdline",
-            create_dynamic_file(fs.clone(), get_current_cmdline),
-        )
-        .add("comm", create_dynamic_file(fs.clone(), get_current_name))
+        .add("stat", match (is_self, specific_pid) {
+            (true, _) => create_dynamic_file(fs.clone(), get_current_stat),
+            (_, Some(pid)) => create_pid_dynamic_file(fs.clone(), get_process_stat_for_pid, pid),
+            _ => create_dynamic_file(fs.clone(), get_current_stat),
+        })
+        .add("statm", create_static_file(fs.clone(), "1024 512 256 128 0 896 0\n"))
+        .add("cmdline", match (is_self, specific_pid) {
+            (true, _) => create_dynamic_file(fs.clone(), get_current_cmdline),
+            (_, Some(pid)) => create_pid_dynamic_file(fs.clone(), get_process_cmdline_for_pid, pid),
+            _ => create_dynamic_file(fs.clone(), get_current_cmdline),
+        })
+        .add("comm", match (is_self, specific_pid) {
+            (true, _) => create_dynamic_file(fs.clone(), get_current_name),
+            (_, Some(pid)) => create_pid_dynamic_file(fs.clone(), get_process_name_for_pid, pid),
+            _ => create_dynamic_file(fs.clone(), get_current_name),
+        })
         .add(
             "environ",
-            create_static_file(fs.clone(), "PATH=/bin:/usr/bin\0HOME=/root\0TERM=xterm\0\0"),
+            create_static_file(
+                fs.clone(),
+                "PATH=/bin:/usr/bin\0HOME=/root\0TERM=xterm\0\0",
+            ),
         )
         .add(
             "mounts",
             create_static_file(
                 fs.clone(),
                 "proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n\
-             devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0\n\
-             tmpfs /tmp tmpfs rw,relatime 0 0\n",
+                 devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0\n\
+                 tmpfs /tmp tmpfs rw,relatime 0 0\n",
             ),
         );
 
-    // /proc/self 额外文件
     if is_self {
         pid_dir.add("exe", VirtFile::new_symlink(fs.clone(), get_current_exe));
     }
 
     pid_dir.build()
 }
+
+pub fn make_oom_score_adj_file(fs: &Arc<VirtFs>) -> Arc<VirtFile> {
+    VirtFile::new(
+        fs.clone(),
+        RwFile::new(move |req| {
+            let thread = with_thread(|thread| thread.clone());
+            let Some(thr_data) = thread.data::<XThread>() else {
+                return Err(VfsError::EBADF);
+            };
+            match req {
+                VirtFileOperation::Read => Ok(Some(
+                    thr_data
+                        .oom_score_adj
+                        .load(Ordering::SeqCst)
+                        .to_string()
+                        .into_bytes(),
+                )),
+                VirtFileOperation::Write(data) => {
+                    if !data.is_empty() {
+                        let value = core::str::from_utf8(data)
+                            .ok()
+                            .and_then(|s| s.trim().parse::<i32>().ok())
+                            .ok_or(VfsError::EINVAL)?;
+                        thr_data.oom_score_adj.store(value, Ordering::SeqCst);
+                    }
+                    Ok(None)
+                }
+            }
+        }),
+    )
+}
+

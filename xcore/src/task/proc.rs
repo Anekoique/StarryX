@@ -19,7 +19,7 @@ use axsignal::{
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 use axsync::Mutex;
-use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
+use axtask::{AxTaskExtIf, TaskExtRef, AxTaskRef, WeakAxTaskRef, TaskInner, WaitQueue, current};
 use axuspace::{UserPtr, UserSpaceAccess, nullable};
 use axvma::MmapRegion;
 use inherit_methods_macro::inherit_methods;
@@ -113,6 +113,7 @@ impl XTaskExt {
 }
 
 pub struct XThread {
+    task: Arc<Once<WeakAxTaskRef>>,
     pub time: RwLock<TimeStat>,
     pub clear_child_tid: AtomicUsize,
     pub robust_list_head: AtomicUsize,
@@ -123,6 +124,7 @@ pub struct XThread {
 impl XThread {
     pub fn new(proc: &XProcess) -> Self {
         Self {
+            task: Arc::new(Once::new()),
             time: RwLock::new(TimeStat::new()),
             clear_child_tid: AtomicUsize::new(0),
             robust_list_head: AtomicUsize::new(0),
@@ -142,6 +144,14 @@ impl XThread {
     pub fn set_clear_child_tid(&self, clear_child_tid: usize) {
         self.clear_child_tid
             .store(clear_child_tid, Ordering::Relaxed);
+    }
+
+    /// Get the task reference.
+    pub fn get_task(&self) -> LinuxResult<AxTaskRef> {
+        self.task
+            .get()
+            .and_then(Weak::upgrade)
+            .ok_or(LinuxError::ESRCH)
     }
 
     pub fn get_oom_score_adj(&self) -> i32 {
