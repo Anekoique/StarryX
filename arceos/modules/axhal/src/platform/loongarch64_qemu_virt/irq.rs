@@ -32,6 +32,9 @@ pub fn register_handler(irq_num: usize, handler: crate::irq::IrqHandler) -> bool
 /// up in the IRQ handler table and calls the corresponding handler. If
 /// necessary, it also acknowledges the interrupt controller after handling.
 pub fn dispatch_irq(irq_num: usize) {
+    // Count the interrupt
+    axinterrupt::increment_interrupt_count(irq_num);
+    
     if irq_num == TIMER_IRQ_NUM {
         ticlr::clear_timer_interrupt();
     }

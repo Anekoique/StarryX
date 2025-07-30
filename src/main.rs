@@ -30,6 +30,8 @@ Y88b  d88P Y88b.  888  888 888     888     Y88b 888  d88P Y88b
 #[unsafe(no_mangle)]
 fn main() {
     ax_println!("{}", LOGO);
+    // Initialize interrupt counting system
+    axinterrupt::init();
     // Create a init process
     axprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
     xcore::fs::init_root().expect("Failed to mount vfs");

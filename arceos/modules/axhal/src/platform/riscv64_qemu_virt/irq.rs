@@ -4,6 +4,7 @@ use crate::irq::IrqHandler;
 use lazyinit::LazyInit;
 use riscv::register::sie;
 
+
 /// `Interrupt` bit in `scause`
 pub(super) const INTC_IRQ_BASE: usize = 1 << (usize::BITS - 1);
 
@@ -65,6 +66,9 @@ pub fn register_handler(scause: usize, handler: IrqHandler) -> bool {
 /// up in the IRQ handler table and calls the corresponding handler. If
 /// necessary, it also acknowledges the interrupt controller after handling.
 pub fn dispatch_irq(scause: usize) {
+    // Count the interrupt
+    axinterrupt::increment_interrupt_count(scause);
+    
     with_cause!(
         scause,
         @TIMER => {

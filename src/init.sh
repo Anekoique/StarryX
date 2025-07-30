@@ -276,7 +276,7 @@ run_ltp() {
     "
 
   cd ltp/testcases/bin
-  for f in $all_testcases; do
+  for f in $all_testcase; do
     echo "RUN LTP CASE $f"
     ./$f
     echo "FAIL LTP CASE $f : 0"
@@ -287,7 +287,7 @@ run_ltp() {
 }
 
 cd /musl
-# sh
+sh
 # run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
 # ./libctest_testcode.sh
@@ -295,7 +295,7 @@ cd /musl
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
 # ./iozone_testcode.sh
-./lmbench_testcode.sh
+# ./lmbench_testcode.sh
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
 # ./netperf_testcode.sh

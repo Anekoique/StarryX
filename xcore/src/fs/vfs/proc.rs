@@ -156,6 +156,12 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
         VirtFile::new_symlink(fs.clone(), || {
             with_current(|curr| curr.id().as_u64().to_string()) // 只返回 PID，不带 /proc/
         }),
+    )
+    .add(
+        "interrupts",
+        VirtFile::new(fs.clone(), || {
+            axinterrupt::get_interrupt_counts()
+        }),
     );
     root.build()
 }

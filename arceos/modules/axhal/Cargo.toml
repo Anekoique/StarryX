@@ -14,7 +14,7 @@ smp = []
 alloc = []
 fp_simd = []
 paging = ["axalloc"]
-irq = []
+irq = ["axinterrupt/irq"]
 tls = ["alloc"]
 rtc = ["x86_rtc", "riscv_goldfish", "arm_pl031", "chrono"]
 uspace = ["paging"]
@@ -38,6 +38,8 @@ page_table_multiarch = "0.5.5"
 axlog = { workspace = true }
 axconfig = { workspace = true }
 axalloc = { workspace = true, optional = true }
+axinterrupt = { path = "../../../modules/axinterrupt", optional = true }
+
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86 = "0.52"

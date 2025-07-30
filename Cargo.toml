@@ -39,6 +39,7 @@ axuspace = { path = "./modules/axuspace" }
 axvma = { path = "./modules/axvma" }
 page_cache = { path = "./modules/page_cache" }
 axio = { path = "./modules/axio" }
+axinterrupt = { path = "./modules/axinterrupt" }
 
 axfs-ng = { path = "./arceos/modules/axfs-ng" }
 axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
@@ -92,6 +93,7 @@ axsignal.workspace = true
 axuspace.workspace = true
 axvma.workspace = true
 page_cache.workspace = true
+axinterrupt.workspace = true
 
 axerrno.workspace = true
 inherit-methods-macro.workspace = true

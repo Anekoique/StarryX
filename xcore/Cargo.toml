@@ -23,6 +23,7 @@ axsignal.workspace = true
 axuspace.workspace = true
 axvma.workspace = true
 page_cache.workspace = true
+axinterrupt.workspace = true
 
 axerrno.workspace = true
 linkme.workspace = true
