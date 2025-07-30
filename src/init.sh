@@ -296,9 +296,9 @@ run_ltp() {
 
 cd /musl
 # sh
-run_ltp musl
+# run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
-# ./libctest_testcode.sh
+./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh

@@ -33,10 +33,13 @@ endif
 .DEFAULT_GOAL := all
 all: oscomp_build
 
+set_env:
+	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/config/config.toml.temp > .cargo/config.toml
+
 oscomp_build:
 	@echo "Building for OS Competition..."
 	@mkdir -p .cargo
-	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/configs/config.toml.temp > .cargo/config.toml
+	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/config/config.toml.temp > .cargo/config.toml
 	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=riscv64 BUS=mmio
 	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=loongarch64
 
@@ -53,16 +56,16 @@ oscomp_binary: defconfig
 # ==============================================================================
 # Run Targets
 # ==============================================================================
-oscomp_run: defconfig setup_disk_image
+oscomp_run: defconfig setup_disk_image set_env
 	@echo "Running OS competition test..."
 	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) run
 
-rv: defconfig
+rv: defconfig set_env
 	@echo "Running OS competition test for RISC-V..."
 	@cp $(PWD)/sdcard-rv.img $(AX_ROOT)/disk.img
 	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) run
 
-la: defconfig
+la: defconfig set_env
 	@echo "Running OS competition test for LoongArch..."
 	@cp $(PWD)/sdcard-la.img $(AX_ROOT)/disk.img
 	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) run
@@ -107,6 +110,10 @@ setup_disk_image:
 		gunzip $(PWD)/sdcard-$(ARCH).img.gz; \
 	fi
 	@cp $(PWD)/sdcard-$(ARCH).img $(AX_ROOT)/disk.img
+
+DOCKER ?= docker.educg.net/cg/os-contest:20250714
+docker:
+	docker run --rm -it -v .:/code --entrypoint bash -w /code --privileged $(DOCKER)
 
 # ==============================================================================
 # Clean Target
