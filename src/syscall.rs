@@ -299,6 +299,8 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             sys_sched_setscheduler(tf.arg0() as _, tf.arg1() as _, tf.arg2().into())
         }
         Sysno::sched_getscheduler => sys_sched_getscheduler(tf.arg0() as _),
+        Sysno::getpriority => sys_getpriority(tf.arg0() as _, tf.arg1() as _),
+        Sysno::setpriority => sys_setpriority(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         // #[cfg(target_arch = "x86_64")]
         // Sysno::sched_get_priority_max => sys_sched_getscheduler_max(tf.arg0() as _, tf.arg1() as _),
         // #[cfg(target_arch = "x86_64")]
@@ -405,7 +407,9 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::setreuid => sys_setreuid(tf.arg0() as _, tf.arg1() as _),
         Sysno::getresuid => Ok(0),
         Sysno::setresuid => sys_setresuid(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::getresgid => Ok(0),
         Sysno::setresgid => Ok(0),
+        Sysno::getgroups => Ok(0),
         Sysno::setgroups => Ok(0),
         Sysno::getgid => sys_getgid(),
         Sysno::setgid => Ok(0),

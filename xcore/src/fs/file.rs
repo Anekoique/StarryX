@@ -73,6 +73,14 @@ impl XFile {
     pub fn check_type<T: FileLike + 'static>(&self) -> bool {
         self.file.clone().into_any().downcast::<T>().is_ok()
     }
+
+    pub fn into_type<T: FileLike + 'static>(self) -> LinuxResult<Arc<T>> {
+        self.file
+            .clone()
+            .into_any()
+            .downcast::<T>()
+            .map_err(|_| LinuxError::EINVAL)
+    }
 }
 
 #[inherit_methods(from = "self.file")]

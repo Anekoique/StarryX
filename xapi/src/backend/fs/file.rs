@@ -69,6 +69,15 @@ impl File {
             .unwrap_or(inner.len()?))
     }
 
+    pub fn update_len(&self) -> LinuxResult<&Self> {
+        let inner = self.inner();
+        debug!("update_len: {:?}", inner.inode());
+        PAGE_CACHE_MANAGER
+            .get_cache(inner.inode()?)
+            .map(|cache| inner.set_len(cache.get_size()).map(|_| self))
+            .unwrap_or(Ok(self))
+    }
+
     pub fn is_empty(&self) -> LinuxResult<bool> {
         Ok(self.len()? == 0)
     }

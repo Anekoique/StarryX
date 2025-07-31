@@ -42,9 +42,9 @@ run_ltp() {
   # copy_file_range03
   # dirtypipe
   #
-  ## getegid01
 
   all_testcases="
+  llseek03
   "
   passed_testcase="
     abort01
@@ -192,8 +192,33 @@ run_ltp() {
     futex_wait01
     futex_wait04
     futex_wake01
+    getdents01
+    getdents02
+    getdomainname01
     getcwd01
     getcwd03
+    geteuid01
+    geteuid01_16
+    geteuid02
+    geteuid02_16
+    getgid03
+    getgid03_16
+    getgroups01
+    getgroups01_16
+    gethostname01
+    getitimer01
+    getitimer02
+    getpagesize01
+    getpeername01
+    getpgid01
+    getpgid02
+    getpgrp01
+    getpid01
+    getpid02
+    getppid01
+    getppid02
+    getpriority01
+    getpriority02
     getrandom01
     getrandom02
     getrandom03
@@ -203,17 +228,31 @@ run_ltp() {
     getrusage01
     getrusage02
     getsid01
+    getsid02
     getsockname01
     getsockopt01
     gettid01
     gettid02
     getuid01
     getuid03
+    ioctl04
+    ioctl05
+    ioctl06
     kill06
     kill07
     kill08
     kill09
     kill11
+    lchown01
+    lchown01_16
+    lchown02
+    lchown02_16
+    link02
+    link04
+    link05
+    link08
+    linkat02
+    listen01
     mmap001
     mmap02
     mmap03
@@ -296,17 +335,18 @@ run_ltp() {
 
 cd /musl
 # sh
-run_ltp musl
+# run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
-# ./libctest_testcode.sh
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./busybox_testcode.sh
-# ./iozone_testcode.sh
-# ./lmbench_testcode.sh
-# ./libcbench_testcode.sh
-# ./iperf_testcode.sh
-# ./netperf_testcode.sh
+./libctest_testcode.sh
+./basic_testcode.sh
+./lua_testcode.sh
+./busybox_testcode.sh
+./iozone_testcode.sh
+./lmbench_testcode.sh
+./libcbench_testcode.sh
+./iperf_testcode.sh
+./netperf_testcode.sh
+# ./cyclictest_testcode.sh
 
 cd /glibc
 # run_ltp musl

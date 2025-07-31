@@ -3,10 +3,13 @@ use axtask::{AxCpuMask, set_affinity, with_task};
 
 use axprocess::Pid;
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::task::with_uspace;
+use xcore::task::{get_process, get_process_group, with_uspace};
 
 use crate::{
-    ctypes::{CLOCK_MONOTONIC, CLOCK_REALTIME, SCHED_FIFO, TIMER_ABSTIME, timespec},
+    ctypes::{
+        CLOCK_MONOTONIC, CLOCK_REALTIME, PRIO_PGRP, PRIO_PROCESS, PRIO_USER, SCHED_FIFO,
+        TIMER_ABSTIME, timespec,
+    },
     have_signals,
     utils::time::{TimeValue, TimeValueLike},
 };
@@ -18,18 +21,6 @@ use crate::{
 pub fn sys_sched_yield() -> LinuxResult<isize> {
     axtask::yield_now();
     Ok(0)
-}
-
-fn cpumask_test(cpumask: &AxCpuMask, cpu_id: usize) -> bool {
-    if cpu_id >= axconfig::SMP {
-        return false;
-    }
-
-    if axconfig::SMP == 1 {
-        cpu_id == 0 && !cpumask.is_empty()
-    } else {
-        !cpumask.is_empty()
-    }
 }
 
 /// Set CPU affinity mask for a thread.
@@ -73,6 +64,17 @@ pub fn sys_sched_getaffinity(
     cpuset_size: usize,
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
+    fn cpumask_test(cpumask: &AxCpuMask, cpu_id: usize) -> bool {
+        if cpu_id >= axconfig::SMP {
+            return false;
+        }
+
+        if axconfig::SMP == 1 {
+            cpu_id == 0 && !cpumask.is_empty()
+        } else {
+            !cpumask.is_empty()
+        }
+    }
     if cpuset_size == 0 {
         return Err(LinuxError::EINVAL);
     }
@@ -82,8 +84,8 @@ pub fn sys_sched_getaffinity(
         let mask_slice = with_uspace(|uspace| uspace.raw_slice(mask, len))?;
         let cpumask = task.cpumask();
 
-        for i in 0..len {
-            mask_slice[i] = 0;
+        for item in mask_slice.iter_mut().take(len) {
+            *item = 0;
         }
 
         for cpu_id in 0..axconfig::SMP.min(len * 8) {
@@ -246,4 +248,32 @@ pub fn sys_clock_nanosleep(
             Ok(0)
         }
     })
+}
+
+pub fn sys_getpriority(which: u32, who: u32) -> LinuxResult<isize> {
+    match which {
+        PRIO_PROCESS => {
+            let _proc_ = get_process(who)?;
+            Ok(20)
+        }
+        PRIO_PGRP => {
+            if who != 0 {
+                let _pg = get_process_group(who)?;
+            }
+            Ok(20)
+        }
+        PRIO_USER => {
+            if who == 0 {
+                Ok(20)
+            } else {
+                Err(LinuxError::ESRCH)
+            }
+        }
+        _ => Err(LinuxError::EINVAL),
+    }
+}
+
+pub fn sys_setpriority(_pid: Pid, _which: usize, _prio: isize) -> LinuxResult<isize> {
+    warn!("sys_setpriority not implemented");
+    Ok(0)
 }

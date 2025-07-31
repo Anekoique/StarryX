@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, string::ToString, sync::Arc};
+use alloc::{borrow::Cow, format, string::ToString, sync::Arc};
 
 use axfs_ng_vfs::Filesystem;
 use axprocess::Thread;
@@ -6,103 +6,22 @@ use axsync::RawMutex;
 
 use crate::{
     fs::{
-        virt_file::{DirMaker, VirtDir, VirtDirOps, VirtFile},
+        virt_file::{DirMaker, VirtDir, VirtDirBuilder, VirtDirOps, VirtFile},
         virt_fs::{VirtFs, VirtNodeOps},
     },
     task::{XProcess, get_thread, processes, with_current},
 };
 
-/// Dummy memory information (Linux-style /proc/meminfo)
-const DUMMY_MEMINFO: &str = r#"MemTotal:        8192000 kB
-MemFree:         6144000 kB
-MemAvailable:    6144000 kB
-Buffers:               0 kB
-Cached:          1024000 kB
-SwapCached:            0 kB
-Active:          1536000 kB
-Inactive:         512000 kB
-Active(anon):    1024000 kB
-Inactive(anon):   256000 kB
-Active(file):     512000 kB
-Inactive(file):   256000 kB
-Unevictable:           0 kB
-Mlocked:               0 kB
-SwapTotal:             0 kB
-SwapFree:              0 kB
-Dirty:                 0 kB
-Writeback:             0 kB
-AnonPages:       1024000 kB
-Mapped:           512000 kB
-Shmem:            256000 kB
-KReclaimable:     128000 kB
-Slab:             256000 kB
-SReclaimable:     128000 kB
-SUnreclaim:       128000 kB
-KernelStack:       16000 kB
-PageTables:        32000 kB
-NFS_Unstable:          0 kB
-Bounce:                0 kB
-WritebackTmp:          0 kB
-CommitLimit:     4096000 kB
-Committed_AS:    2048000 kB
-VmallocTotal:   34359738367 kB
-VmallocUsed:           0 kB
-VmallocChunk:          0 kB
-Percpu:             1024 kB
-HardwareCorrupted:     0 kB
-AnonHugePages:         0 kB
-ShmemHugePages:        0 kB
-ShmemPmdMapped:        0 kB
-FileHugePages:         0 kB
-FilePmdMapped:         0 kB
-HugePages_Total:       0
-HugePages_Free:        0
-HugePages_Rsvd:        0
-HugePages_Surp:        0
-Hugepagesize:       2048 kB
-Hugetlb:               0 kB
-DirectMap4k:     8388608 kB
-DirectMap2M:           0 kB
-DirectMap1G:           0 kB
-"#;
-
-/// Dummy CPU information (Linux-style /proc/cpuinfo)
-const DUMMY_CPUINFO: &str = r#"processor	: 0
-vendor_id	: StarryOS
-cpu family	: 6
-model		: 42
-model name	: Virtual CPU @ 2.4GHz
-stepping	: 1
-microcode	: 0x1
-cpu MHz		: 2400.000
-cache size	: 256 KB
-physical id	: 0
-siblings	: 1
-core id		: 0
-cpu cores	: 1
-apicid		: 0
-initial apicid	: 0
-fpu		: yes
-fpu_exception	: yes
-cpuid level	: 4
-wp		: yes
-flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx rdtscp lm rep_good nopl xtopology cpuid pni cx16 x2apic movbe popcnt aes xsave avx rdrand hypervisor lahf_lm abm 3dnowprefetch fsgsbase avx2 invpcid rdseed clflushopt
-bogomips	: 4800.00
-clflush size	: 64
-cache_alignment	: 64
-address sizes	: 40 bits physical, 48 bits virtual
-power management:
-
-"#;
+use super::dummy::*;
 
 /// Initialize the procfs filesystem
 pub fn init_procfs() -> Filesystem<RawMutex> {
     VirtFs::new_with("procfs".into(), 0x9fa0, create_proc_root)
 }
 
-struct ProcOps(Arc<VirtFs>);
+struct ProcPidOps(Arc<VirtFs>);
 
-impl VirtDirOps for ProcOps {
+impl VirtDirOps for ProcPidOps {
     fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
         processes()
             .into_iter()
@@ -119,7 +38,8 @@ impl VirtDirOps for ProcOps {
 
 /// Create the root /proc directory structure
 fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
-    let mut root = VirtDir::builder(fs.clone(), Some(Arc::new(ProcOps(fs.clone()))));
+    let mut root = VirtDir::builder(fs.clone(), Some(Arc::new(ProcPidOps(fs.clone()))));
+    let sys_root = create_sys_root(fs.clone());
 
     // Add standard /proc entries
     root.add(
@@ -132,7 +52,7 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
     )
     .add(
         "version",
-        VirtFile::new(fs.clone(), || "StarryOS version 1.0.0\n".to_string()),
+        VirtFile::new(fs.clone(), || "StarryX version 1.0.0\n".to_string()),
     )
     .add(
         "uptime",
@@ -144,19 +64,15 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
     )
     .add(
         "mounts",
-        VirtFile::new(fs.clone(), || {
-            "proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n\
-                 devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0\n\
-                 tmpfs /tmp tmpfs rw,relatime 0 0\n"
-                .to_string()
-        }),
+        VirtFile::new(fs.clone(), || DUMMY_MOUNTINFO.to_string()),
     )
     .add(
         "self",
         VirtFile::new_symlink(fs.clone(), || {
-            with_current(|curr| curr.id().as_u64().to_string()) // 只返回 PID，不带 /proc/
+            with_current(|curr| curr.id().as_u64().to_string())
         }),
-    );
+    )
+    .add("sys", sys_root.build());
     root.build()
 }
 
@@ -170,4 +86,140 @@ fn create_tid_root(fs: Arc<VirtFs>, thread: Arc<Thread>) -> DirMaker {
     );
 
     root.build()
+}
+
+fn create_sys_root(fs: Arc<VirtFs>) -> VirtDirBuilder<()> {
+    let mut root = VirtDir::<()>::builder(fs.clone(), None);
+    let kernel_root = create_kernel_root(fs.clone());
+
+    root.add("kernel", kernel_root.build());
+
+    root
+}
+
+fn create_kernel_root(fs: Arc<VirtFs>) -> VirtDirBuilder<()> {
+    let mut root = VirtDir::<()>::builder(fs.clone(), None);
+
+    // Add kernel parameters commonly found in /proc/sys/kernel
+    root.add(
+        "pid_max",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_PID_MAX)),
+    )
+    .add(
+        "threads-max",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_THREADS_MAX)),
+    )
+    .add(
+        "hostname",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_HOSTNAME)),
+    )
+    .add(
+        "domainname",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_DOMAINNAME)),
+    )
+    .add(
+        "osrelease",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_OSRELEASE)),
+    )
+    .add(
+        "printk",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_PRINTK)),
+    )
+    .add("random", create_random_root(fs.clone()).build())
+    .add(
+        "sysrq",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_SYSRQ)),
+    )
+    .add(
+        "core_pattern",
+        VirtFile::new(fs.clone(), || "core\n".to_string()),
+    )
+    .add(
+        "core_uses_pid",
+        VirtFile::new(fs.clone(), || "0\n".to_string()),
+    )
+    .add("panic", VirtFile::new(fs.clone(), || "0\n".to_string()))
+    .add(
+        "panic_on_oops",
+        VirtFile::new(fs.clone(), || "0\n".to_string()),
+    )
+    .add(
+        "shmmax",
+        VirtFile::new(fs.clone(), || "33554432\n".to_string()),
+    )
+    .add(
+        "shmall",
+        VirtFile::new(fs.clone(), || "2097152\n".to_string()),
+    )
+    .add("shmmni", VirtFile::new(fs.clone(), || "4096\n".to_string()))
+    .add(
+        "sem",
+        VirtFile::new(fs.clone(), || "250	32000	32	128\n".to_string()),
+    )
+    .add("msgmax", VirtFile::new(fs.clone(), || "8192\n".to_string()))
+    .add(
+        "msgmnb",
+        VirtFile::new(fs.clone(), || "16384\n".to_string()),
+    )
+    .add(
+        "msgmni",
+        VirtFile::new(fs.clone(), || "32000\n".to_string()),
+    )
+    .add(
+        "pid_max_limit",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_PID_MAX_LIMIT)),
+    )
+    .add(
+        "overcommit_memory",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_OVERCOMMIT_MEMORY)),
+    )
+    .add(
+        "hung_task_timeout_secs",
+        VirtFile::new(fs.clone(), || {
+            format!("{}\n", DEFAULT_HUNG_TASK_TIMEOUT_SECS)
+        }),
+    )
+    .add(
+        "sched_child_runs_first",
+        VirtFile::new(fs.clone(), || {
+            format!("{}\n", DEFAULT_SCHED_CHILD_RUNS_FIRST)
+        }),
+    );
+
+    root
+}
+
+fn create_random_root(fs: Arc<VirtFs>) -> VirtDirBuilder<()> {
+    let mut root = VirtDir::<()>::builder(fs.clone(), None);
+
+    root.add(
+        "poolsize",
+        VirtFile::new(fs.clone(), || format!("{}\n", DEFAULT_RANDOM_POOLSIZE)),
+    )
+    .add(
+        "entropy_avail",
+        VirtFile::new(fs.clone(), || "3072\n".to_string()),
+    )
+    .add(
+        "read_wakeup_threshold",
+        VirtFile::new(fs.clone(), || "64\n".to_string()),
+    )
+    .add(
+        "write_wakeup_threshold",
+        VirtFile::new(fs.clone(), || "896\n".to_string()),
+    )
+    .add(
+        "uuid",
+        VirtFile::new(fs.clone(), || {
+            "550e8400-e29b-41d4-a716-446655440000\n".to_string()
+        }),
+    )
+    .add(
+        "boot_id",
+        VirtFile::new(fs.clone(), || {
+            "550e8400-e29b-41d4-a716-446655440001\n".to_string()
+        }),
+    );
+
+    root
 }

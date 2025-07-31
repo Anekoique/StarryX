@@ -207,3 +207,22 @@ update_timer!(time_stat_from_kernel_to_user, switch_into_user_mode);
 update_timer!(time_stat_from_user_to_kernel, switch_into_kernel_mode);
 update_timer!(time_stat_switch_to_new_task, switch_to_new_task);
 update_timer!(time_stat_switch_from_old_task, switch_from_old_task);
+
+pub fn set_timer(timer_interval_ns: usize, timer_remained_ns: usize, timer_type: usize) -> bool {
+    with_irqs_disabled(|| {
+        with_xthread(|xthread| {
+            xthread
+                .time
+                .write()
+                .set_timer(timer_interval_ns, timer_remained_ns, timer_type)
+        })
+    })
+}
+
+pub fn clear_timer() {
+    with_irqs_disabled(|| {
+        with_xthread(|xthread| {
+            xthread.time.write().clear_timer();
+        })
+    })
+}

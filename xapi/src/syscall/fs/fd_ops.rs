@@ -92,6 +92,7 @@ pub fn sys_open(
 pub fn sys_close(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_close <= {}", fd);
     close_file_like(fd)?;
+    // TODO: sync file
     Ok(0)
 }
 

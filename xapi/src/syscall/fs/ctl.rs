@@ -264,6 +264,9 @@ pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isiz
             *dir_offset = offset;
             true
         })?;
+    if buffer.offset == 0 {
+        return Err(LinuxError::EINVAL);
+    }
     Ok(buffer.offset as _)
 }
 
