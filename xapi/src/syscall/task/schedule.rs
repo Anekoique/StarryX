@@ -20,6 +20,18 @@ pub fn sys_sched_yield() -> LinuxResult<isize> {
     Ok(0)
 }
 
+fn cpumask_test(cpumask: &AxCpuMask, cpu_id: usize) -> bool {
+    if cpu_id >= axconfig::SMP {
+        return false;
+    }
+
+    if axconfig::SMP == 1 {
+        cpu_id == 0 && !cpumask.is_empty()
+    } else {
+        !cpumask.is_empty()
+    }
+}
+
 /// Set CPU affinity mask for a thread.
 ///
 /// # Arguments
@@ -61,20 +73,26 @@ pub fn sys_sched_getaffinity(
     cpuset_size: usize,
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
+    if cpuset_size == 0 {
+        return Err(LinuxError::EINVAL);
+    }
+
     with_task(pid.into(), |task| {
         let len = cpuset_size.min(axconfig::SMP.div_ceil(8));
         let mask_slice = with_uspace(|uspace| uspace.raw_slice(mask, len))?;
         let cpumask = task.cpumask();
-        let cpumask_bytes = cpumask.as_bytes();
 
         for i in 0..len {
-            if i < cpumask_bytes.len() {
-                mask_slice[i] = cpumask_bytes[i];
-            } else {
-                mask_slice[i] = 0;
+            mask_slice[i] = 0;
+        }
+
+        for cpu_id in 0..axconfig::SMP.min(len * 8) {
+            if cpumask_test(&cpumask, cpu_id) {
+                mask_slice[cpu_id / 8] |= 1 << (cpu_id % 8);
             }
         }
-        Ok(0)
+
+        Ok(axconfig::SMP.div_ceil(8).min(cpuset_size) as isize)
     })
     .ok_or(LinuxError::ESRCH)?
 }
