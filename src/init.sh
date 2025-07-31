@@ -298,7 +298,7 @@ cd /musl
 # sh
 # run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
-./libctest_testcode.sh
+# ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
@@ -307,6 +307,7 @@ cd /musl
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
 # ./netperf_testcode.sh
+./cyclictest_testcode
 
 cd /glibc
 # run_ltp musl

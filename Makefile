@@ -36,6 +36,9 @@ all: oscomp_build
 set_env:
 	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/config/config.toml.temp > .cargo/config.toml
 
+vf2_config:
+	@$(MAKE) defconfig ARCH=riscv64 PLAT_NAME=riscv64-visionfive2
+
 oscomp_build:
 	@echo "Building for OS Competition..."
 	@mkdir -p .cargo
@@ -52,6 +55,10 @@ oscomp_binary: defconfig
 	else \
 		cp $$(basename $(PWD))_$(ARCH)-qemu-virt.elf kernel-la; \
 	fi
+
+vf2: vf2_config
+	@echo "Building for VisionFive2..."
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) -C $(AX_ROOT) A=$(PWD) build PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 BUS=mmio
 
 # ==============================================================================
 # Run Targets
