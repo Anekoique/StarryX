@@ -125,14 +125,16 @@ impl TimeStat {
         timer_remained_ns: usize,
         timer_type: usize,
     ) -> bool {
-        debug!(
-            "set_timer: {:?}, timer_interval_ns: {:?}, timer_remained_ns: {:?}",
-            timer_type, timer_interval_ns, timer_remained_ns
-        );
-        self.timer_type = timer_type.into();
-        self.timer_interval_ns = timer_interval_ns;
-        self.timer_remained_ns = timer_remained_ns;
-        self.timer_type != TimerType::NONE
+        with_irqs_disabled(|| {
+            debug!(
+                "set_timer: {:?}, timer_interval_ns: {:?}, timer_remained_ns: {:?}",
+                timer_type, timer_interval_ns, timer_remained_ns
+            );
+            self.timer_type = timer_type.into();
+            self.timer_interval_ns = timer_interval_ns;
+            self.timer_remained_ns = timer_remained_ns;
+            self.timer_type != TimerType::NONE
+        })
     }
 
     pub fn update_timer(&mut self, delta: usize) {

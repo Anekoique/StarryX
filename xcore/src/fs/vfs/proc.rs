@@ -1,7 +1,7 @@
 use alloc::{borrow::Cow, string::ToString, sync::Arc};
 
 use axfs_ng_vfs::Filesystem;
-use axprocess::Process;
+use axprocess::Thread;
 use axsync::RawMutex;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
         virt_file::{DirMaker, VirtDir, VirtDirOps, VirtFile},
         virt_fs::{VirtFs, VirtNodeOps},
     },
-    task::{XProcess, get_process, processes, with_current},
+    task::{XProcess, get_thread, processes, with_current},
 };
 
 /// Dummy memory information (Linux-style /proc/meminfo)
@@ -110,10 +110,10 @@ impl VirtDirOps for ProcOps {
     }
 
     fn lookup(&self, name: &str) -> Option<VirtNodeOps> {
-        let pid = name.parse::<u32>().ok()?;
-        get_process(pid)
+        let tid = name.parse::<u32>().ok()?;
+        get_thread(tid)
             .ok()
-            .map(|proc| VirtNodeOps::Dir(create_proc_pid(self.0.clone(), proc)))
+            .map(|thread| VirtNodeOps::Dir(create_tid_root(self.0.clone(), thread)))
     }
 }
 
@@ -160,9 +160,9 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
     root.build()
 }
 
-fn create_proc_pid(fs: Arc<VirtFs>, proc: Arc<Process>) -> DirMaker {
+fn create_tid_root(fs: Arc<VirtFs>, thread: Arc<Thread>) -> DirMaker {
     let mut root = VirtDir::<()>::builder(fs.clone(), None);
-    let xproc = XProcess::from_process_static(&proc);
+    let xproc = XProcess::from_thread_static(&thread);
 
     root.add(
         "exe",

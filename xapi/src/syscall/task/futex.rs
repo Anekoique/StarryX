@@ -40,7 +40,7 @@ pub fn sys_futex(
     let key = FutexKey::new(uaddr.address().as_usize());
     let command = futex_op & (FUTEX_CMD_MASK as u32);
     match command {
-        FUTEX_WAIT => {
+        FUTEX_WAIT | FUTEX_WAIT_BITSET=> {
             let uaddr_val = uspace.read(uaddr)?;
             if uaddr_val != value {
                 return Err(LinuxError::EAGAIN);
@@ -85,7 +85,7 @@ pub fn sys_futex(
                 Ok(0)
             }
         }
-        FUTEX_WAKE => {
+        FUTEX_WAKE | FUTEX_WAKE_BITSET => {
             let futex = futex_table.get(&key);
             let mut count = 0;
             if let Some(futex) = futex {

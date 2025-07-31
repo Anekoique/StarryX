@@ -363,7 +363,8 @@ pub fn sys_unlink(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
 /// # Arguments
 /// * `buf` - Buffer to store the current working directory path
 /// * `size` - Size of the buffer
-pub fn sys_getcwd(buf: UserPtr<u8>, size: usize) -> LinuxResult<isize> {
+pub fn sys_getcwd(buf: UserPtr<u8>, size: isize) -> LinuxResult<isize> {
+    let size: usize = size.try_into().map_err(|_| LinuxError::EFAULT)?;
     let buf = with_uspace(|uspace| nullable!(uspace.raw_slice(buf, size)))?;
 
     let Some(buf) = buf else {

@@ -41,16 +41,10 @@ run_ltp() {
   # copy_file_range02
   # copy_file_range03
   # dirtypipe
+  #
+  ## getegid01
 
   all_testcases="
-    futex_cmp_requeue02
-    futex_wait01
-    futex_wait02
-    futex_wait04
-    futex_wake01
-    futex_wake02
-    futex_wake03
-    futex_wake04
   "
   passed_testcase="
     abort01
@@ -194,6 +188,12 @@ run_ltp() {
     fsync01
     ftruncate01
     ftruncate01_64
+    futex_cmp_requeue02
+    futex_wait01
+    futex_wait04
+    futex_wake01
+    getcwd01
+    getcwd03
     getrandom01
     getrandom02
     getrandom03
@@ -296,9 +296,9 @@ run_ltp() {
 
 cd /musl
 # sh
-# run_ltp musl
+run_ltp musl
 # /musl/runtest.exe -w entry-static.exe syscall_sign_extend
-./libctest_testcode.sh
+# ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
