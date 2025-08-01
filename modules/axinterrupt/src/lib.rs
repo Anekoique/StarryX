@@ -14,7 +14,7 @@ use alloc::format;
 extern crate alloc;
 
 /// Maximum number of interrupt lines we can track
-#[warn(dead_code)]
+#[allow(dead_code)]
 const MAX_INTERRUPTS: usize = 1024;
 
 /// Global interrupt counter storage
