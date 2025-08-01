@@ -341,12 +341,15 @@ run_ltp() {
   echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
+export HOME=/musl
+
 cd /musl
-./interrupts_testcode.sh
+cp -r ./usr/share /usr
+cp ./usr/bin/git /bin
+./git_testcode.sh
 # run_ltp musl
 # sh
-# ./iozone -t 4 -i 0 -i 1 -r 1k -s 1m
-# /musl/runtest.exe -w entry-static.exe syscall_sign_extend
+# ./interrupts_testcode.sh
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh

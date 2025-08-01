@@ -92,7 +92,6 @@ pub fn sys_open(
 pub fn sys_close(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_close <= {}", fd);
     close_file_like(fd)?;
-    // TODO: sync file
     Ok(0)
 }
 
@@ -167,9 +166,9 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             Ok(new_fd)
         }
         F_SETFL => {
-            if fd == 0 || fd == 1 || fd == 2 {
-                return Ok(0);
-            }
+            // if fd == 0 || fd == 1 || fd == 2 {
+            //     return Ok(0);
+            // }
             get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0)?;
             Ok(0)
         }

@@ -65,7 +65,7 @@ pub fn register_handler(scause: usize, handler: IrqHandler) -> bool {
 /// up in the IRQ handler table and calls the corresponding handler. If
 /// necessary, it also acknowledges the interrupt controller after handling.
 pub fn dispatch_irq(scause: usize) {
-    crate::irq::increment_irq_count(scause);
+    // crate::irq::increment_irq_count(scause);
     with_cause!(
         scause,
         @TIMER => {

@@ -8,6 +8,7 @@ use axtask::{TaskExtRef, current};
 
 use axuspace::{UserConstPtr, UserSpaceAccess};
 use xcore::{
+    fs::FD_TABLE,
     mm::{load_app, load_file},
     task::XProcess,
 };
@@ -69,7 +70,8 @@ pub fn sys_execve(
     current().set_name(name);
     *xprocess.exe_path.write() = FS_CONTEXT.lock().canonicalize(path)?.to_string();
 
-    // TODO: fd close-on-exec
+    // Close all file descriptors marked with FD_CLOEXEC
+    FD_TABLE.close_on_exec();
 
     tf.set_ip(entry_point.as_usize());
     tf.set_sp(user_stack_base.as_usize());

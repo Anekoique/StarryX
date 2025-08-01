@@ -78,6 +78,14 @@ impl File {
             .unwrap_or(Ok(self))
     }
 
+    pub fn sync(&self) -> LinuxResult<()> {
+        let inner = self.inner();
+        PAGE_CACHE_MANAGER
+            .get_cache(inner.inode()?)
+            .map(|cache| cache.sync().map(|_| ()))
+            .unwrap_or(Ok(()))
+    }
+
     pub fn is_empty(&self) -> LinuxResult<bool> {
         Ok(self.len()? == 0)
     }

@@ -145,6 +145,24 @@ impl FdTable {
     pub fn set_cloexec(&self, fd: usize, cloexec: bool) {
         self.flags.write().set(fd, cloexec);
     }
+
+    /// Close all file descriptors that have the CLOEXEC flag set
+    /// This is called during exec() to close files marked for close-on-exec
+    pub fn close_on_exec(&self) {
+        let flags = self.flags.read();
+        let ids_to_close: Vec<usize> = self.inner.read()
+            .ids()
+            .filter(|&fd| flags.get(fd))
+            .collect();
+        drop(flags);
+
+        let mut inner = self.inner.write();
+        let mut flags = self.flags.write();
+        for fd in ids_to_close {
+            inner.remove(fd);
+            flags.set(fd, false);
+        }
+    }
 }
 
 /// Get a file-like object by `fd`.
