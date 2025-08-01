@@ -72,3 +72,6 @@ axfs-ng-vfs = { path = "crates/axfs-ng-vfs" }
 
 [profile.release]
 lto = true
+
+[patch."https://github.com/arceos-org/axdriver_crates.git"]
+axdriver_block = { path = "crates/axdriver_crates/axdriver_block", optional = true}

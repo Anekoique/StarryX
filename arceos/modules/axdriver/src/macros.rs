@@ -59,6 +59,11 @@ macro_rules! for_each_drivers {
             type $drv_type = crate::drivers::BcmSdhciDriver;
             $code
         }
+        #[cfg(block_dev = "visionfive2-sd")]
+        {
+            type $drv_type = crate::drivers::SdDriver;
+            $code
+        }
         #[cfg(net_dev = "ixgbe")]
         {
             type $drv_type = crate::drivers::IxgbeDriver;

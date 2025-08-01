@@ -109,3 +109,6 @@ syscalls = { git = "https://github.com/jasonwhite/syscalls.git", rev = "92624de"
 page_table_multiarch = { path = "./arceos/crates/page_table_multiarch/page_table_multiarch" }
 page_table_entry = { path = "./arceos/crates/page_table_multiarch/page_table_entry" }
 axio = { path = "./modules/axio" }
+
+[patch."https://github.com/arceos-org/axdriver_crates.git"]
+axdriver_block = { path = "arceos/crates/axdriver_crates/axdriver_block", optional = true}

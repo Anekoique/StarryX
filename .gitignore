@@ -4,6 +4,7 @@
 .DS_Store
 *.elf
 *.bin
+*.itb
 apps/*/build/
 **/target/
 **/Cargo.lock

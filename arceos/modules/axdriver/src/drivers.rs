@@ -82,6 +82,21 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
+    if #[cfg(block_dev = "visionfive2-sd")] {
+        pub struct SdDriver;
+        register_block_driver!(SdDriver, axdriver_block::visionfive2sd::VF2SD);
+
+        impl DriverProbe for SdDriver {
+            fn probe_global() -> Option<AxDeviceEnum> {
+                Some(AxDeviceEnum::from_block(
+                    axdriver_block::visionfive2sd::VF2SD::new(),
+                ))
+            }
+        }
+    }
+}
+
+cfg_if::cfg_if! {
     if #[cfg(net_dev = "ixgbe")] {
         use crate::ixgbe::IxgbeHalImpl;
         use axhal::mem::phys_to_virt;

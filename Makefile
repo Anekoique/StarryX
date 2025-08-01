@@ -58,24 +58,28 @@ oscomp_binary: defconfig
 
 vf2: vf2_config
 	@echo "Building for VisionFive2..."
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) -C $(AX_ROOT) A=$(PWD) build PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 BUS=mmio
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 \
+		$(MAKE) -C $(AX_ROOT) A=$(PWD) visionfive2 \
+			PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 BUS=mmio \
+			FEATURES=$(FEATURES),driver-visionfive2-sd
+	@mv $(AX_ROOT)/arceos-vf2.itb $(PWD)/starryx-vf2.itb
 
 # ==============================================================================
 # Run Targets
 # ==============================================================================
 oscomp_run: defconfig setup_disk_image set_env
 	@echo "Running OS competition test..."
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) run
+	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk LOG=$(LOG) run
 
 rv: defconfig set_env
 	@echo "Running OS competition test for RISC-V..."
 	@cp $(PWD)/sdcard-rv.img $(AX_ROOT)/disk.img
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) run
+	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk LOG=$(LOG) run
 
 la: defconfig set_env
 	@echo "Running OS competition test for LoongArch..."
 	@cp $(PWD)/sdcard-la.img $(AX_ROOT)/disk.img
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) run
+	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk LOG=$(LOG) run
 
 oscomp_debug: defconfig setup_disk_image
 	@echo "Starting debug session..."

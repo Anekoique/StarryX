@@ -5,13 +5,13 @@
 /dts-v1/;
 
 / {
-	description = "U-Boot uImage source file for ZeroOS vf2";
+	description = "U-Boot uImage source file for StarryX vf2";
 	#address-cells = <1>;
 
 	images {
 		kernel {
             description = "Linux kernel for StarryX";
-            data = /incbin/("../kernel-qemu.bin");
+            data = /incbin/("../../kernel-qemu.bin");
             type = "kernel";
             arch = "riscv";
             os = "linux";

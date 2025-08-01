@@ -307,7 +307,7 @@ cd /musl
 # ./libcbench_testcode.sh
 # ./iperf_testcode.sh
 # ./netperf_testcode.sh
-./cyclictest_testcode
+# ./cyclictest_testcode.sh
 
 cd /glibc
 # run_ltp musl
