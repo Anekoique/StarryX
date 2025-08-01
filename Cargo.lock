@@ -309,6 +309,7 @@ dependencies = [
  "riscv 0.12.1",
  "riscv_goldfish",
  "sbi-rt",
+ "spin 0.9.8",
  "static_assertions",
  "tock-registers 0.9.0",
  "x2apic",

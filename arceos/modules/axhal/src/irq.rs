@@ -1,6 +1,8 @@
 //! Interrupt management.
+use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 
 use handler_table::HandlerTable;
+use spin::RwLock;
 
 use crate::arch::{disable_irqs, enable_irqs, irqs_enabled};
 use crate::platform::irq::{MAX_IRQ_COUNT, dispatch_irq};
@@ -12,6 +14,22 @@ pub use crate::platform::irq::{register_handler, set_enable};
 pub type IrqHandler = handler_table::Handler;
 
 static IRQ_HANDLER_TABLE: HandlerTable<MAX_IRQ_COUNT> = HandlerTable::new();
+static IRQ_STATISTIC: RwLock<BTreeMap<usize, usize>> = RwLock::new(BTreeMap::new());
+
+#[allow(dead_code)]
+pub(crate) fn increment_irq_count(irq_num: usize) {
+    let mut irq_statistic = IRQ_STATISTIC.write();
+    warn!("increment_irq_count: {}", irq_num);
+    *irq_statistic.entry(irq_num).or_insert(0) += 1;
+}
+
+pub fn irq_stat() -> Vec<(usize, usize)> {
+    let irq_statistic = IRQ_STATISTIC.read();
+    irq_statistic
+        .iter()
+        .map(|(&irq, &count)| (irq, count))
+        .collect()
+}
 
 /// Platform-independent IRQ dispatching.
 #[allow(dead_code)]

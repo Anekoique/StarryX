@@ -37,6 +37,9 @@ extern crate log;
 #[macro_use]
 extern crate memory_addr;
 
+#[cfg(feature = "irq")]
+extern crate alloc;
+
 mod platform;
 
 #[macro_use]

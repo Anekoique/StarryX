@@ -1,4 +1,9 @@
-use alloc::{borrow::Cow, format, string::ToString, sync::Arc};
+use alloc::{
+    borrow::Cow,
+    format,
+    string::{String, ToString},
+    sync::Arc,
+};
 
 use axfs_ng_vfs::Filesystem;
 use axprocess::Thread;
@@ -66,6 +71,7 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
         "mounts",
         VirtFile::new(fs.clone(), || DUMMY_MOUNTINFO.to_string()),
     )
+    .add("interrupts", VirtFile::new(fs.clone(), irq_stat))
     .add(
         "self",
         VirtFile::new_symlink(fs.clone(), || {
@@ -222,4 +228,16 @@ fn create_random_root(fs: Arc<VirtFs>) -> VirtDirBuilder<()> {
     );
 
     root
+}
+
+fn irq_stat() -> String {
+    let mut result = String::new();
+
+    let irq_stats = axhal::irq::irq_stat();
+
+    for (irq_num, count) in irq_stats {
+        result.push_str(&format!("{}:        {}\n", irq_num, count));
+    }
+
+    result
 }

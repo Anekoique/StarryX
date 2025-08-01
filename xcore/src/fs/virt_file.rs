@@ -20,7 +20,7 @@ use super::virt_fs::{VirtFs, VirtNode, VirtNodeOps};
 
 pub trait VirtFileOps: Send + Sync {
     fn read_all(&self) -> VfsResult<Cow<[u8]>>;
-    fn write_all(&self, data: &[u8]) -> VfsResult<()>;
+    fn write_all(&self, data: &[u8], offset: u64) -> VfsResult<usize>;
 }
 
 impl<F, R> VirtFileOps for F
@@ -32,7 +32,7 @@ where
         Ok(Cow::Owned((self)().into()))
     }
 
-    fn write_all(&self, _data: &[u8]) -> VfsResult<()> {
+    fn write_all(&self, _data: &[u8], _offset: u64) -> VfsResult<usize> {
         Err(VfsError::EBADF)
     }
 }
@@ -92,42 +92,31 @@ impl FileNodeOps<RawMutex> for VirtFile {
     }
 
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
-        let data = self.ops.read_all()?;
-        if offset == 0 && buf.len() >= data.len() {
-            self.ops.write_all(buf)?;
-            return Ok(buf.len());
-        }
-        let mut data = data.to_vec();
-        let end_pos = offset + buf.len() as u64;
-        if end_pos > data.len() as u64 {
-            data.resize(end_pos as usize, 0);
-        }
-        data[offset as usize..].copy_from_slice(buf);
-        Ok(buf.len())
+        self.ops.write_all(buf, offset)
     }
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
         let mut data = self.ops.read_all()?.into_owned();
         data.extend_from_slice(buf);
-        self.ops.write_all(&data)?;
+        self.ops.write_all(&data, 0)?;
         Ok((buf.len(), data.len() as u64))
     }
 
     fn set_len(&self, len: u64) -> VfsResult<()> {
         let data = self.ops.read_all()?;
         match len.cmp(&(data.len() as u64)) {
-            Ordering::Less => self.ops.write_all(&data[..len as usize]),
+            Ordering::Less => self.ops.write_all(&data[..len as usize], 0).map(|_| ()),
             Ordering::Greater => {
                 let mut new_data = data.into_owned();
                 new_data.resize(len as usize, 0);
-                self.ops.write_all(&new_data)
+                self.ops.write_all(&new_data, 0).map(|_| ())
             }
             Ordering::Equal => Ok(()),
         }
     }
 
     fn set_symlink(&self, target: &str) -> VfsResult<()> {
-        self.ops.write_all(target.as_bytes())
+        self.ops.write_all(target.as_bytes(), 0).map(|_| ())
     }
 }
 
