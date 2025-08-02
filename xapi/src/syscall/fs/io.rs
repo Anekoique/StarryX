@@ -153,6 +153,7 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
     let off = File::from_fd(fd, FileFlags::empty(), FileFlags::empty())?
         .inner()
         .seek(pos)?;
+    info!("sys_lseek => {}", off);
     Ok(off as _)
 }
 
@@ -411,256 +412,6 @@ pub fn sys_sendfile(
     })
 }
 
-/// Copy a range of data from one file to another.
-///
-/// # Arguments
-/// * `fd_in` - Input file descriptor
-/// * `off_in` - Pointer to offset in input file (NULL for current position)
-/// * `fd_out` - Output file descriptor
-/// * `off_out` - Pointer to offset in output file (NULL for current position)
-/// * `len` - Maximum number of bytes to copy
-/// * `flags` - Flags for the operation (currently unused)
-pub fn sys_copy_file_range(
-    fd_in: i32,
-    off_in: UserPtr<__kernel_off_t>,
-    fd_out: i32,
-    off_out: UserPtr<__kernel_off_t>,
-    len: usize,
-    _flags: u32,
-) -> LinuxResult<isize> {
-    debug!(
-        "sys_copy_file_range <= fd_in: {}, off_in: {:?}, fd_out: {}, off_out: {:?}, len: {}",
-        fd_in,
-        !off_in.is_null(),
-        fd_out,
-        !off_out.is_null(),
-        len
-    );
-
-    // 使用与 sendfile 完全相同的模式
-    with_file(fd_out, FileFlags::WRITE, FileFlags::PATH, |dest| {
-        with_uspace(|uspace| {
-            let in_offset = if off_in.is_null() {
-                None
-            } else {
-                Some(uspace.read(off_in)?)
-            };
-
-            let out_offset = if off_out.is_null() {
-                None
-            } else {
-                Some(uspace.read(off_out)?)
-            };
-
-            debug!("copy_file_range: in_offset={:?}, out_offset={:?}, len={}", in_offset, out_offset, len);
-
-            let result = match (in_offset, out_offset) {
-                // 两个偏移都是用户提供的
-                (Some(mut in_off), Some(mut out_off)) => {
-                    let copied = with_file(fd_in, FileFlags::READ, FileFlags::PATH, |src_file| {
-                        do_copy_explicit_offsets(src_file, dest, &mut in_off, &mut out_off, len)
-                    })?;
-                    uspace.write(off_in, in_off)?;
-                    uspace.write(off_out, out_off)?;
-                    debug!("copy_file_range: updated user offsets to in={}, out={}", in_off, out_off);
-                    copied
-                },
-                // 输入使用用户偏移，输出使用文件位置  
-                (Some(mut in_off), None) => {
-                    let copied = with_file(fd_in, FileFlags::READ, FileFlags::PATH, |src_file| {
-                        do_copy_in_explicit_out_current(src_file, dest, &mut in_off, len)
-                    })?;
-                    uspace.write(off_in, in_off)?;
-                    debug!("copy_file_range: updated user in_offset to {}", in_off);
-                    copied
-                },
-                // 输入使用文件位置，输出使用用户偏移
-                (None, Some(mut out_off)) => {
-                    let copied = do_copy_in_current_out_explicit(fd_in, dest, &mut out_off, len)?;
-                    uspace.write(off_out, out_off)?;
-                    debug!("copy_file_range: updated user out_offset to {}", out_off);
-                    copied
-                },
-                // 两个都使用文件位置 - 最关键的情况，与 sendfile 完全相同
-                (None, None) => {
-                    do_copy_both_current(fd_in, dest, len)?
-                },
-            };
-
-            debug!("copy_file_range: copied {} bytes", result);
-            Ok(result as isize)
-        })
-    })
-}
-
-// 模仿 sys_sendfile 中处理 None offset 的方式
-fn do_copy_both_current(
-    fd_in: i32,
-    dest: &File,
-    len: usize,
-) -> LinuxResult<usize> {
-    debug!("do_copy_both_current: fd_in={}, len={}", fd_in, len);
-    
-    // 与 sys_sendfile 完全相同的模式：使用 get_file_like 获取输入文件
-    let src = get_file_like(fd_in)?;
-    
-    let mut buf = vec![0u8; min(len, 0x4000)];
-    let mut total_copied = 0;
-    let mut remaining = len;
-
-    while remaining > 0 {
-        let to_read = min(remaining, buf.len());
-        debug!("attempting to read {} bytes using current file position", to_read);
-        
-        let bytes_read = src.read(&mut buf[..to_read])?;
-        debug!("read {} bytes from file", bytes_read);
-        
-        if bytes_read == 0 {
-            debug!("EOF reached");
-            break;
-        }
-
-        debug!("attempting to write {} bytes using current file position", bytes_read);
-        let bytes_written = dest.write(&buf[..bytes_read])?;
-        debug!("wrote {} bytes to file", bytes_written);
-        
-        total_copied += bytes_written;
-        
-        if bytes_written < bytes_read {
-            debug!("partial write: {} < {}, stopping", bytes_written, bytes_read);
-            break;
-        }
-        
-        remaining -= bytes_written;
-        debug!("copy progress: copied={}, remaining={}", total_copied, remaining);
-    }
-
-    debug!("do_copy_both_current: completed, total_copied={}", total_copied);
-    Ok(total_copied)
-}
-
-fn do_copy_explicit_offsets(
-    src_file: &File,
-    dest_file: &File,
-    in_off: &mut __kernel_off_t,
-    out_off: &mut __kernel_off_t,
-    len: usize,
-) -> LinuxResult<usize> {
-    debug!("do_copy_explicit_offsets: in_off={}, out_off={}, len={}", *in_off, *out_off, len);
-    
-    if len == 0 {
-        debug!("do_copy_explicit_offsets: len=0, returning 0");
-        return Ok(0);
-    }
-
-    let mut buf = vec![0u8; min(len, 0x4000)];
-    let mut total_copied = 0;
-    let mut remaining = len;
-
-    while remaining > 0 {
-        let to_read = min(remaining, buf.len());
-        
-        let bytes_read = src_file.read_at(&mut buf[..to_read], *in_off as u64)?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        let bytes_written = dest_file.write_at(&buf[..bytes_read], *out_off as u64)?;
-        
-        *in_off += bytes_written as __kernel_off_t;
-        *out_off += bytes_written as __kernel_off_t;
-        total_copied += bytes_written;
-        
-        if bytes_written < bytes_read {
-            break;
-        }
-        
-        remaining -= bytes_written;
-    }
-
-    Ok(total_copied)
-}
-
-fn do_copy_in_explicit_out_current(
-    src_file: &File,
-    dest_file: &File,
-    in_off: &mut __kernel_off_t,
-    len: usize,
-) -> LinuxResult<usize> {
-    debug!("do_copy_in_explicit_out_current: in_off={}, len={}", *in_off, len);
-    
-    if len == 0 {
-        return Ok(0);
-    }
-
-    let mut buf = vec![0u8; min(len, 0x4000)];
-    let mut total_copied = 0;
-    let mut remaining = len;
-
-    while remaining > 0 {
-        let to_read = min(remaining, buf.len());
-        
-        let bytes_read = src_file.read_at(&mut buf[..to_read], *in_off as u64)?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        let bytes_written = dest_file.write(&buf[..bytes_read])?;
-        
-        *in_off += bytes_written as __kernel_off_t;
-        total_copied += bytes_written;
-        
-        if bytes_written < bytes_read {
-            break;
-        }
-        
-        remaining -= bytes_written;
-    }
-
-    Ok(total_copied)
-}
-
-fn do_copy_in_current_out_explicit(
-    fd_in: i32,
-    dest_file: &File,
-    out_off: &mut __kernel_off_t,
-    len: usize,
-) -> LinuxResult<usize> {
-    debug!("do_copy_in_current_out_explicit: out_off={}, len={}", *out_off, len);
-    
-    if len == 0 {
-        return Ok(0);
-    }
-
-    // 与 sendfile 相同：使用 get_file_like 获取使用当前位置的文件
-    let src = get_file_like(fd_in)?;
-    let mut buf = vec![0u8; min(len, 0x4000)];
-    let mut total_copied = 0;
-    let mut remaining = len;
-
-    while remaining > 0 {
-        let to_read = min(remaining, buf.len());
-        
-        let bytes_read = src.read(&mut buf[..to_read])?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        let bytes_written = dest_file.write_at(&buf[..bytes_read], *out_off as u64)?;
-        
-        *out_off += bytes_written as __kernel_off_t;
-        total_copied += bytes_written;
-        
-        if bytes_written < bytes_read {
-            break;
-        }
-        
-        remaining -= bytes_written;
-    }
-
-    Ok(total_copied)
-}
-
 pub fn sys_splice(
     fd_in: i32,
     off_in: UserPtr<__kernel_off_t>,
@@ -843,5 +594,230 @@ fn do_splice_pipe_to_file(
     }
 
     debug!("do_splice_pipe_to_file: completed, total_copied={}", total_copied);
+    Ok(total_copied)
+}
+
+/// Copy a range of data from one file to another.
+///
+/// # Arguments
+/// * `fd_in` - Input file descriptor
+/// * `off_in` - Pointer to offset in input file (NULL for current position)
+/// * `fd_out` - Output file descriptor
+/// * `off_out` - Pointer to offset in output file (NULL for current position)  
+/// * `len` - Maximum number of bytes to copy
+/// * `flags` - Flags for the operation (currently unused)
+pub fn sys_copy_file_range(
+    fd_in: i32,
+    off_in: UserPtr<__kernel_off_t>,
+    fd_out: i32,
+    off_out: UserPtr<__kernel_off_t>,
+    len: usize,
+    _flags: u32,
+) -> LinuxResult<isize> {
+    debug!(
+        "sys_copy_file_range <= fd_in: {}, off_in: {:?}, fd_out: {}, off_out: {:?}, len: {}",
+        fd_in,
+        !off_in.is_null(),
+        fd_out,
+        !off_out.is_null(),
+        len
+    );
+
+    with_uspace(|uspace| {
+        // Handle input offset
+        let in_offset = if off_in.is_null() {
+            None
+        } else {
+            let offset = uspace.read(off_in)?;
+            if offset < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            Some(offset)
+        };
+
+        // Handle output offset
+        let out_offset = if off_out.is_null() {
+            None
+        } else {
+            let offset = uspace.read(off_out)?;
+            if offset < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            Some(offset)
+        };
+
+        info!("sys_copy_file_range: in_offset={:?}, out_offset={:?}", in_offset, out_offset);
+
+        let result = match (in_offset, out_offset) {
+            (None, None) => {
+                // Both use current file positions
+                do_copy_both_current(fd_in, fd_out, len)
+            },
+            (Some(mut in_off), None) => {
+                // Input uses explicit offset, output uses current position
+                let copied = do_copy_input_offset(fd_in, fd_out, &mut in_off, len)?;
+                uspace.write(off_in, in_off)?;
+                Ok(copied)
+            },
+            (None, Some(mut out_off)) => {
+                // Input uses current position, output uses explicit offset
+                let copied = do_copy_output_offset(fd_in, fd_out, &mut out_off, len)?;
+                uspace.write(off_out, out_off)?;
+                Ok(copied)
+            },
+            (Some(mut in_off), Some(mut out_off)) => {
+                // Both use explicit offsets
+                let copied = do_copy_both_offsets(fd_in, fd_out, &mut in_off, &mut out_off, len)?;
+                uspace.write(off_in, in_off)?;
+                uspace.write(off_out, out_off)?;
+                Ok(copied)
+            },
+        }?;
+        info!("【end】sys_copy_file_range: in_offset={:?}, out_offset={:?}", in_offset, out_offset);
+        debug!("sys_copy_file_range => result={}", result);
+        Ok(result as isize)
+    })
+}
+
+fn do_copy_both_current(fd_in: i32, fd_out: i32, len: usize) -> LinuxResult<usize> {
+    let src = get_file_like(fd_in)?;
+    let dest = get_file_like(fd_out)?;
+    
+    let mut buf = vec![0u8; core::cmp::min(len, 0x4000)];
+    let mut total_copied = 0;
+    let mut remaining = len;
+
+    while remaining > 0 {
+        let to_read = core::cmp::min(remaining, buf.len());
+        let bytes_read = src.read(&mut buf[..to_read])?;
+        
+        if bytes_read == 0 {
+            break; // EOF - 重要：这里不应该推进偏移
+        }
+        
+        let bytes_written = dest.write(&buf[..bytes_read])?;
+        total_copied += bytes_written;
+
+        
+        if bytes_written < bytes_read {
+            break; // Partial write
+        }
+
+        info!("copy_file_range: requested={}, actual={}", len, total_copied);
+        
+        remaining -= bytes_written;
+    }
+
+    Ok(total_copied)
+}
+
+fn do_copy_input_offset(
+    fd_in: i32, 
+    fd_out: i32, 
+    in_off: &mut __kernel_off_t, 
+    len: usize
+) -> LinuxResult<usize> {
+    let src_file = File::from_fd(fd_in, FileFlags::READ, FileFlags::PATH)?;
+    let dest = get_file_like(fd_out)?;
+    
+    let mut buf = vec![0u8; core::cmp::min(len, 0x4000)];
+    let mut total_copied = 0;
+    let mut remaining = len;
+
+    while remaining > 0 {
+        let to_read = core::cmp::min(remaining, buf.len());
+        let bytes_read = src_file.read_at(&mut buf[..to_read], *in_off as u64)?;
+        
+        if bytes_read == 0 {
+            break; // EOF
+        }
+
+        let bytes_written = dest.write(&buf[..bytes_read])?;
+        *in_off += bytes_read as __kernel_off_t;
+        total_copied += bytes_written;
+        
+        if bytes_written < bytes_read {
+            break; // Partial write
+        }
+
+        info!("copy_file_range: requested={}, actual={}", len, total_copied);
+        
+        remaining -= bytes_written;
+    }
+
+    Ok(total_copied)
+}
+
+fn do_copy_output_offset(
+    fd_in: i32, 
+    fd_out: i32, 
+    out_off: &mut __kernel_off_t, 
+    len: usize
+) -> LinuxResult<usize> {
+    let src = get_file_like(fd_in)?;
+    let dest_file = File::from_fd(fd_out, FileFlags::WRITE, FileFlags::PATH)?;
+    
+    let mut buf = vec![0u8; core::cmp::min(len, 0x4000)];
+    let mut total_copied = 0;
+    let mut remaining = len;
+
+    while remaining > 0 {
+        let to_read = core::cmp::min(remaining, buf.len());
+        let bytes_read = src.read(&mut buf[..to_read])?;
+        
+        if bytes_read == 0 {
+            break; // EOF
+        }
+
+        let bytes_written = dest_file.write_at(&buf[..bytes_read], *out_off as u64)?;
+        *out_off += bytes_written as __kernel_off_t;
+        info!("Wrote {} bytes at offset {}", bytes_written, *out_off);
+        total_copied += bytes_written;
+        
+        if bytes_written < bytes_read {
+            break; // Partial write
+        }
+        info!("copy_file_range: requested={}, actual={}", len, total_copied);
+        remaining -= bytes_written;
+    }
+
+    Ok(total_copied)
+}
+
+fn do_copy_both_offsets(
+    fd_in: i32, 
+    fd_out: i32, 
+    in_off: &mut __kernel_off_t, 
+    out_off: &mut __kernel_off_t, 
+    len: usize
+) -> LinuxResult<usize> {
+    let src_file = File::from_fd(fd_in, FileFlags::READ, FileFlags::PATH)?;
+    let dest_file = File::from_fd(fd_out, FileFlags::WRITE, FileFlags::PATH)?;
+    
+    let mut buf = vec![0u8; core::cmp::min(len, 0x4000)];
+    let mut total_copied = 0;
+    let mut remaining = len;
+
+    while remaining > 0 {
+        let to_read = core::cmp::min(remaining, buf.len());
+        let bytes_read = src_file.read_at(&mut buf[..to_read], *in_off as u64)?;
+        
+        if bytes_read == 0 {
+            break; // EOF
+        }
+
+        let bytes_written = dest_file.write_at(&buf[..bytes_read], *out_off as u64)?;
+        *in_off += bytes_read as __kernel_off_t;
+        *out_off += bytes_written as __kernel_off_t;
+    
+        total_copied += bytes_written;
+        
+        if bytes_written < bytes_read {
+            break; // Partial write
+        }
+        info!("copy_file_range: requested={}, actual={}", len, total_copied);
+        remaining -= bytes_written;
+    }
+
     Ok(total_copied)
 }

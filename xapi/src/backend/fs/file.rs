@@ -72,6 +72,14 @@ impl File {
     pub fn is_empty(&self) -> LinuxResult<bool> {
         Ok(self.len()? == 0)
     }
+
+    pub fn get_position(&self) -> u64 {
+        self.inner().position
+    }
+
+    pub fn set_position(&self, pos: u64) {
+        self.inner().set_position(pos);
+    }
 }
 
 impl FileLike for File {
