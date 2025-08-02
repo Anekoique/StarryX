@@ -106,6 +106,10 @@ impl Pipe {
         !self.readable
     }
 
+    pub fn available_read(&self) -> usize {
+        self.buffer.lock().available_read()
+    }
+
     pub fn closed(&self) -> bool {
         Arc::strong_count(&self.buffer) == 1
     }
@@ -160,8 +164,11 @@ impl FileLike for Pipe {
             let mut ring_buffer = self.buffer.lock();
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
-                if self.closed() || self.nonblocking.load(Ordering::Relaxed) {
+                if self.closed() {
                     return Ok(write_size);
+                }
+                if self.nonblocking.load(Ordering::Relaxed) {
+                    return Err(LinuxError::EAGAIN);
                 }
                 drop(ring_buffer);
                 // Buffer is full, wait for read end to consume
@@ -210,9 +217,7 @@ impl FileLike for Pipe {
         }
     }
 
-    fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult {
-        warn!("set_nonblocking: {}", nonblocking);
+    fn set_nonblocking(&self, nonblocking: bool) {
         self.nonblocking.store(nonblocking, Ordering::Relaxed);
-        Ok(())
     }
 }

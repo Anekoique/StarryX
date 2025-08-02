@@ -176,8 +176,6 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     pub fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
         let mut current_offset = offset;
         let mut buf_offset = 0;
-        self.file_size
-            .fetch_max(offset + buf.len() as u64, Ordering::AcqRel);
 
         while buf_offset < buf.len() {
             let page_idx = page_index(current_offset);
@@ -204,6 +202,11 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
 
             current_offset += copy_size as u64;
             buf_offset += copy_size;
+        }
+
+        if !buf.is_empty() {
+            self.file_size
+                .fetch_max(offset + buf.len() as u64, Ordering::AcqRel);
         }
 
         Ok(buf.len())
@@ -276,6 +279,34 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
             P::dealloc_page(page.addr);
         }
         pages.clear();
+        Ok(())
+    }
+
+    pub fn clear_range(&self, start: u64, end: u64) -> LinuxResult {
+        let start_index = page_index(start);
+        let end_index = page_index(end);
+
+        let mut pages = self.pages.lock();
+        for index in start_index..=end_index {
+            if let Some(page) = pages.pop(&index) {
+                P::dealloc_page(page.addr);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn clear_from_pos(&self, start: u64) -> LinuxResult {
+        let start_index = page_index(start);
+        let end_index = page_index(self.get_size());
+
+        let mut pages = self.pages.lock();
+        for index in start_index..=end_index {
+            if let Some(page) = pages.pop(&index) {
+                P::dealloc_page(page.addr);
+            }
+        }
+        self.set_size(start);
         Ok(())
     }
 

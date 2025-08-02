@@ -150,7 +150,9 @@ impl FdTable {
     /// This is called during exec() to close files marked for close-on-exec
     pub fn close_on_exec(&self) {
         let flags = self.flags.read();
-        let ids_to_close: Vec<usize> = self.inner.read()
+        let ids_to_close: Vec<usize> = self
+            .inner
+            .read()
             .ids()
             .filter(|&fd| flags.get(fd))
             .collect();

@@ -344,12 +344,14 @@ run_ltp() {
 export HOME=/musl
 
 cd /musl
-cp -r ./usr/share /usr
-cp ./usr/bin/git /bin
-./git_testcode.sh
+# cp -r ./usr/share /usr
+# cp ./usr/bin/git /bin
+# ./git_testcode.sh
 # run_ltp musl
 # sh
 # ./interrupts_testcode.sh
+# ./copy-file-range_testcode.sh
+./splice_testcode.sh
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
@@ -362,6 +364,7 @@ cp ./usr/bin/git /bin
 # ./cyclictest_testcode.sh
 
 cd /glibc
+# ./copy-file-range_testcode.sh
 # run_ltp musl
 # ./basic_testcode.sh
 # ./lua_testcode.sh

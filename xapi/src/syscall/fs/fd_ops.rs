@@ -169,7 +169,7 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             // if fd == 0 || fd == 1 || fd == 2 {
             //     return Ok(0);
             // }
-            get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0)?;
+            get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0);
             Ok(0)
         }
         F_GETFD => {

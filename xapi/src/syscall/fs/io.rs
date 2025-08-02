@@ -1,4 +1,4 @@
-use alloc::vec;
+use alloc::{sync::Arc, vec};
 use core::ffi::c_int;
 
 use axerrno::{LinuxError, LinuxResult};
@@ -14,7 +14,7 @@ use xcore::{
 
 use crate::{
     ctypes::{__kernel_off_t, iovec},
-    fs::{File, with_file},
+    fs::{File, Pipe, with_file},
 };
 
 /// Read data from the file indicated by `fd`.
@@ -164,7 +164,7 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     trace!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
         if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(file.inner().inode()?) {
-            cache.set_size(length as _);
+            cache.clear_from_pos(length as _)?;
         }
         file.inner().access(FileFlags::WRITE)?.set_len(length as _)
     })
@@ -344,43 +344,66 @@ pub fn sys_pwritev2(
     })
 }
 
-fn do_sendfile<F, D>(mut read: F, dest: &D) -> LinuxResult<usize>
-where
-    F: FnMut(&mut [u8]) -> LinuxResult<usize>,
-    D: FileLike + ?Sized,
-{
+enum SendFile<'a> {
+    Direct(Arc<dyn FileLike>),
+    Offset(Arc<File>, &'a mut i64),
+}
+
+impl SendFile<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> LinuxResult<usize> {
+        match self {
+            SendFile::Direct(file) => file.read(buf),
+            SendFile::Offset(file, offset) => {
+                let bytes_read = file.read_at(buf, **offset as _)?;
+                **offset += bytes_read as i64;
+                Ok(bytes_read)
+            }
+        }
+    }
+
+    fn write(&mut self, buf: &[u8]) -> LinuxResult<usize> {
+        match self {
+            SendFile::Direct(file) => file.write(buf),
+            SendFile::Offset(file, offset) => {
+                let bytes_written = file.write_at(buf, **offset as _)?;
+                **offset += bytes_written as i64;
+                Ok(bytes_written)
+            }
+        }
+    }
+}
+
+fn do_send(mut src: SendFile<'_>, mut dst: SendFile<'_>, len: usize) -> LinuxResult<usize> {
     let mut buf = vec![0; 0x4000];
     let mut total_written = 0;
-    loop {
-        let bytes_read = read(&mut buf)?;
+    let mut remaining = len;
+
+    while remaining > 0 {
+        let to_read = buf.len().min(remaining);
+        let bytes_read = src.read(&mut buf[..to_read])?;
         if bytes_read == 0 {
             break;
         }
 
-        let bytes_written = dest.write(&buf[..bytes_read])?;
+        let bytes_written = dst.write(&buf[..bytes_read])?;
         if bytes_written < bytes_read {
             break;
         }
+
         total_written += bytes_written;
+        remaining -= bytes_written;
     }
 
     Ok(total_written)
 }
 
-/// Transfer data between file descriptors.
-///
-/// # Arguments
-/// * `out_fd` - Output file descriptor
-/// * `in_fd` - Input file descriptor
-/// * `offset` - Pointer to offset in input file (NULL for current position)
-/// * `len` - Maximum number of bytes to transfer
 pub fn sys_sendfile(
     out_fd: c_int,
     in_fd: c_int,
-    offset: UserPtr<u64>,
+    offset: UserPtr<i64>,
     len: usize,
 ) -> LinuxResult<isize> {
-    trace!(
+    debug!(
         "sys_sendfile <= out_fd: {}, in_fd: {}, offset: {}, len: {}",
         out_fd,
         in_fd,
@@ -388,24 +411,137 @@ pub fn sys_sendfile(
         len
     );
 
-    with_file(out_fd, FileFlags::WRITE, FileFlags::PATH, |dest| {
-        let offset = with_uspace(|uspace| nullable!(uspace.read(offset)))?;
+    with_uspace(|uspace| {
+        let off = nullable!(uspace.raw_ptr(offset))?;
+        let src = if let Some(off) = off {
+            if *off < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            SendFile::Offset(File::from_fd(in_fd, FileFlags::READ, FileFlags::PATH)?, off)
+        } else {
+            SendFile::Direct(get_file_like(in_fd)?.file.clone())
+        };
 
-        let result = match offset {
-            Some(mut offset) => with_file(in_fd, FileFlags::READ, FileFlags::PATH, |src_file| {
-                do_sendfile(
-                    |buf| {
-                        let bytes_read = src_file.read_at(buf, offset)?;
-                        offset += bytes_read as u64;
-                        Ok(bytes_read)
-                    },
-                    dest.as_ref(),
-                )
-            }),
-            None => do_sendfile(|buf| get_file_like(in_fd)?.read(buf), dest.as_ref()),
+        let dst = SendFile::Direct(get_file_like(out_fd)?.file.clone());
+
+        do_send(src, dst, len).map(|n| n as _)
+    })
+}
+
+pub fn sys_splice(
+    fd_in: c_int,
+    off_in: UserPtr<i64>,
+    fd_out: c_int,
+    off_out: UserPtr<i64>,
+    mut len: usize,
+    _flags: u32,
+) -> LinuxResult<isize> {
+    debug!(
+        "sys_splice <= fd_in: {}, off_in: {}, fd_out: {}, off_out: {}, len: {}, flags: {}",
+        fd_in,
+        !off_in.is_null(),
+        fd_out,
+        !off_out.is_null(),
+        len,
+        _flags
+    );
+
+    if !(Pipe::from_fd(fd_in, FileFlags::READ, FileFlags::PATH).is_ok()
+        || Pipe::from_fd(fd_out, FileFlags::WRITE, FileFlags::PATH).is_ok())
+    {
+        return Err(LinuxError::EINVAL);
+    }
+    with_uspace(|uspace| {
+        let off = nullable!(uspace.raw_ptr(off_in))?;
+        let src = if let Some(off) = off {
+            if *off < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            SendFile::Offset(File::from_fd(fd_in, FileFlags::READ, FileFlags::PATH)?, off)
+        } else {
+            if let Ok(src) = Pipe::from_fd(fd_in, FileFlags::READ, FileFlags::PATH) {
+                if !src.readable() {
+                    return Err(LinuxError::EBADF);
+                }
+                if !src.poll()?.readable {
+                    return Err(LinuxError::EINVAL);
+                }
+                len = len.min(src.available_read());
+            }
+            SendFile::Direct(get_file_like(fd_in)?.file.clone())
+        };
+
+        let off = nullable!(uspace.raw_ptr(off_out))?;
+        let dst = if let Some(off) = off {
+            if *off < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            SendFile::Offset(
+                File::from_fd(fd_out, FileFlags::WRITE, FileFlags::PATH)?,
+                off,
+            )
+        } else {
+            if let Ok(src) = Pipe::from_fd(fd_in, FileFlags::WRITE, FileFlags::PATH)
+                && !src.writable()
+            {
+                return Err(LinuxError::EBADF);
+            }
+            SendFile::Direct(get_file_like(fd_out)?.file.clone())
+        };
+
+        do_send(src, dst, len).map(|n| n as _)
+    })
+}
+
+/// Copy a range of data from one file to another.
+///
+/// # Arguments
+/// * `in_fd` - Input file descriptor
+/// * `in_off_ptr` - Pointer to offset in input file
+/// * `out_fd` - Output file descriptor
+/// * `out_off_ptr` - Pointer to offset in output file
+/// * `len` - Length of data to copy
+/// * `flags` - Flags for the operation (currently unused)
+pub fn sys_copy_file_range(
+    in_fd: c_int,
+    in_off: UserPtr<u64>,
+    out_fd: c_int,
+    out_off: UserPtr<u64>,
+    len: u64,
+    _flags: usize,
+) -> LinuxResult<isize> {
+    trace!(
+        "sys_copy_file_range <= in_fd: {}, in_off: {:?}, out_fd: {}, out_off: {:?}, len: {}, flags: {}",
+        in_fd, in_off, out_fd, out_off, len, _flags
+    );
+
+    let in_file = File::from_fd(in_fd, FileFlags::READ, FileFlags::PATH)?;
+    let out_file = File::from_fd(out_fd, FileFlags::WRITE, FileFlags::PATH)?;
+    let mut buf = vec![0; len as _];
+
+    with_uspace(|uspace| {
+        let new_len = if let Some(off) = nullable!(uspace.read(in_off))? {
+            if off > in_file.len()? {
+                return Ok(0);
+            }
+            let r = in_file.read_at(&mut buf, off as _)?;
+            uspace.write(in_off, off + r as u64).map(|_| r)
+        } else {
+            let position = in_file.inner().position;
+            if position > in_file.len()? {
+                return Ok(0);
+            }
+            in_file.read(&mut buf)
         }?;
 
-        PAGE_CACHE_MANAGER.sync_file(dest.inner().inode()?)?;
+        buf.truncate(new_len);
+        let result = if let Some(off) = nullable!(uspace.read(out_off))? {
+            let r = out_file.write_at(&buf, off as _)?;
+            uspace.write(out_off, off + r as u64).map(|_| r)
+        } else {
+            out_file.write(&buf)
+        }?;
+
         Ok(result as isize)
     })
 }

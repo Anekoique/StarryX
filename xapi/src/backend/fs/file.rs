@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs_ng::{FileFlags, FsFile};
 use axfs_ng_vfs::Location;
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
@@ -14,28 +14,28 @@ use xcore::{
 
 /// File wrapper for `axfs::fops::File`.
 pub struct File {
-    inner: Arc<Mutex<axfs_ng::FsFile<RawMutex>>>,
+    inner: Arc<Mutex<FsFile<RawMutex>>>,
 }
 
 impl File {
-    pub fn new(inner: axfs_ng::FsFile<RawMutex>) -> Self {
+    pub fn new(inner: FsFile<RawMutex>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(inner)),
         }
     }
 
     /// Create a new File from an existing Arc<Mutex<axfs_ng::FsFile<RawMutex>>>
-    pub fn from_shared(inner: Arc<Mutex<axfs_ng::FsFile<RawMutex>>>) -> Self {
+    pub fn from_shared(inner: Arc<Mutex<FsFile<RawMutex>>>) -> Self {
         Self { inner }
     }
 
     /// Get the inner node of the file.
-    pub fn inner(&self) -> MutexGuard<axfs_ng::FsFile<RawMutex>> {
+    pub fn inner(&self) -> MutexGuard<FsFile<RawMutex>> {
         self.inner.lock()
     }
 
     /// Get a clone of the shared inner Arc
-    pub fn clone_inner(&self) -> Arc<Mutex<axfs_ng::FsFile<RawMutex>>> {
+    pub fn clone_inner(&self) -> Arc<Mutex<FsFile<RawMutex>>> {
         self.inner.clone()
     }
 
@@ -71,7 +71,6 @@ impl File {
 
     pub fn update_len(&self) -> LinuxResult<&Self> {
         let inner = self.inner();
-        debug!("update_len: {:?}", inner.inode());
         PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
             .map(|cache| inner.set_len(cache.get_size()).map(|_| self))
@@ -133,9 +132,7 @@ impl FileLike for File {
         })
     }
 
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
-    }
+    fn set_nonblocking(&self, _nonblocking: bool) {}
 
     fn from_fd(fd: c_int, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>> {
         get_file_like(fd)?
@@ -195,9 +192,7 @@ impl FileLike for Directory {
         })
     }
 
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
-    }
+    fn set_nonblocking(&self, _nonblocking: bool) {}
 
     fn from_fd(fd: c_int, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>> {
         get_file_like(fd)?

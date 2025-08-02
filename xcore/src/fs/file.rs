@@ -18,7 +18,7 @@ pub trait FileLike: Send + Sync {
     fn stat(&self) -> LinuxResult<Kstat>;
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
     fn poll(&self) -> LinuxResult<PollState>;
-    fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
+    fn set_nonblocking(&self, nonblocking: bool);
     fn is_nonblocking(&self) -> bool {
         false
     }
@@ -96,7 +96,7 @@ impl XFile {
     }
     pub fn stat(&self) -> LinuxResult<Kstat>;
     pub fn poll(&self) -> LinuxResult<PollState>;
-    pub fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
+    pub fn set_nonblocking(&self, nonblocking: bool);
     pub fn is_nonblocking(&self) -> bool;
     pub fn get_location(&self) -> Option<Location<RawMutex>>;
 }
