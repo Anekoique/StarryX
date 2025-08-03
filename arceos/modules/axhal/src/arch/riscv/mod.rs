@@ -58,11 +58,13 @@ pub fn read_page_table_root() -> PhysAddr {
 /// # Safety
 ///
 /// This function is unsafe as it changes the virtual memory address space.
-pub unsafe fn write_page_table_root(root_paddr: PhysAddr) {
+pub fn write_page_table_root(root_paddr: PhysAddr) {
     let old_root = read_page_table_root();
     trace!("set page table root: {:#x} => {:#x}", old_root, root_paddr);
     if old_root != root_paddr {
-        satp::set(satp::Mode::Sv39, 0, root_paddr.as_usize() >> 12);
+        unsafe {
+             satp::set(satp::Mode::Sv39, 0, root_paddr.as_usize() >> 12);
+        }
         asm::sfence_vma_all();
     }
 }
@@ -106,8 +108,8 @@ pub fn read_thread_pointer() -> usize {
 ///
 /// This function is unsafe as it changes the CPU states.
 #[inline]
-pub unsafe fn write_thread_pointer(tp: usize) {
-    core::arch::asm!("mv tp, {}", in(reg) tp)
+pub fn write_thread_pointer(tp: usize) {
+    unsafe { core::arch::asm!("mv tp, {}", in(reg) tp) }
 }
 
 /// Initializes CPU states on the current CPU.

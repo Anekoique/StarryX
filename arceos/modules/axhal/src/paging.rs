@@ -75,7 +75,7 @@ static KERNEL_PAGE_TABLE_ROOT: LazyInit<PhysAddr> = LazyInit::new();
 /// on context switch.
 pub fn set_kernel_page_table_root(root_paddr: PhysAddr) {
     KERNEL_PAGE_TABLE_ROOT.call_once(|| root_paddr);
-    unsafe { crate::arch::write_page_table_root(root_paddr) };
+    crate::arch::write_page_table_root(root_paddr);
 }
 
 /// Get the root physical address of the kernel page table.

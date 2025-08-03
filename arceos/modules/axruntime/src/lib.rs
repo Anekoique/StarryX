@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(test), no_std)]
 #![feature(doc_auto_cfg)]
-
+#![feature(naked_functions)]
 #[macro_use]
 extern crate axlog;
 

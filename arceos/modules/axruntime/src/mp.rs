@@ -12,6 +12,9 @@ static ENTERED_CPUS: AtomicUsize = AtomicUsize::new(1);
 pub fn start_secondary_cpus(primary_cpu_id: usize) {
     let mut logic_cpu_id = 0;
     for i in 0..SMP {
+        if axconfig::PLATFORM == "riscv64-visionfive2" && i == 0 {
+            continue;
+        }
         if i != primary_cpu_id && logic_cpu_id < SMP - 1 {
             let stack_top = virt_to_phys(VirtAddr::from(unsafe {
                 SECONDARY_BOOT_STACK[logic_cpu_id].as_ptr_range().end as usize

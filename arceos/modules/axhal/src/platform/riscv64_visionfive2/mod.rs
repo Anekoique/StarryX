@@ -17,21 +17,25 @@ unsafe extern "C" {
     fn rust_main_secondary(cpu_id: usize);
 }
 
-unsafe extern "C" fn rust_entry(cpu_id: usize, dtb: usize) {
+extern "C" fn rust_entry(cpu_id: usize, dtb: usize) {
     crate::mem::clear_bss();
     crate::cpu::init_primary(cpu_id);
-    #[cfg(feature = "uspace")]
-    riscv::register::sstatus::set_sum();
-    self::time::init_early();
-    rust_main(cpu_id, dtb);
+    unsafe {
+        #[cfg(feature = "uspace")]
+        riscv::register::sstatus::set_sum();
+        self::time::init_early();
+        rust_main(cpu_id, dtb);
+    }
 }
 
 #[cfg(feature = "smp")]
-unsafe extern "C" fn rust_entry_secondary(cpu_id: usize) {
+extern "C" fn rust_entry_secondary(cpu_id: usize) {
     crate::cpu::init_secondary(cpu_id);
-    #[cfg(feature = "uspace")]
-    riscv::register::sstatus::set_sum();
-    rust_main_secondary(cpu_id);
+    unsafe {
+        #[cfg(feature = "uspace")]
+        riscv::register::sstatus::set_sum();
+        rust_main_secondary(cpu_id);
+    }
 }
 
 /// Initializes the platform devices for the primary CPU.

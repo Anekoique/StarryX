@@ -170,7 +170,11 @@ pub(crate) fn select_run_queue<G: BaseGuard>(task: &AxTaskRef) -> AxRunQueueRef<
     #[cfg(feature = "smp")]
     {
         // When SMP is enabled, select the run queue based on the task's CPU affinity and load balance.
-        let index = select_run_queue_index(task.cpumask());
+        let index = if axconfig::PLATFORM == "riscv64-visionfive2" {
+            1
+        } else {
+            select_run_queue_index(task.cpumask())
+        };
         AxRunQueueRef {
             inner: get_run_queue(index),
             state: irq_state,
@@ -232,11 +236,14 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
     ///
     /// This function is used to add a new task to the scheduler.
     pub fn add_task(&mut self, task: AxTaskRef) {
+        warn!("add_task: {}", task.id_name());
+        warn!("run_queue: {}", self.inner.cpu_id);
         debug!(
             "task add: {} on run_queue {}",
             task.id_name(),
             self.inner.cpu_id
         );
+        warn!("add_task: {}", task.id_name());
         assert!(task.is_ready());
         self.inner.scheduler.lock().add_task(task);
     }
@@ -665,6 +672,7 @@ pub(crate) unsafe fn clear_prev_task_on_cpu() {
 }
 pub(crate) fn init() {
     let cpu_id = this_cpu_id();
+    warn!("init run_queue: {}", cpu_id);
 
     // Create the `idle` task (not current task).
     const IDLE_TASK_STACK_SIZE: usize = 4096;

@@ -56,14 +56,42 @@ cfg_if::cfg_if! {
         pub struct RamDiskDriver;
         register_block_driver!(RamDiskDriver, axdriver_block::ramdisk::RamDisk);
 
-        impl DriverProbe for RamDiskDriver {
-            fn probe_global() -> Option<AxDeviceEnum> {
-                // TODO: format RAM disk
-                Some(AxDeviceEnum::from_block(
-                    axdriver_block::ramdisk::RamDisk::new(0x100_0000), // 16 MiB
-                ))
+        #[macro_export]
+        macro_rules! init_ramdisk {
+            ($path:literal) => {
+                core::arch::global_asm!(
+                    concat!(
+                        ".section .data
+                        .global initrd_start
+                        .global initrd_end
+                        .p2align 12
+                        initrd_start:
+                        .incbin \"",
+                        $path,
+                        "\"
+                        initrd_end:"
+                    )
+                );
             }
         }
+
+        impl DriverProbe for RamDiskDriver {
+            fn probe_global() -> Option<AxDeviceEnum> {
+                unsafe extern "C" {
+                    fn initrd_start();
+                    fn initrd_end();
+                }
+
+                let initrd = unsafe {
+                    axdriver_block::ramdisk::RamDisk::new(
+                        initrd_start as usize,
+                        initrd_end as usize - initrd_start as usize,
+                    )
+                };
+                Some(AxDeviceEnum::from_block(initrd))
+            }
+        }
+
     }
 }
 

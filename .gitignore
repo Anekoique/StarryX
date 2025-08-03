@@ -5,6 +5,7 @@
 *.elf
 *.bin
 *.itb
+*.bak
 apps/*/build/
 **/target/
 **/Cargo.lock

@@ -59,10 +59,10 @@ oscomp_binary: defconfig
 vf2: vf2_config
 	@echo "Building for VisionFive2..."
 	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 \
-		$(MAKE) -C $(AX_ROOT) A=$(PWD) visionfive2 \
+		$(MAKE) -C $(AX_ROOT) A=$(PWD) build \
 			PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 BUS=mmio \
-			FEATURES=$(FEATURES),driver-visionfive2-sd
-	@mv $(AX_ROOT)/arceos-vf2.itb $(PWD)/starryx-vf2.itb
+			FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2
+	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
 
 # ==============================================================================
 # Run Targets

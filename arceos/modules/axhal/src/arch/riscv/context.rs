@@ -377,10 +377,8 @@ impl TaskContext {
             unsafe { super::write_thread_pointer(next_ctx.tp) };
         }
         #[cfg(feature = "uspace")]
-        unsafe {
-            if self.satp != next_ctx.satp {
-                super::write_page_table_root(next_ctx.satp);
-            }
+        if self.satp != next_ctx.satp {
+            super::write_page_table_root(next_ctx.satp);
         }
         #[cfg(feature = "fp_simd")]
         {
@@ -419,87 +417,95 @@ impl TaskContext {
             }
         }
 
-        unsafe { context_switch(self, next_ctx) }
+        context_switch(self, next_ctx);
     }
 }
 
 #[cfg(feature = "fp_simd")]
 #[naked]
-unsafe extern "C" fn save_fp_registers(_fp_registers: &mut [u64; 32]) {
-    naked_asm!(
-        include_fp_asm_macros!(),
-        "
-        PUSH_FLOAT_REGS a0
-        frcsr t0
-        STR t0, a0, 32
-        ret
-        "
-    )
+extern "C" fn save_fp_registers(_fp_registers: &mut [u64; 32]) {
+    unsafe {
+        naked_asm!(
+            include_fp_asm_macros!(),
+            "
+            PUSH_FLOAT_REGS a0
+            frcsr t0
+            STR t0, a0, 32
+            ret
+            "
+        )
+    }
 }
 
 #[cfg(feature = "fp_simd")]
 #[naked]
-unsafe extern "C" fn restore_fp_registers(_fp_registers: &[u64; 32]) {
-    naked_asm!(
-        include_fp_asm_macros!(),
-        "
-        POP_FLOAT_REGS a0
-        LDR t0, a0, 32
-        fscsr x0, t0
-        ret
-        "
-    )
+extern "C" fn restore_fp_registers(_fp_registers: &[u64; 32]) {
+    unsafe {
+        naked_asm!(
+            include_fp_asm_macros!(),
+            "
+            POP_FLOAT_REGS a0
+            LDR t0, a0, 32
+            fscsr x0, t0
+            ret
+            "
+        )
+    }
 }
 
 #[cfg(feature = "fp_simd")]
 #[naked]
-unsafe extern "C" fn clear_fp_registers() {
-    naked_asm!(
-        include_fp_asm_macros!(),
-        "
-        CLEAR_FLOAT_REGS
-        ret
-        "
-    )
+extern "C" fn clear_fp_registers() {
+    unsafe {
+        naked_asm!(
+            include_fp_asm_macros!(),
+            "
+            CLEAR_FLOAT_REGS
+            ret
+            "
+        )
+    }
 }
 
 #[naked]
-unsafe extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task: &TaskContext) {
-    naked_asm!(
-        include_asm_macros!(),
-        "
-        // save old context (callee-saved registers)
-        STR     ra, a0, 0
-        STR     sp, a0, 1
-        STR     s0, a0, 2
-        STR     s1, a0, 3
-        STR     s2, a0, 4
-        STR     s3, a0, 5
-        STR     s4, a0, 6
-        STR     s5, a0, 7
-        STR     s6, a0, 8
-        STR     s7, a0, 9
-        STR     s8, a0, 10
-        STR     s9, a0, 11
-        STR     s10, a0, 12
-        STR     s11, a0, 13
+extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task: &TaskContext) {
+    unsafe {
+        naked_asm!(
+            include_asm_macros!(),
+            "
+            // save old context (callee-saved registers)
+            STR     ra, a0, 0
+            STR     sp, a0, 1
+            STR     s0, a0, 2
+            STR     s1, a0, 3
+            STR     s2, a0, 4
+            STR     s3, a0, 5
+            STR     s4, a0, 6
+            STR     s5, a0, 7
+            STR     s6, a0, 8
+            STR     s7, a0, 9
+            STR     s8, a0, 10
+            STR     s9, a0, 11
+            STR     s10, a0, 12
+            STR     s11, a0, 13
 
-        // restore new context
-        LDR     s11, a1, 13
-        LDR     s10, a1, 12
-        LDR     s9, a1, 11
-        LDR     s8, a1, 10
-        LDR     s7, a1, 9
-        LDR     s6, a1, 8
-        LDR     s5, a1, 7
-        LDR     s4, a1, 6
-        LDR     s3, a1, 5
-        LDR     s2, a1, 4
-        LDR     s1, a1, 3
-        LDR     s0, a1, 2
-        LDR     sp, a1, 1
-        LDR     ra, a1, 0
+            // restore new context
+            LDR     s11, a1, 13
+            LDR     s10, a1, 12
+            LDR     s9, a1, 11
+            LDR     s8, a1, 10
+            LDR     s7, a1, 9
+            LDR     s6, a1, 8
+            LDR     s5, a1, 7
+            LDR     s4, a1, 6
+            LDR     s3, a1, 5
+            LDR     s2, a1, 4
+            LDR     s1, a1, 3
+            LDR     s0, a1, 2
+            LDR     sp, a1, 1
+            LDR     ra, a1, 0
 
-        ret",
-    )
+            ret",
+        )
+    }
 }
