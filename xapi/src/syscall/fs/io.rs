@@ -8,7 +8,6 @@ use axio::{Seek, SeekFrom};
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
     fs::{FileLike, get_file_like},
-    mm::PAGE_CACHE_MANAGER,
     task::with_uspace,
 };
 
@@ -163,12 +162,9 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     trace!("sys_ftruncate <= {} {}", fd, length);
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
-        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(file.inner().inode()?) {
-            cache.clear_from_pos(length as _)?;
-        }
-        file.inner().access(FileFlags::WRITE)?.set_len(length as _)
-    })
-    .map(|_| 0)
+        file.set_len(length as _)
+    })?;
+    Ok(0)
 }
 
 /// Allocate space in a file.
@@ -192,11 +188,9 @@ pub fn sys_fallocate(
         return Ok(0);
     }
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
-        file.inner()
-            .access(FileFlags::WRITE)?
-            .set_len(offset as u64 + len as u64)
-    })
-    .map(|_| 0)
+        file.set_len(offset as u64 + len as u64)
+    })?;
+    Ok(0)
 }
 
 /// Synchronize a file's in-core state with storage device.
@@ -206,10 +200,9 @@ pub fn sys_fallocate(
 pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
     trace!("sys_fsync <= {}", fd);
     with_file(fd, FileFlags::empty(), FileFlags::empty(), |file| {
-        PAGE_CACHE_MANAGER.sync_file(file.inner().inode()?)?;
-        file.inner().sync(false)
-    })
-    .map(|_| 0)
+        file.sync(false)
+    })?;
+    Ok(0)
 }
 
 /// Synchronize a file's in-core data with storage device.
@@ -219,9 +212,9 @@ pub fn sys_fsync(fd: c_int) -> LinuxResult<isize> {
 pub fn sys_fdatasync(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_fdatasync <= {}", fd);
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
-        file.inner().sync(true)
-    })
-    .map(|_| 0)
+        file.sync(true)
+    })?;
+    Ok(0)
 }
 
 /// Read from a file descriptor at a given offset.
@@ -423,7 +416,6 @@ pub fn sys_sendfile(
         };
 
         let dst = SendFile::Direct(get_file_like(out_fd)?.file.clone());
-
         do_send(src, dst, len).map(|n| n as _)
     })
 }

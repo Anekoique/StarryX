@@ -92,6 +92,7 @@ pub fn sys_open(
 pub fn sys_close(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_close <= {}", fd);
     close_file_like(fd)?;
+    PAGE_CACHE_MANAGER.clear_stale_cache();
     Ok(0)
 }
 

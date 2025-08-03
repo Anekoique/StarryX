@@ -54,11 +54,10 @@ impl File {
     /// Write a number of bytes starting from a given offset.
     pub fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
         let mut inner = self.inner();
-        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?) {
-            cache.write_at(buf, offset)
-        } else {
-            inner.write_at(buf, offset)
-        }
+        PAGE_CACHE_MANAGER
+            .get_cache(inner.inode()?)
+            .map(|cache| cache.write_at(buf, offset))
+            .unwrap_or_else(|| inner.write_at(buf, offset))
     }
 
     pub fn len(&self) -> LinuxResult<u64> {
@@ -69,20 +68,21 @@ impl File {
             .unwrap_or(inner.len()?))
     }
 
-    pub fn update_len(&self) -> LinuxResult<&Self> {
+    pub fn set_len(&self, len: u64) -> LinuxResult<()> {
         let inner = self.inner();
-        PAGE_CACHE_MANAGER
+        Ok(PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
-            .map(|cache| inner.set_len(cache.get_size()).map(|_| self))
-            .unwrap_or(Ok(self))
+            .map(|cache| cache.set_size(len))
+            .unwrap_or(inner.set_len(len)?))
     }
 
-    pub fn sync(&self) -> LinuxResult<()> {
+    pub fn sync(&self, data_only: bool) -> LinuxResult<()> {
         let inner = self.inner();
         PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
-            .map(|cache| cache.sync().map(|_| ()))
+            .map(|cache| cache.sync())
             .unwrap_or(Ok(()))
+            .and_then(|_| inner.sync(data_only))
     }
 
     pub fn is_empty(&self) -> LinuxResult<bool> {

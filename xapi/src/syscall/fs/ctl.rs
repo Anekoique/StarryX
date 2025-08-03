@@ -40,7 +40,7 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
     trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
     let f = get_file_like(fd)?;
 
-    if f.clone().into_any().is::<Stdin>() || f.clone().into_any().is::<Stdout>() {
+    if f.is::<Stdin>() || f.is::<Stdout>() {
         return Ok(0);
     }
 
@@ -54,7 +54,6 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
                 .downcast::<VirtDevice>()
         })
         .map_err(|_| LinuxError::ENOTTY)?;
-
     let ops = device.inner().as_any();
 
     with_uspace(|uspace| {
@@ -150,8 +149,8 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     with_fs(AT_FDCWD, path, |fs| {
         let entry = fs.resolve(path)?;
         fs.set_current_dir(entry)
-    })
-    .map(|_| 0)
+    })?;
+    Ok(0)
 }
 
 /// Change to the directory represented by the given file descriptor
@@ -159,11 +158,12 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
 /// # Arguments
 /// * `fd` - File descriptor
 pub fn sys_fchdir(fd: i32) -> LinuxResult<isize> {
-    debug!("sys_fchdir <= fd: {}", fd);
+    trace!("sys_fchdir <= fd: {}", fd);
     let dir = Directory::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?
         .inner()
         .clone();
-    FS_CONTEXT.lock().set_current_dir(dir).map(|_| 0)
+    FS_CONTEXT.lock().set_current_dir(dir)?;
+    Ok(0)
 }
 
 /// Create a directory.
@@ -189,7 +189,8 @@ pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxRe
         "sys_mkdirat <= dirfd: {}, path: {}, mode: {:?}",
         dirfd, path, mode
     );
-    with_fs(dirfd, path, |fs| fs.create_dir(path, mode)).map(|_| 0)
+    with_fs(dirfd, path, |fs| fs.create_dir(path, mode))?;
+    Ok(0)
 }
 
 // Directory buffer for getdents64 syscall
@@ -306,8 +307,8 @@ pub fn sys_linkat(
             return Err(LinuxError::EPERM);
         }
         new_dir.link(new_name, location)
-    })
-    .map(|_| 0)
+    })?;
+    Ok(0)
 }
 
 /// Create a hard link.
@@ -341,8 +342,8 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
         } else {
             fs.remove_file(path)
         }
-    })
-    .map(|_| 0)
+    })?;
+    Ok(0)
 }
 
 /// Remove a directory.
@@ -422,7 +423,8 @@ pub fn sys_symlinkat(
         "sys_symlinkat <= target: {}, new_dirfd: {}, linkpath: {}",
         target, new_dirfd, linkpath
     );
-    with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath)).map(|_| 0)
+    with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath))?;
+    Ok(0)
 }
 
 /// Read value of a symbolic link.
@@ -522,8 +524,8 @@ pub fn sys_fchownat(
             owner: Some((uid, gid)),
             ..Default::default()
         })
-    })
-    .map(|_| 0)
+    })?;
+    Ok(0)
 }
 
 /// Change file permissions.
@@ -563,8 +565,8 @@ pub fn sys_fchmodat(
             mode: Some(NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?),
             ..Default::default()
         })
-    })
-    .map(|_| 0)
+    })?;
+    Ok(0)
 }
 
 fn update_times(
@@ -581,8 +583,8 @@ fn update_times(
             mtime,
             ..Default::default()
         })
-    })
-    .map(|_| ())
+    })?;
+    Ok(())
 }
 
 /// Change file access and modification times.

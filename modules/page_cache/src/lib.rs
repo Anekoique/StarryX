@@ -283,6 +283,8 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     }
 
     pub fn clear_range(&self, start: u64, end: u64) -> LinuxResult {
+        self.sync_range(start, end)?;
+
         let start_index = page_index(start);
         let end_index = page_index(end);
 
@@ -297,6 +299,8 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
     }
 
     pub fn clear_from_pos(&self, start: u64) -> LinuxResult {
+        self.sync_range(start, self.get_size())?;
+
         let start_index = page_index(start);
         let end_index = page_index(self.get_size());
 

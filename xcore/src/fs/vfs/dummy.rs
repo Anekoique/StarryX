@@ -89,6 +89,11 @@ devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0
 tmpfs /tmp tmpfs rw,relatime 0 0
 "#;
 
+pub const DUMMY_MAPS: &str = r#"
+00400000-00401000 r-xp 00000000 08:01 1000000000000000 /bin/sh
+00401000-00402000 r--p 00000000 08:01 1000000000000000 /bin/sh
+"#;
+
 /// Default PID maximum value (32768 is common on Linux)
 pub const DEFAULT_PID_MAX: u32 = 32768;
 

@@ -1,49 +1,50 @@
 /musl/busybox mkdir -v /bin
 /musl/busybox --install -s /bin
-export PATH=/bin
+export path=/bin
 
 mkdir -v /lib
 mkdir -v /usr
-cp -v /glibc/lib/* /lib
+mkdir -v /etc/
+mkdir -v -p /var/tmp
+
+cp /glibc/lib/libc.so.6 /lib/libc.so.6
+ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
+ln -v -s /lib/libc.so.6 /lib/libc.so
+ln -v -s /lib/libm.so.6 /lib/libm.so
 if [[ $ARCH == loongarch64 ]]; then
   ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+  ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
 else
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH.so.1
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-$ARCH-sf.so.1
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+  ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
 fi
-
 ln -v -s /lib /lib64
 ln -v -s /lib /usr/lib
 ln -v -s /lib /usr/lib64
 
-export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+export ld_library_path=".:./lib:/musl/lib:/lib"
 
-mkdir -v -p /var/tmp
-
-mkdir -v /etc/
 echo "root:x:0:0:root:/root:/bin/bash" >/etc/passwd
 echo "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" >>/etc/passwd
-cat >/etc/protocols <<EOF
-ip      0       IP
-icmp    1       ICMP
-tcp     6       TCP
-udp     17      UDP
-EOF
+cat >/etc/protocols <<eof
+ip      0       ip
+icmp    1       icmp
+tcp     6       tcp
+udp     17      udp
+eof
 
 run_ltp() {
-  echo "#### OS COMP TEST GROUP START ltp-$1 ####"
+  echo "#### os comp test group start ltp-$1 ####"
 
-  export LTP_TIMEOUT_MUL=0.5
-  export LTP_DEV_FS_TYPE=tmpfs
-  export LTP_SINGLE_FS_TYPE=tmpfs
-
-  # copy_file_range01
-  # copy_file_range02
-  # copy_file_range03
-  # dirtypipe
-  #
+  export ltp_timeout_mul=0.5
+  export ltp_dev_fs_type=tmpfs
+  export ltp_single_fs_type=tmpfs
 
   all_testcases="
+    llseek01
+    llseek02
+    llseek03
   "
   passed_testcase="
     abort01
@@ -91,6 +92,7 @@ run_ltp() {
     close01
     close02
     confstr01
+    copy_file_range01
     crash01
     crash02
     creat01
@@ -98,6 +100,7 @@ run_ltp() {
     connect01
     data_space
     diotest1
+    dirtypipe
     dup01
     dup02
     dup03
@@ -294,6 +297,16 @@ run_ltp() {
     semctl05
     semctl07
     send01
+    sendfile02
+    sendfile02_64
+    sendfile04
+    sendfile04_64
+    sendfile05
+    sendfile05_64
+    sendfile06
+    sendfile06_64
+    sendfile08
+    sendfile08_64
     setreuid01
     setreuid03
     setreuid04
@@ -317,6 +330,9 @@ run_ltp() {
     signal05
     sigpending02
     sigprocmask01
+    splice03
+    splice07
+    splice08
     times01
     tkill01
     uname01
@@ -332,16 +348,16 @@ run_ltp() {
 
   cd ltp/testcases/bin
   for f in $all_testcases; do
-    echo "RUN LTP CASE $f"
+    echo "run ltp case $f"
     ./$f
-    echo "FAIL LTP CASE $f : 0"
+    echo "fail ltp case $f : 0"
   done
   cd ../../..
 
-  echo "#### OS COMP TEST GROUP END ltp-$1 ####"
+  echo "#### os comp test group end ltp-$1 ####"
 }
 
-export HOME=/musl
+export home=/musl
 
 cd /musl
 # cp -r ./usr/share /usr
@@ -351,27 +367,34 @@ cd /musl
 # sh
 # ./interrupts_testcode.sh
 # ./copy-file-range_testcode.sh
-./splice_testcode.sh
-# ./libctest_testcode.sh
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./busybox_testcode.sh
-# ./iozone_testcode.sh
-# ./lmbench_testcode.sh
-# ./libcbench_testcode.sh
-# ./iperf_testcode.sh
-# ./netperf_testcode.sh
-# ./cyclictest_testcode.sh
+# ./splice_testcode.sh
+#./lmbench_testcode.sh
+
+cd /glibc
+#./lmbench_testcode.sh
+
+cd /musl
+#./libctest_testcode.sh
+#./basic_testcode.sh
+#./lua_testcode.sh
+#./busybox_testcode.sh
+#./iozone_testcode.sh
+#./libcbench_testcode.sh
+#./iperf_testcode.sh
+#./netperf_testcode.sh
 
 cd /glibc
 # ./copy-file-range_testcode.sh
 # run_ltp musl
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./busybox_testcode.sh
-# ./iozone_testcode.sh
-# ./lmbench_testcode.sh
-# ./libcbench_testcode.sh
-# ./iperf_testcode.sh
-# ./netperf_testcode.sh
-# ./cyclictest_testcode.sh
+#./basic_testcode.sh
+#./lua_testcode.sh
+#./busybox_testcode.sh
+#./iozone_testcode.sh
+#./libcbench_testcode.sh
+#./iperf_testcode.sh
+#./netperf_testcode.sh
+
+cd /musl
+#./cyclictest_testcode.sh
+cd /glibc
+#./cyclictest_testcode.sh

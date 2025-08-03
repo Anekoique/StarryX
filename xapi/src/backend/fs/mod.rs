@@ -1,13 +1,7 @@
 mod api;
-mod event;
-mod file;
 mod iomux;
-mod pipe;
-mod stdio;
+mod fd;
 
 pub use self::api::*;
-pub use self::event::*;
-pub use self::file::*;
+pub use self::fd::*;
 pub use self::iomux::*;
-pub use self::pipe::*;
-pub use self::stdio::*;

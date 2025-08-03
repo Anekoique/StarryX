@@ -389,9 +389,7 @@ impl TaskContext {
             // save the current task's FP state
             if current_fs == FS::Dirty {
                 // we need to save the current task's FP state
-                unsafe {
-                    save_fp_registers(&mut self.fp_status.fp);
-                }
+                save_fp_registers(&mut self.fp_status.fp);
                 // after saving, we set the FP state to clean
                 self.fp_status.fs = FS::Clean;
             }

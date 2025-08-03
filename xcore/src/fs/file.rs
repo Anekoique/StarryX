@@ -70,8 +70,8 @@ impl XFile {
         }
     }
 
-    pub fn check_type<T: FileLike + 'static>(&self) -> bool {
-        self.file.clone().into_any().downcast::<T>().is_ok()
+    pub fn is<T: FileLike + 'static>(&self) -> bool {
+        self.file.clone().into_any().is::<T>()
     }
 
     pub fn into_type<T: FileLike + 'static>(self) -> LinuxResult<Arc<T>> {

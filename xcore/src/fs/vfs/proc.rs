@@ -89,6 +89,10 @@ fn create_tid_root(fs: Arc<VirtFs>, thread: Arc<Thread>) -> DirMaker {
     root.add(
         "exe",
         VirtFile::new_symlink(fs.clone(), || xproc.exe_path.read().to_string()),
+    )
+    .add(
+        "maps",
+        VirtFile::new(fs.clone(), || DUMMY_MAPS.to_string()),
     );
 
     root.build()
