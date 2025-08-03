@@ -459,17 +459,12 @@ impl<M: RawMutex> axio::Seek for FsFile<M> {
                 SeekFrom::Start(pos) => pos,
                 SeekFrom::End(off) => {
                     let size = self.access(FileFlags::empty())?.len()?;
-                    size.checked_add_signed(off)
-                        .ok_or(VfsError::EINVAL)?
-                        .clamp(0, size)
+                    size.checked_add_signed(off).ok_or(VfsError::EINVAL)?
                 }
-                SeekFrom::Current(off) => {
-                    let size = self.access(FileFlags::empty())?.len()?;
-                    self.position
-                        .checked_add_signed(off)
-                        .ok_or(VfsError::EINVAL)?
-                        .clamp(0, size)
-                }
+                SeekFrom::Current(off) => self
+                    .position
+                    .checked_add_signed(off)
+                    .ok_or(VfsError::EINVAL)?,
             })
         })()
         .map_err(vfs_error_to_axio)?;

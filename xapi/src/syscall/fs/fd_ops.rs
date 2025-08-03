@@ -2,6 +2,7 @@ use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FileFlags, OpenResult};
+use axfs_ng_vfs::NodePermission;
 use axsync::{Mutex, RawMutex};
 
 use axuspace::{UserConstPtr, UserSpaceAccess};
@@ -14,7 +15,7 @@ use xcore::{
 use crate::{
     ctypes::{
         __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
-        F_SETLK, FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, fs::flags_to_options,
+        F_SETLK, FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, O_RDWR, O_WRONLY, fs::flags_to_options,
     },
     fs::{Directory, File, with_fs},
     sys_getegid, sys_geteuid,
@@ -165,10 +166,10 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             Ok(new_fd)
         }
         F_SETFL => {
-            if fd == 0 || fd == 1 || fd == 2 {
-                return Ok(0);
-            }
-            get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0)?;
+            // if fd == 0 || fd == 1 || fd == 2 {
+            //     return Ok(0);
+            // }
+            get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0);
             Ok(0)
         }
         F_GETFD => {
@@ -181,9 +182,25 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             Ok(0)
         }
         F_GETFL => {
-            warn!("unsupported fcntl parameters: F_GETFL, returning O_NONBLOCK");
-            let nonblock = get_file_like(fd)?.is_nonblocking();
-            Ok(if nonblock { O_NONBLOCK as _ } else { 0 })
+            let f = get_file_like(fd)?;
+            let perm = NodePermission::from_bits_truncate(f.stat()?.mode as _);
+
+            let mut ret = 0;
+
+            if f.is_nonblocking() {
+                ret |= O_NONBLOCK;
+            }
+
+            ret |= match (
+                perm.contains(NodePermission::OWNER_READ),
+                perm.contains(NodePermission::OWNER_WRITE),
+            ) {
+                (true, true) => O_RDWR,
+                (false, true) => O_WRONLY,
+                _ => 0,
+            };
+
+            Ok(ret as _)
         }
         F_SETLK => Err(LinuxError::EINVAL),
         _ => {

@@ -45,9 +45,7 @@ impl FileLike for EpollInstance {
             writable: false,
         })
     }
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
-    }
+    fn set_nonblocking(&self, _nonblocking: bool) {}
 }
 
 #[derive(Debug, Clone, Copy)]

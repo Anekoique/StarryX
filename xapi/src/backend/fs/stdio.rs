@@ -135,9 +135,7 @@ impl FileLike for Stdin {
         })
     }
 
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
-    }
+    fn set_nonblocking(&self, _nonblocking: bool) {}
 }
 
 impl FileLike for Stdout {
@@ -167,9 +165,7 @@ impl FileLike for Stdout {
         })
     }
 
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
-    }
+    fn set_nonblocking(&self, _nonblocking: bool) {}
 }
 
 #[ctor_bare::register_ctor]

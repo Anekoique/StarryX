@@ -126,10 +126,9 @@ impl FileLike for EventFd {
         })
     }
 
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
+    fn set_nonblocking(&self, _nonblocking: bool) {
         // EventFd nonblocking behavior is set at creation time
         // This is a no-op for compatibility
-        Ok(())
     }
 
     fn is_nonblocking(&self) -> bool {

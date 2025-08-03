@@ -3,7 +3,7 @@ use axerrno::{LinuxError, LinuxResult};
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
     task::{XProcess, XThread, with_thread, with_uspace},
-    time::time_stat_output,
+    time::{clear_timer, set_timer, time_stat_output},
 };
 
 use crate::{
@@ -151,14 +151,10 @@ pub fn sys_setitimer(
                     let remained_ns = new_value.it_value.to_nanos();
 
                     if remained_ns == 0 {
-                        XThread::from_thread(thread).time.write().clear_timer();
+                        clear_timer();
                     } else {
                         let timer_type = which as usize;
-                        XThread::from_thread(thread).time.write().set_timer(
-                            interval_ns as usize,
-                            remained_ns as usize,
-                            timer_type,
-                        );
+                        set_timer(interval_ns as usize, remained_ns as usize, timer_type);
                     }
                     Ok(0)
                 }

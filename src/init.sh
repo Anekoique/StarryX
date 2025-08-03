@@ -41,16 +41,9 @@ run_ltp() {
   # copy_file_range02
   # copy_file_range03
   # dirtypipe
+  #
 
   all_testcases="
-    futex_cmp_requeue02
-    futex_wait01
-    futex_wait02
-    futex_wait04
-    futex_wake01
-    futex_wake02
-    futex_wake03
-    futex_wake04
   "
   passed_testcase="
     abort01
@@ -194,6 +187,37 @@ run_ltp() {
     fsync01
     ftruncate01
     ftruncate01_64
+    futex_cmp_requeue02
+    futex_wait01
+    futex_wait04
+    futex_wake01
+    getdents01
+    getdents02
+    getdomainname01
+    getcwd01
+    getcwd03
+    geteuid01
+    geteuid01_16
+    geteuid02
+    geteuid02_16
+    getgid03
+    getgid03_16
+    getgroups01
+    getgroups01_16
+    gethostname01
+    getitimer01
+    getitimer02
+    getpagesize01
+    getpeername01
+    getpgid01
+    getpgid02
+    getpgrp01
+    getpid01
+    getpid02
+    getppid01
+    getppid02
+    getpriority01
+    getpriority02
     getrandom01
     getrandom02
     getrandom03
@@ -203,17 +227,31 @@ run_ltp() {
     getrusage01
     getrusage02
     getsid01
+    getsid02
     getsockname01
     getsockopt01
     gettid01
     gettid02
     getuid01
     getuid03
+    ioctl04
+    ioctl05
+    ioctl06
     kill06
     kill07
     kill08
     kill09
     kill11
+    lchown01
+    lchown01_16
+    lchown02
+    lchown02_16
+    link02
+    link04
+    link05
+    link08
+    linkat02
+    listen01
     mmap001
     mmap02
     mmap03
@@ -225,6 +263,15 @@ run_ltp() {
     mmap16
     mmap17
     mmap19
+    msgctl01
+    msgctl04
+    msgget01
+    msgget02
+    msgrcv01
+    msgrcv02
+    msgrcv07
+    msgrcv08
+    msgsnd02
     recv01
     recvfrom01
     rt_sigaction01
@@ -294,10 +341,17 @@ run_ltp() {
   echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
+export HOME=/musl
+
 cd /musl
-# sh
+# cp -r ./usr/share /usr
+# cp ./usr/bin/git /bin
+# ./git_testcode.sh
 # run_ltp musl
-# /musl/runtest.exe -w entry-static.exe syscall_sign_extend
+# sh
+# ./interrupts_testcode.sh
+# ./copy-file-range_testcode.sh
+./splice_testcode.sh
 # ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
@@ -310,6 +364,7 @@ cd /musl
 # ./cyclictest_testcode.sh
 
 cd /glibc
+# ./copy-file-range_testcode.sh
 # run_ltp musl
 # ./basic_testcode.sh
 # ./lua_testcode.sh

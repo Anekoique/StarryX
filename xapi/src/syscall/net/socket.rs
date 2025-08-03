@@ -61,7 +61,7 @@ pub fn sys_socket(domain: u32, ty: u32, proto: u32) -> LinuxResult<isize> {
         _ => return Err(LinuxError::ESOCKTNOSUPPORT),
     };
 
-    socket.set_nonblocking(sock_flags & SOCK_NONBLOCK != 0)?;
+    socket.set_nonblocking(sock_flags & SOCK_NONBLOCK != 0);
     socket
         .add_to_fd_table(
             FileFlags::READ | FileFlags::WRITE,
@@ -306,8 +306,8 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
     let socket2 = Socket::Unix(Mutex::new(unix_socket2));
 
     if sock_flags & SOCK_NONBLOCK != 0 {
-        socket1.set_nonblocking(true)?;
-        socket2.set_nonblocking(true)?;
+        socket1.set_nonblocking(true);
+        socket2.set_nonblocking(true);
     }
 
     let fd1 = socket1

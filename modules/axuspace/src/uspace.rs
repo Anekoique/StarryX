@@ -142,7 +142,8 @@ pub fn check_region<A: UserSpaceAccess>(
         return Err(LinuxError::EFAULT);
     }
 
-    let range = VirtAddrRange::from_start_size(start, layout.size());
+    let range =
+        VirtAddrRange::try_from_start_size(start, layout.size()).ok_or(LinuxError::EFAULT)?;
     uspace.check_region_access(range, access_flags)?;
     uspace.populate_region(range, access_flags)?;
     Ok(())

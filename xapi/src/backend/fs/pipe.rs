@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 use core::any::Any;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
@@ -78,6 +79,7 @@ impl PipeRingBuffer {
 pub struct Pipe {
     readable: bool,
     buffer: Arc<Mutex<PipeRingBuffer>>,
+    nonblocking: AtomicBool,
 }
 
 impl Pipe {
@@ -86,10 +88,12 @@ impl Pipe {
         let read_end = Pipe {
             readable: true,
             buffer: buffer.clone(),
+            nonblocking: AtomicBool::new(false),
         };
         let write_end = Pipe {
             readable: false,
             buffer,
+            nonblocking: AtomicBool::new(false),
         };
         (read_end, write_end)
     }
@@ -100,6 +104,10 @@ impl Pipe {
 
     pub const fn writable(&self) -> bool {
         !self.readable
+    }
+
+    pub fn available_read(&self) -> usize {
+        self.buffer.lock().available_read()
     }
 
     pub fn closed(&self) -> bool {
@@ -122,6 +130,9 @@ impl FileLike for Pipe {
             if read_size == 0 {
                 if self.closed() {
                     return Ok(0);
+                }
+                if self.nonblocking.load(Ordering::Relaxed) {
+                    return Err(LinuxError::EAGAIN);
                 }
                 drop(ring_buffer);
                 // Data not ready, wait for write end
@@ -155,6 +166,9 @@ impl FileLike for Pipe {
             if loop_write == 0 {
                 if self.closed() {
                     return Ok(write_size);
+                }
+                if self.nonblocking.load(Ordering::Relaxed) {
+                    return Err(LinuxError::EAGAIN);
                 }
                 drop(ring_buffer);
                 // Buffer is full, wait for read end to consume
@@ -203,7 +217,7 @@ impl FileLike for Pipe {
         }
     }
 
-    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
-        Ok(())
+    fn set_nonblocking(&self, nonblocking: bool) {
+        self.nonblocking.store(nonblocking, Ordering::Relaxed);
     }
 }

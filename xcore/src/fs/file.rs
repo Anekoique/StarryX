@@ -18,7 +18,7 @@ pub trait FileLike: Send + Sync {
     fn stat(&self) -> LinuxResult<Kstat>;
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
     fn poll(&self) -> LinuxResult<PollState>;
-    fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
+    fn set_nonblocking(&self, nonblocking: bool);
     fn is_nonblocking(&self) -> bool {
         false
     }
@@ -73,6 +73,14 @@ impl XFile {
     pub fn check_type<T: FileLike + 'static>(&self) -> bool {
         self.file.clone().into_any().downcast::<T>().is_ok()
     }
+
+    pub fn into_type<T: FileLike + 'static>(self) -> LinuxResult<Arc<T>> {
+        self.file
+            .clone()
+            .into_any()
+            .downcast::<T>()
+            .map_err(|_| LinuxError::EINVAL)
+    }
 }
 
 #[inherit_methods(from = "self.file")]
@@ -88,7 +96,7 @@ impl XFile {
     }
     pub fn stat(&self) -> LinuxResult<Kstat>;
     pub fn poll(&self) -> LinuxResult<PollState>;
-    pub fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
+    pub fn set_nonblocking(&self, nonblocking: bool);
     pub fn is_nonblocking(&self) -> bool;
     pub fn get_location(&self) -> Option<Location<RawMutex>>;
 }

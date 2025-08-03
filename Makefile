@@ -5,6 +5,7 @@ AX_ROOT ?= $(PWD)/arceos
 AX_TESTCASE ?= oscomp
 ARCH ?= x86_64
 LOG ?= off
+N ?= 1
 FEATURES ?= fp_simd,lwext4_rs
 export AX_TESTCASES_LIST=$(shell cat ./apps/$(AX_TESTCASE)/testcase_list | tr '\n' ',')
 
@@ -110,6 +111,10 @@ clippy: defconfig
 	@AX_CONFIG_PATH=$(PWD)/.axconfig.toml cargo clippy \
 		--target $(TARGET) --all-features -- -D warnings -A clippy::new_without_default
 
+switch:
+	@echo "Switching to target $$N..."; \
+	cp sdcard-rv$$N.img.bak sdcard-rv.img;
+
 defconfig build run justrun debug disasm:
 	@$(MAKE) -C $(AX_ROOT) A=$(PWD) $@
 
@@ -162,6 +167,7 @@ help:
 	@echo "  run              - Build and run the kernel"
 	@echo "  debug            - Build and debug the kernel"
 	@echo "  clippy           - Run code linting"
+	@echo "  switch <from> <to> - Switch between different disk images"
 	@echo "  clean            - Clean all build artifacts"
 	@echo ""
 	@echo "User application targets:"
@@ -185,5 +191,5 @@ help:
 .PHONY: all oscomp_build oscomp_binary
 .PHONY: oscomp_run rv la oscomp_debug
 .PHONY: user_apps run_apps
-.PHONY: clippy defconfig build run justrun debug disasm
+.PHONY: clippy switch defconfig build run justrun debug disasm
 .PHONY: setup_disk_image clean help
