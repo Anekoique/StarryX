@@ -9,7 +9,7 @@ core::arch::global_asm!(
     start_page_paddr = const START_PAGE_PADDR.as_usize(),
 );
 
-unsafe fn setup_startup_page(stack_top: PhysAddr) {
+fn setup_startup_page(stack_top: PhysAddr) {
     unsafe extern "C" {
         fn ap_entry32();
         fn ap_start();
@@ -18,19 +18,21 @@ unsafe fn setup_startup_page(stack_top: PhysAddr) {
     const U64_PER_PAGE: usize = PAGE_SIZE_4K / 8;
 
     let start_page_ptr = phys_to_virt(START_PAGE_PADDR).as_mut_ptr() as *mut u64;
-    let start_page = core::slice::from_raw_parts_mut(start_page_ptr, U64_PER_PAGE);
-    core::ptr::copy_nonoverlapping(
-        ap_start as *const u64,
-        start_page_ptr,
-        (ap_end as usize - ap_start as usize) / 8,
-    );
-    start_page[U64_PER_PAGE - 2] = stack_top.as_usize() as u64; // stack_top
-    start_page[U64_PER_PAGE - 1] = ap_entry32 as usize as _; // entry
+    unsafe {
+        let start_page = core::slice::from_raw_parts_mut(start_page_ptr, U64_PER_PAGE);
+        core::ptr::copy_nonoverlapping(
+            ap_start as *const u64,
+            start_page_ptr,
+            (ap_end as usize - ap_start as usize) / 8,
+        );
+        start_page[U64_PER_PAGE - 2] = stack_top.as_usize() as u64; // stack_top
+        start_page[U64_PER_PAGE - 1] = ap_entry32 as usize as _; // entry
+    }
 }
 
 /// Starts the given secondary CPU with its boot stack.
 pub fn start_secondary_cpu(apic_id: usize, stack_top: PhysAddr) {
-    unsafe { setup_startup_page(stack_top) };
+    setup_startup_page(stack_top);
 
     let apic_id = super::apic::raw_apic_id(apic_id as u8);
     let lapic = super::apic::local_apic();

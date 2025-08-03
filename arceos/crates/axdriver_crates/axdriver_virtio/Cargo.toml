@@ -1,0 +1,24 @@
+[package]
+name = "axdriver_virtio"
+edition = "2021"
+description = "Wrappers of some devices in the `virtio-drivers` crate, that implement traits in the `axdriver_base` series crates"
+documentation = "https://arceos-org.github.io/axdriver_crates/axdriver_virtio"
+keywords = ["arceos", "driver", "vritio"]
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories.workspace = true
+
+[features]
+block = ["axdriver_block"]
+net = ["axdriver_net"]
+gpu = ["axdriver_display"]
+
+[dependencies]
+axdriver_base = { workspace = true }
+axdriver_block = { workspace = true, optional = true }
+axdriver_net = { workspace = true, optional = true }
+axdriver_display = { workspace = true, optional = true}
+virtio-drivers = "0.7.4"
