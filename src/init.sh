@@ -360,14 +360,14 @@ run_ltp() {
 export home=/musl
 
 cd /musl
-# cp -r ./usr/share /usr
-# cp ./usr/bin/git /bin
-# ./git_testcode.sh
+#cp -r ./usr/share /usr
+#cp ./usr/bin/git /bin
+#./git_testcode.sh
 # run_ltp musl
 # sh
-# ./interrupts_testcode.sh
-# ./copy-file-range_testcode.sh
-# ./splice_testcode.sh
+./interrupts_testcode.sh
+./copy-file-range_testcode.sh
+./splice_testcode.sh
 #./lmbench_testcode.sh
 
 cd /glibc

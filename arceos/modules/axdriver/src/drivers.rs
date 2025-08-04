@@ -217,3 +217,6 @@ cfg_if::cfg_if! {
         }
     }
 }
+
+#[cfg(feature = "ramdisk")]
+init_ramdisk!("./sdcard-rv.img");

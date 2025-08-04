@@ -88,6 +88,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 static INITED_CPUS: AtomicUsize = AtomicUsize::new(0);
 
 fn is_init_ok() -> bool {
+    if axconfig::PLATFORM == "riscv64-visionfive2" {
+        return true;
+    }
     INITED_CPUS.load(Ordering::Acquire) == axconfig::SMP
 }
 
@@ -176,7 +179,6 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
 
         #[cfg(feature = "net")]
         axnet::init_network(all_devices.net);
-
         #[cfg(feature = "display")]
         axdisplay::init_display(all_devices.display);
     }

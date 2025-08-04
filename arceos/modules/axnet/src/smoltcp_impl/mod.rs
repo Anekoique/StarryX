@@ -334,7 +334,7 @@ pub fn add_membership(multicast_addr: IpAddress) -> Result<(), MulticastError> {
     LOOPBACK.lock().join_multicast_group(multicast_addr)
 }
 
-pub(crate) fn init(_net_dev: AxNetDevice) {
+pub(crate) fn init(net_dev: AxNetDevice) {
     let mut device = LoopbackDev::new(Medium::Ip);
     let config = Config::new(smoltcp::wire::HardwareAddress::Ip);
 
@@ -351,8 +351,8 @@ pub(crate) fn init(_net_dev: AxNetDevice) {
     LOOPBACK.init_once(Mutex::new(iface));
     LOOPBACK_DEV.init_once(Mutex::new(device));
 
-    let ether_addr = EthernetAddress(_net_dev.mac_address().0);
-    let eth0 = InterfaceWrapper::new("eth0", _net_dev, ether_addr);
+    let ether_addr = EthernetAddress(net_dev.mac_address().0);
+    let eth0 = InterfaceWrapper::new("eth0", net_dev, ether_addr);
 
     let ip = IP.parse().expect("invalid IP address");
     let gateway = GATEWAY.parse().expect("invalid gateway IP address");

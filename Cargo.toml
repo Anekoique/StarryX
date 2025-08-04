@@ -74,7 +74,6 @@ repository.workspace = true
 
 [features]
 lwext4_rs = ["axfeat/lwext4_rs"]
-ramdisk = ["axdriver/ramdisk"]
 
 [dependencies]
 axfeat.workspace = true
