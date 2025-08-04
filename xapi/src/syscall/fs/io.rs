@@ -1,5 +1,5 @@
 use alloc::{sync::Arc, vec};
-use core::ffi::c_int;
+use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
@@ -7,13 +7,15 @@ use axio::{Seek, SeekFrom};
 
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
-    fs::{FileLike, get_file_like},
+    fs::{get_file_like, FileLike},
+    mm::PAGE_CACHE_MANAGER,
+    resources::AX_FSIZE_LIMIT,
     task::with_uspace,
 };
 
 use crate::{
-    ctypes::{__kernel_off_t, iovec},
-    fs::{File, Pipe, with_file},
+    ctypes::{__kernel_off_t, AT_FDCWD, iovec},
+    fs::{File, Pipe, with_file, with_fs},
 };
 
 /// Read data from the file indicated by `fd`.
@@ -154,6 +156,23 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
     Ok(off as _)
 }
 
+pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> LinuxResult<isize> {
+    if length < 0 {
+        return Err(LinuxError::EINVAL);
+    } else if length > AX_FSIZE_LIMIT as _ {
+        return Err(LinuxError::EFBIG);
+    }
+    let path = with_uspace(|uspace| uspace.read_str(path))?;
+    trace!("sys_truncate <= {} {}", path, length);
+    with_fs(AT_FDCWD, path, |fs| {
+        PAGE_CACHE_MANAGER
+            .get_cache(fs.write_file(path)?.access(FileFlags::WRITE)?.inode())
+            .map(|inode| inode.clear_from_pos(length as _))
+            .unwrap_or(Ok(()))
+    })?;
+    Ok(0)
+}
+
 /// Truncate a file to a specified length.
 ///
 /// # Arguments
@@ -161,6 +180,9 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
 /// * `length` - New length for the file
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
     trace!("sys_ftruncate <= {} {}", fd, length);
+    if length < 0 {
+        return Err(LinuxError::EINVAL);
+    }
     with_file(fd, FileFlags::WRITE, FileFlags::empty(), |file| {
         file.set_len(length as _)
     })?;
@@ -232,7 +254,10 @@ pub fn sys_pread64(
 ) -> LinuxResult<isize> {
     let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
     trace!("sys_pread64 <= {}", fd);
-    File::from_fd(fd, FileFlags::READ, FileFlags::PATH)?
+    if offset < 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    File::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?
         .read_at(buf, offset as _)
         .map(|read| read as isize)
 }

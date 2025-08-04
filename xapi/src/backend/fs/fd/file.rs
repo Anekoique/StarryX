@@ -70,10 +70,10 @@ impl File {
 
     pub fn set_len(&self, len: u64) -> LinuxResult<()> {
         let inner = self.inner();
-        Ok(PAGE_CACHE_MANAGER
+        PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
-            .map(|cache| cache.set_size(len))
-            .unwrap_or(inner.set_len(len)?))
+            .map(|cache| cache.clear_from_pos(len as _))
+            .unwrap_or(inner.set_len(len))
     }
 
     pub fn sync(&self, data_only: bool) -> LinuxResult<()> {
@@ -135,12 +135,18 @@ impl FileLike for File {
     fn set_nonblocking(&self, _nonblocking: bool) {}
 
     fn from_fd(fd: c_int, required: FileFlags, forbidden: FileFlags) -> LinuxResult<Arc<Self>> {
-        get_file_like(fd)?
+        let file = get_file_like(fd)?
             .validate(required, forbidden)?
             .clone()
-            .into_any()
-            .downcast::<Self>()
-            .map_err(|_| LinuxError::EBADF)
+            .into_any();
+
+        file.downcast::<Self>().map_err(|any| {
+            if any.is::<Directory>() {
+                LinuxError::EISDIR
+            } else {
+                LinuxError::ESPIPE
+            }
+        })
     }
 
     fn get_location(&self) -> Option<Location<RawMutex>> {

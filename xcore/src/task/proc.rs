@@ -23,6 +23,7 @@ use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
 use axuspace::{UserPtr, UserSpaceAccess, nullable};
 use axvma::MmapRegion;
 use inherit_methods_macro::inherit_methods;
+use linux_raw_sys::general::SCHED_RR;
 use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
@@ -43,7 +44,7 @@ pub fn new_user_task(
         move || {
             with_current(|curr| {
                 if let Some(tid_addr) = tid_addr {
-                    nullable!(curr.task_ext().xprocess().uspace().write(
+                    nullable!(curr.task_ext().xprocess_ref().uspace().write(
                         UserPtr::<u32>::from(tid_addr as *mut _),
                         curr.id().as_u64() as Pid
                     ))
@@ -75,10 +76,6 @@ impl XTaskExt {
         Self(thread)
     }
 
-    pub fn from_task(task: &TaskInner) -> &'static XTaskExt {
-        unsafe { &*(task.task_ext() as *const Self) }
-    }
-
     pub fn thread_ref(&self) -> &Arc<Thread> {
         &self.0
     }
@@ -99,16 +96,8 @@ impl XTaskExt {
         self.0.data().unwrap()
     }
 
-    pub fn xthread(&self) -> &'static XThread {
-        unsafe { &*(self.0.data::<XThread>().unwrap() as *const XThread) }
-    }
-
     pub fn xprocess_ref(&self) -> &XProcess {
         self.0.process().data().unwrap()
-    }
-
-    pub fn xprocess(&self) -> &'static XProcess {
-        unsafe { &*(self.0.process().data::<XProcess>().unwrap() as *const XProcess) }
     }
 }
 
@@ -119,6 +108,8 @@ pub struct XThread {
     pub signal: ThreadSignal,
     pub oom_score_adj: AtomicI32,
     pub futex_bitset: AtomicU32,
+    pub priority: AtomicI32,
+    pub policy: AtomicU32,
 }
 
 impl XThread {
@@ -130,6 +121,8 @@ impl XThread {
             signal: ThreadSignalManager::new(proc.signal.clone()),
             oom_score_adj: AtomicI32::new(200),
             futex_bitset: AtomicU32::new(0),
+            priority: AtomicI32::new(0),
+            policy: AtomicU32::new(SCHED_RR),
         }
     }
 
@@ -144,6 +137,22 @@ impl XThread {
     pub fn set_clear_child_tid(&self, clear_child_tid: usize) {
         self.clear_child_tid
             .store(clear_child_tid, Ordering::Relaxed);
+    }
+
+    pub fn get_priority(&self) -> i32 {
+        self.priority.load(Ordering::Relaxed)
+    }
+
+    pub fn set_priority(&self, priority: i32) {
+        self.priority.store(priority, Ordering::Relaxed);
+    }
+
+    pub fn get_policy(&self) -> u32 {
+        self.policy.load(Ordering::Relaxed)
+    }
+
+    pub fn set_policy(&self, policy: u32) {
+        self.policy.store(policy, Ordering::Relaxed);
     }
 
     pub fn get_oom_score_adj(&self) -> i32 {
@@ -197,16 +206,8 @@ impl XProcess {
         process.data().unwrap()
     }
 
-    pub fn from_process_static(process: &Arc<Process>) -> &'static XProcess {
-        unsafe { &*(process.data::<XProcess>().unwrap() as *const XProcess) }
-    }
-
     pub fn from_thread(thread: &Arc<Thread>) -> &XProcess {
         thread.process().data().unwrap()
-    }
-
-    pub fn from_thread_static(thread: &Arc<Thread>) -> &'static XProcess {
-        unsafe { &*(thread.process().data::<XProcess>().unwrap() as *const XProcess) }
     }
 
     pub fn is_clone_child(&self) -> bool {
@@ -268,7 +269,7 @@ impl AxNamespaceIf for AxNamespaceImpl {
                 dst as usize
             })) as *mut u8;
         }
-        current.task_ext().xprocess().ns.base()
+        current.task_ext().xprocess_ref().ns.base()
     }
 }
 

@@ -71,3 +71,9 @@ pub const SEMVMX: usize = 32767;
 pub const EFD_CLOEXEC: u32 = O_CLOEXEC;
 pub const EFD_NONBLOCK: u32 = O_NONBLOCK;
 pub const EFD_SEMAPHORE: u32 = 0o1;
+
+// timerfd
+pub const TFD_CLOEXEC: u32 = O_CLOEXEC;
+pub const TFD_NONBLOCK: u32 = O_NONBLOCK;
+pub const TFD_TIMER_ABSTIME: u32 = 1;
+pub const TFD_TIMER_CANCEL_ON_SET: u32 = 2;

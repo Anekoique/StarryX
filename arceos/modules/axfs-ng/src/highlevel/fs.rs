@@ -346,8 +346,14 @@ impl<M: RawMutex> FsContext<M> {
     }
 
     /// Convenience method to open a file for reading
-    pub fn open_file(&self, path: impl AsRef<Path>) -> VfsResult<FsFile<M>> {
+    pub fn read_file(&self, path: impl AsRef<Path>) -> VfsResult<FsFile<M>> {
         let options = OpenOptions::new().read(true).clone();
+        self.open(&options, path)?.into_file()
+    }
+
+    /// Convenience method to open a file for writing
+    pub fn write_file(&self, path: impl AsRef<Path>) -> VfsResult<FsFile<M>> {
+        let options = OpenOptions::new().write(true).truncate(true).clone();
         self.open(&options, path)?.into_file()
     }
 

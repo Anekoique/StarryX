@@ -320,13 +320,13 @@ pub fn sys_rt_sigsuspend(
     check_sigset_size(sigsetsize)?;
 
     with_xtask(|xtask| {
-        let xthread = xtask.xthread();
-        let xprocess = xtask.xprocess();
+        let xprocess = xtask.xprocess_ref();
         let uspace = xprocess.uspace();
         let mut set = uspace.read(set)?;
         set.remove(Signo::SIGKILL);
         set.remove(Signo::SIGSTOP);
-        let old_blocked = xthread
+        let old_blocked = xtask
+            .xthread_ref()
             .signal
             .with_blocked_mut(|blocked| mem::replace(blocked, set));
 

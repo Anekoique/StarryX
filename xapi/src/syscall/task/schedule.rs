@@ -3,12 +3,12 @@ use axtask::{AxCpuMask, set_affinity, with_task};
 
 use axprocess::Pid;
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xcore::task::{get_process, get_process_group, with_uspace};
+use xcore::task::{XThread, get_process, get_process_group, get_thread, with_uspace};
 
 use crate::{
     ctypes::{
-        CLOCK_MONOTONIC, CLOCK_REALTIME, PRIO_PGRP, PRIO_PROCESS, PRIO_USER, SCHED_FIFO,
-        TIMER_ABSTIME, timespec,
+        CLOCK_MONOTONIC, CLOCK_REALTIME, PRIO_PGRP, PRIO_PROCESS, PRIO_USER, TIMER_ABSTIME,
+        timespec,
     },
     have_signals,
     utils::time::{TimeValue, TimeValueLike},
@@ -104,8 +104,13 @@ pub fn sys_sched_getaffinity(
 /// # Arguments
 /// * `_pid` - Thread ID (currently unused)
 /// * `_param` - Buffer to store scheduling parameters (currently unused)
-pub fn sys_sched_getparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> {
-    warn!("sys_sched_getparam not implemented");
+pub fn sys_sched_getparam(pid: i32, param: UserPtr<usize>) -> LinuxResult<isize> {
+    if pid < 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    let thread = get_thread(pid as _)?;
+    with_uspace(|uspace| uspace.write(param, XThread::from_thread(&thread).get_priority() as _))
+        .map_err(|_| LinuxError::EINVAL)?;
     Ok(0)
 }
 
@@ -114,8 +119,17 @@ pub fn sys_sched_getparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> 
 /// # Arguments
 /// * `_pid` - Thread ID (currently unused)
 /// * `_param` - New scheduling parameters (currently unused)
-pub fn sys_sched_setparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> {
-    warn!("sys_sched_setparam not implemented");
+pub fn sys_sched_setparam(pid: i32, param: UserPtr<usize>) -> LinuxResult<isize> {
+    if pid < 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    let thread = get_thread(pid as _)?;
+    with_uspace(|uspace| -> LinuxResult<()> {
+        let priority = uspace.read(param)?;
+        XThread::from_thread(&thread).set_priority(priority as _);
+        Ok(())
+    })
+    .map_err(|_| LinuxError::EINVAL)?;
     Ok(0)
 }
 
@@ -125,11 +139,21 @@ pub fn sys_sched_setparam(_pid: Pid, _param: UserPtr<u8>) -> LinuxResult<isize> 
 /// * `_pid` - Thread ID (currently unused)
 /// * `policy` - Scheduling policy
 /// * `_param` - Scheduling parameters (currently unused)
-pub fn sys_sched_setscheduler(_pid: Pid, policy: usize, _param: UserPtr<u8>) -> LinuxResult<isize> {
-    if policy as u32 != SCHED_FIFO {
-        error!("Not supported policy: {}", policy);
+pub fn sys_sched_setscheduler(
+    pid: i32,
+    policy: usize,
+    param: UserPtr<usize>,
+) -> LinuxResult<isize> {
+    if pid < 0 || policy > 6 {
         return Err(LinuxError::EINVAL);
     }
+    let thread = get_thread(pid as _)?;
+    with_uspace(|uspace| -> LinuxResult<()> {
+        XThread::from_thread(&thread).set_policy(policy as _);
+        uspace.write(param, XThread::from_thread(&thread).get_priority() as _)?;
+        Ok(())
+    })
+    .map_err(|_| LinuxError::EINVAL)?;
     Ok(0)
 }
 
@@ -137,8 +161,12 @@ pub fn sys_sched_setscheduler(_pid: Pid, policy: usize, _param: UserPtr<u8>) -> 
 ///
 /// # Arguments
 /// * `_pid` - Thread ID (currently unused)
-pub fn sys_sched_getscheduler(_pid: Pid) -> LinuxResult<isize> {
-    Ok(SCHED_FIFO as isize)
+pub fn sys_sched_getscheduler(pid: i32) -> LinuxResult<isize> {
+    if pid < 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    let thread = get_thread(pid as _)?;
+    Ok(XThread::from_thread(&thread).get_policy() as _)
 }
 
 /// Get maximum priority value for a scheduling algorithm.
@@ -273,7 +301,13 @@ pub fn sys_getpriority(which: u32, who: u32) -> LinuxResult<isize> {
     }
 }
 
-pub fn sys_setpriority(_pid: Pid, _which: usize, _prio: isize) -> LinuxResult<isize> {
-    warn!("sys_setpriority not implemented");
+pub fn sys_setpriority(pid: i32, _which: usize, prio: isize) -> LinuxResult<isize> {
+    if pid < 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    let _thread = get_thread(pid as _)?;
+    if prio < 0 {
+        return Err(LinuxError::EACCES);
+    }
     Ok(0)
 }

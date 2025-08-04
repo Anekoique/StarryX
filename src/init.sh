@@ -1,6 +1,6 @@
 /musl/busybox mkdir -v /bin
 /musl/busybox --install -s /bin
-export path=/bin
+export PATH=/bin
 
 mkdir -v /lib
 mkdir -v /usr
@@ -23,29 +23,27 @@ ln -v -s /lib /lib64
 ln -v -s /lib /usr/lib
 ln -v -s /lib /usr/lib64
 
-export ld_library_path=".:./lib:/musl/lib:/lib"
+export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 echo "root:x:0:0:root:/root:/bin/bash" >/etc/passwd
 echo "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" >>/etc/passwd
-cat >/etc/protocols <<eof
-ip      0       ip
-icmp    1       icmp
-tcp     6       tcp
-udp     17      udp
-eof
+cat >/etc/protocols <<EOF
+ip      0       IP
+icmp    1       ICMP
+tcp     6       TCP
+udp     17      UDP
+EOF
 
 run_ltp() {
-  echo "#### os comp test group start ltp-$1 ####"
+  echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
-  export ltp_timeout_mul=0.5
-  export ltp_dev_fs_type=tmpfs
-  export ltp_single_fs_type=tmpfs
+  export LTP_TIMEOUT_MUL=0.5
+  export LTP_DEV_FS_TYPE=tmpfs
+  export LTP_SINGLE_FS_TYPE=tmpfs
 
   all_testcases="
-    llseek01
-    llseek02
-    llseek03
   "
+
   passed_testcase="
     abort01
     abs01
@@ -255,6 +253,26 @@ run_ltp() {
     link08
     linkat02
     listen01
+    llseek01
+    llseek02
+    llseek03
+    lseek01
+    lseek07
+    lstat01
+    lstat01_64
+    lstat02
+    lstat02_64
+    madvise01
+    madvise10
+    memcmp01
+    memcpy01
+    memset01
+    mkdirat02
+    mkdirat01
+    mknod01
+    mknod02
+    mlock01
+    mlock04
     mmap001
     mmap02
     mmap03
@@ -267,35 +285,113 @@ run_ltp() {
     mmap17
     mmap19
     msgctl01
+    msgctl02
     msgctl04
     msgget01
     msgget02
-    msgrcv01
     msgrcv02
+    msgrcv03
     msgrcv07
     msgrcv08
     msgsnd02
+    msgsnd05
+    munmap01
+    munmap02
+    munmap03
+    munlock01
+    nanosleep04
+    newuname01
+    open01
+    open02
+    open03
+    open04
+    open12
+    open13
+    pipe01
+    pipe04
+    pipe05
+    pipe06
+    pipe09
+    pipe10
+    pipe11
+    pipe12
+    pipe14
+    pipe2_01
+    poll01
+    posix_fadvise01
+    posix_fadvise03
+    ppoll01
+    prctl01
+    prctl03
+    prctl04
+    prctl05
+    pread01
+    pread01_64
+    pread02
+    pread02_64
+    preadv01
+    preadv01_64
+    preadv02
+    preadv02_64
+    preadv201
+    preadv201_64
+    preadv202
+    preadv202_64
+    pselect02
+    pselect02_64
+    pselect03
+    pselect03_64
+    pwrite01
+    pwrite01_64
+    pwrite04
+    pwrite04_64
+    pwritev01
+    pwritev01_64
+    pwritev201
+    pwritev201_64
+    read01
+    read02
+    read04
+    readlink01
+    readlink03
+    readlinkat01
+    readv01
+    readv02
+    reboot01
     recv01
     recvfrom01
+    rmdir01
+    rmdir02
     rt_sigaction01
     rt_sigaction02
     rt_sigaction03
     rt_sigprocmask01
     rt_sigprocmask02
     rtc01
-    poll01
     sbrk01
     sbrk02
+    sched_getaffinity01
+    sched_setaffinity01
+    sched_getparam01
+    sched_getparam03
+    sched_setparam01
+    sched_setparam02
+    sched_setparam03
+    sched_setparam04
+    sched_setparam05
+    sched_getscheduler01
+    sched_getscheduler02
+    sched_setscheduler01
     sched_yield01
     select03
     sem_nstest
-    semop01
-    semget01
-    semget02
     semctl01
     semctl03
     semctl05
     semctl07
+    semget01
+    semget02
+    semop01
     send01
     sendfile02
     sendfile02_64
@@ -307,11 +403,49 @@ run_ltp() {
     sendfile06_64
     sendfile08
     sendfile08_64
+    set_robust_list01
+    set_tid_address01
+    setegid01
+    setfsgid02
+    setfsgid02_64
+    setfsuid01
+    setfsuid01_64
+    setfsuid02
+    setfsuid02_64
+    setfsuid03
+    setfsuid03_64
+    setpriority02
+    setgid01
+    setgid01_64
+    setgid03
+    setgid03_64
+    setgroups01
+    setgroups01_64
+    setgroups02
+    setgroups02_64
+    setitimer02
+    setpgid01
+    setpgid02
+    setpgrp01
+    setpgrp02
+    setregid01
+    setregid01_64
+    setregid03
+    setregid03_64
+    setresuid04
+    setresuid04_64
+    setresuid05
+    setresuid05_64
     setreuid01
+    setreuid01_64
     setreuid03
+    setreuid03_64
     setreuid04
+    setreuid04_64
     setreuid05
+    setreuid05_64
     setreuid07
+    setreuid07_64
     setrlimit01
     setrlimit02
     setrlimit03
@@ -321,6 +455,13 @@ run_ltp() {
     setsockopt03
     setsockopt04
     setuid01
+    setuid01_64
+    shmat01
+    shmat03
+    shmctl02
+    shmctl06
+    shmctl07
+    shmctl08
     sigaction02
     sigaltstack02
     signal01
@@ -330,71 +471,122 @@ run_ltp() {
     signal05
     sigpending02
     sigprocmask01
+    socket01
+    socket02
+    socketpair01
+    socketpair02
     splice03
     splice07
     splice08
+    stat01
+    stat01_64
+    stat02
+    stat02_64
+    stat03
+    stat03_64
+    statfs02
+    statfs02_64
+    statvfs02
+    statx02
+    statx03
+    symlink01
+    symlink02
+    symlink03
+    symlink04
+    syscall01
+    sysconf01
+    syslog11
+    time01
     times01
+    timerfd02
+    timerfd_gettime01
+    timerfd_settime01
     tkill01
+    truncate02
+    truncate02_64
+    truncate03
+    truncate03_64
     uname01
     uname02
     uname04
+    unlink05
+    unlink07
+    unlink08
     utime06
     utime07
+    utsname01
+    utsname04
     wait01
     wait02
+    waitid01
+    waitid05
+    waitpid01
     waitpid03
     waitpid04
+    write01
+    write03
+    write05
+    writev01
+    writev02
+    writev03
+    writev05
+    writev06
+    writev07
     "
 
   cd ltp/testcases/bin
   for f in $all_testcases; do
-    echo "run ltp case $f"
+    echo "RUN LTP CASE $f"
     ./$f
-    echo "fail ltp case $f : 0"
+    echo "FAIL LTP CASE $f : 0"
   done
   cd ../../..
 
-  echo "#### os comp test group end ltp-$1 ####"
+  echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
-export home=/musl
+export HOME=/musl
 
 cd /musl
 #cp -r ./usr/share /usr
 #cp ./usr/bin/git /bin
 #./git_testcode.sh
-# run_ltp musl
 # sh
-./interrupts_testcode.sh
-./copy-file-range_testcode.sh
-./splice_testcode.sh
-#./lmbench_testcode.sh
+# ./interrupts_testcode.sh
+# ./copy-file-range_testcode.sh
+# ./splice_testcode.sh
+# run_ltp musl
 
 cd /glibc
-#./lmbench_testcode.sh
+run_ltp musl
 
 cd /musl
-#./libctest_testcode.sh
-#./basic_testcode.sh
-#./lua_testcode.sh
-#./busybox_testcode.sh
-#./iozone_testcode.sh
-#./libcbench_testcode.sh
-#./iperf_testcode.sh
-#./netperf_testcode.sh
+./libctest_testcode.sh
+./basic_testcode.sh
+./lua_testcode.sh
+./busybox_testcode.sh
+./iozone_testcode.sh
+./libcbench_testcode.sh
+./iperf_testcode.sh
+./netperf_testcode.sh
 
 cd /glibc
 # ./copy-file-range_testcode.sh
 # run_ltp musl
-#./basic_testcode.sh
-#./lua_testcode.sh
-#./busybox_testcode.sh
-#./iozone_testcode.sh
-#./libcbench_testcode.sh
-#./iperf_testcode.sh
-#./netperf_testcode.sh
+./basic_testcode.sh
+./lua_testcode.sh
+./busybox_testcode.sh
+./iozone_testcode.sh
+./libcbench_testcode.sh
+./iperf_testcode.sh
+./netperf_testcode.sh
 
 cd /musl
-#./cyclictest_testcode.sh
+./lmbench_testcode.sh
 cd /glibc
-#./cyclictest_testcode.sh
+./lmbench_testcode.sh
+
+cd /musl
+./cyclictest_testcode.sh
+cd /glibc
+./cyclictest_testcode.sh

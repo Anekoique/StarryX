@@ -151,7 +151,7 @@ pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<is
     };
 
     with_fs(AT_FDCWD, device_path, |fs| {
-        fs.open_file(device_path)?.read_at(buffer, 0)
+        fs.read_file(device_path)?.read_at(buffer, 0)
     })
     .map(|bytes_read| bytes_read as isize)
     .or_else(|_| {

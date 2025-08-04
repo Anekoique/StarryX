@@ -53,6 +53,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         ),
         Sysno::fchdir => sys_fchdir(tf.arg0() as _),
         Sysno::flock => Ok(0),
+        Sysno::fadvise64 => Ok(0),
 
         // file ops
         Sysno::fchown => sys_fchown(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
@@ -113,6 +114,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::write => sys_write(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
         Sysno::writev => sys_writev(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
         Sysno::lseek => sys_lseek(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::truncate => sys_truncate(tf.arg0().into(), tf.arg1() as _),
         Sysno::ftruncate => sys_ftruncate(tf.arg0() as _, tf.arg1() as _),
         Sysno::fallocate => sys_fallocate(
             tf.arg0() as _,
@@ -239,10 +241,22 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         #[cfg(target_arch = "x86_64")]
         Sysno::pipe => sys_pipe2(tf.arg0().into(), 0),
 
-        // eventfd
+        // fd
         Sysno::eventfd2 => sys_eventfd2(tf.arg0() as _, tf.arg1() as _),
         #[cfg(target_arch = "x86_64")]
         Sysno::eventfd => Ok(0),
+        Sysno::timerfd_create => sys_timerfd_create(tf.arg0() as _, tf.arg1() as _),
+        Sysno::timerfd_settime => sys_timerfd_settime(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2().into(),
+            tf.arg3().into(),
+        ),
+        Sysno::timerfd_gettime => sys_timerfd_gettime(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2().into(),
+        ),
 
         // fs stat
         #[cfg(target_arch = "x86_64")]
@@ -295,6 +309,9 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::munmap => sys_munmap(tf.arg0(), tf.arg1() as _),
         Sysno::mprotect => sys_mprotect(tf.arg0(), tf.arg1() as _, tf.arg2() as _),
         Sysno::msync => sys_msync(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::madvise => Ok(0),
+        Sysno::mlock => Ok(0),
+        Sysno::munlock => Ok(0),
 
         // task info
         Sysno::getpid => sys_getpid(),
@@ -363,6 +380,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::setsid => sys_setsid(),
         Sysno::getpgid => sys_getpgid(tf.arg0() as _),
         Sysno::setpgid => sys_setpgid(tf.arg0() as _, tf.arg1() as _),
+        Sysno::waitid => Ok(0),
 
         // signal
         Sysno::rt_sigprocmask => sys_rt_sigprocmask(
@@ -430,13 +448,18 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::getgid => sys_getgid(),
         Sysno::setgid => Ok(0),
         Sysno::getegid => sys_getegid(),
+        Sysno::setregid => Ok(0),
+        Sysno::setfsgid => Ok(0),
+        Sysno::setfsuid => Ok(0),
         Sysno::getrandom => sys_getrandom(tf.arg0().into(), tf.arg1() as _, tf.arg2() as _),
         Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
+        Sysno::sethostname => Ok(0),
         Sysno::uname => sys_uname(tf.arg0().into()),
         Sysno::sysinfo => sys_sysinfo(tf.arg0().into()),
         Sysno::syslog => sys_syslog(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
         Sysno::personality => Ok(0),
         Sysno::chroot => Err(LinuxError::EPERM),
+        Sysno::reboot => Ok(0),
 
         // time
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),

@@ -7,7 +7,7 @@ extern crate axlog;
 extern crate alloc;
 extern crate axruntime;
 
-use alloc::{format, string::ToString};
+use alloc::{format, string::ToString, vec::Vec};
 
 mod entry;
 mod mm;
@@ -27,9 +27,34 @@ Y88b  d88P Y88b.  888  888 888     888     Y88b 888  d88P Y88b
                                             "Y88P"
 "#;
 
+const RAINBOW_COLORS: &[&str] = &[
+    "\x1b[38;5;219m",
+    "\x1b[38;5;217m",
+    "\x1b[38;5;216m",
+    "\x1b[38;5;229m",
+    "\x1b[38;5;193m",
+    "\x1b[38;5;158m",
+    "\x1b[38;5;159m",
+    "\x1b[38;5;153m",
+    "\x1b[38;5;147m",
+    "\x1b[38;5;183m",
+    "\x1b[38;5;182m",
+    "\x1b[38;5;218m",
+];
+
+const RESET_COLOR: &str = "\x1b[0m";
+
+fn print_logo() {
+    let lines: Vec<&str> = LOGO.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        let color = RAINBOW_COLORS[i % RAINBOW_COLORS.len()];
+        ax_println!("{}{}{}", color, line, RESET_COLOR);
+    }
+}
+
 #[unsafe(no_mangle)]
 fn main() {
-    ax_println!("{}", LOGO);
+    print_logo();
     axprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
     xcore::fs::init_root().expect("Failed to mount vfs");
 
