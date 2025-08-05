@@ -7,7 +7,7 @@ use axio::{Seek, SeekFrom};
 
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
-    fs::{get_file_like, FileLike},
+    fs::{FileLike, get_file_like},
     mm::PAGE_CACHE_MANAGER,
     resources::AX_FSIZE_LIMIT,
     task::with_uspace,
@@ -167,7 +167,7 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> Linux
     with_fs(AT_FDCWD, path, |fs| {
         PAGE_CACHE_MANAGER
             .get_cache(fs.write_file(path)?.access(FileFlags::WRITE)?.inode())
-            .map(|inode| inode.clear_from_pos(length as _))
+            .map(|inode| inode.evict_from_pos(length as _))
             .unwrap_or(Ok(()))
     })?;
     Ok(0)

@@ -64,8 +64,31 @@ impl PageCacheManager {
 
         for key in stale_keys {
             if let Some(cache) = caches.remove(&key) {
-                let _ = cache.clear();
+                let _ = cache.evict();
             }
+        }
+    }
+}
+
+struct AxPageCacheImpl;
+#[crate_interface::impl_interface]
+impl axalloc::AxAllocIf for AxPageCacheImpl {
+    fn evict_cache(num_pages: usize) -> axalloc::AllocResult {
+        let caches = PAGE_CACHE_MANAGER.caches.write();
+        let mut total_evicted = 0;
+        caches.iter().for_each(|(_, cache)| {
+            if let Ok(count) = cache.evict() {
+                total_evicted += count;
+            }
+        });
+        error!(
+            "Evicted {} pages from cache, expected {}",
+            total_evicted, num_pages
+        );
+        if total_evicted < num_pages {
+            Err(axalloc::AllocError::NoMemory)
+        } else {
+            Ok(())
         }
     }
 }

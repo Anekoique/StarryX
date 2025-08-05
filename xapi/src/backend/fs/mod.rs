@@ -1,6 +1,6 @@
 mod api;
-mod iomux;
 mod fd;
+mod iomux;
 
 pub use self::api::*;
 pub use self::fd::*;

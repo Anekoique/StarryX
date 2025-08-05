@@ -76,6 +76,10 @@ impl XTaskExt {
         Self(thread)
     }
 
+    pub fn from_task(task: &TaskInner) -> &'static XTaskExt {
+        unsafe { &*(task.task_ext() as *const Self) }
+    }
+
     pub fn thread_ref(&self) -> &Arc<Thread> {
         &self.0
     }
@@ -96,8 +100,16 @@ impl XTaskExt {
         self.0.data().unwrap()
     }
 
+    pub fn xthread(&self) -> &'static XThread {
+        unsafe { &*(self.0.data::<XThread>().unwrap() as *const XThread) }
+    }
+
     pub fn xprocess_ref(&self) -> &XProcess {
         self.0.process().data().unwrap()
+    }
+
+    pub fn xprocess(&self) -> &'static XProcess {
+        unsafe { &*(self.0.process().data::<XProcess>().unwrap() as *const XProcess) }
     }
 }
 
@@ -122,7 +134,7 @@ impl XThread {
             oom_score_adj: AtomicI32::new(200),
             futex_bitset: AtomicU32::new(0),
             priority: AtomicI32::new(0),
-            policy: AtomicU32::new(SCHED_RR),
+            policy: AtomicU32::new(SCHED_RR as _),
         }
     }
 
@@ -206,8 +218,16 @@ impl XProcess {
         process.data().unwrap()
     }
 
+    pub fn from_process_static(process: &Arc<Process>) -> &'static XProcess {
+        unsafe { &*(process.data::<XProcess>().unwrap() as *const XProcess) }
+    }
+
     pub fn from_thread(thread: &Arc<Thread>) -> &XProcess {
         thread.process().data().unwrap()
+    }
+
+    pub fn from_thread_static(thread: &Arc<Thread>) -> &'static XProcess {
+        unsafe { &*(thread.process().data::<XProcess>().unwrap() as *const XProcess) }
     }
 
     pub fn is_clone_child(&self) -> bool {

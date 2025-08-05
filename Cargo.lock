@@ -126,6 +126,7 @@ dependencies = [
  "allocator",
  "axerrno",
  "cfg-if",
+ "crate_interface",
  "kspin",
  "log",
  "memory_addr",
@@ -2028,6 +2029,7 @@ dependencies = [
 name = "xcore"
 version = "0.1.0"
 dependencies = [
+ "axalloc",
  "axconfig",
  "axerrno",
  "axfs-ng",

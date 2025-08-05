@@ -72,7 +72,7 @@ impl File {
         let inner = self.inner();
         PAGE_CACHE_MANAGER
             .get_cache(inner.inode()?)
-            .map(|cache| cache.clear_from_pos(len as _))
+            .map(|cache| cache.evict_from_pos(len as _))
             .unwrap_or(inner.set_len(len))
     }
 

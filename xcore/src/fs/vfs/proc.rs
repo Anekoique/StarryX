@@ -84,12 +84,11 @@ fn create_proc_root(fs: Arc<VirtFs>) -> DirMaker {
 
 fn create_tid_root(fs: Arc<VirtFs>, thread: Arc<Thread>) -> DirMaker {
     let mut root = VirtDir::<()>::builder(fs.clone(), None);
+    let xproc = XProcess::from_thread_static(&thread);
 
     root.add(
         "exe",
-        VirtFile::new_symlink(fs.clone(), move || {
-            XProcess::from_thread(&thread).exe_path.read().to_string()
-        }),
+        VirtFile::new_symlink(fs.clone(), || xproc.exe_path.read().to_string()),
     )
     .add("maps", VirtFile::new(fs.clone(), || DUMMY_MAPS.to_string()));
 

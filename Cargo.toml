@@ -33,6 +33,7 @@ axns = { path = "arceos/modules/axns", features = [ "thread-local" ] }
 axruntime = { path = "arceos/modules/axruntime" }
 axsync = { path = "arceos/modules/axsync", features = [ "multitask" ] }
 axtask = { path = "arceos/modules/axtask", features = [ "smp" ] }
+axalloc = { path = "arceos/modules/axalloc" }
 
 axprocess = { path = "./modules/axprocess" }
 axsignal = { path = "./modules/axsignal" }

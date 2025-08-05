@@ -271,18 +271,19 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
         self.write_back()
     }
 
-    pub fn clear(&self) -> LinuxResult {
+    pub fn evict(&self) -> LinuxResult<usize> {
         self.sync()?;
 
         let mut pages = self.pages.lock();
+        let evicted_count = pages.len();
         for (_, page) in pages.iter() {
             P::dealloc_page(page.addr);
         }
         pages.clear();
-        Ok(())
+        Ok(evicted_count)
     }
 
-    pub fn clear_range(&self, start: u64, end: u64) -> LinuxResult {
+    pub fn evict_range(&self, start: u64, end: u64) -> LinuxResult {
         self.sync_range(start, end)?;
 
         let start_index = page_index(start);
@@ -298,7 +299,7 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
         Ok(())
     }
 
-    pub fn clear_from_pos(&self, start: u64) -> LinuxResult {
+    pub fn evict_from_pos(&self, start: u64) -> LinuxResult {
         self.sync_range(start, self.get_size())?;
 
         let start_index = page_index(start);
@@ -320,5 +321,56 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
 
     pub fn set_size(&self, size: u64) {
         self.file_size.store(size, Ordering::Relaxed);
+    }
+
+    /// Remove the least recently used cache page
+    /// Returns true if a page was removed, false if cache is empty
+    pub fn evict_lru(&self) -> LinuxResult<bool> {
+        let mut pages = self.pages.lock();
+
+        if let Some((index, mut page)) = pages.pop_lru() {
+            // If the page is dirty, write it back first
+            if page.is_dirty() {
+                page.mark_to_write();
+                drop(pages);
+                self.write_back_page(index, &mut page)?;
+            }
+
+            P::dealloc_page(page.addr);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Remove multiple least recently used cache pages
+    /// Returns the number of pages actually removed
+    pub fn evict_lru_pages(&self, count: usize) -> LinuxResult<usize> {
+        let mut removed = 0;
+
+        for _ in 0..count {
+            let mut pages = self.pages.lock();
+
+            if let Some((index, mut page)) = pages.pop_lru() {
+                // If the page is dirty, write it back first
+                if page.is_dirty() {
+                    page.mark_to_write();
+                    drop(pages);
+                    self.write_back_page(index, &mut page)?;
+                }
+
+                P::dealloc_page(page.addr);
+                removed += 1;
+            } else {
+                break;
+            }
+        }
+
+        Ok(removed)
+    }
+
+    /// Get the current number of cached pages
+    pub fn cache_size(&self) -> usize {
+        self.pages.lock().len()
     }
 }

@@ -3,13 +3,14 @@ use alloc::vec;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 use axhal::paging::PageSize;
+use axtask::current;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
 
 use axvma::MmapRegion;
 use xcore::{
     fs::{FD_TABLE, FileLike},
     mm::FileWrapper,
-    task::with_xprocess,
+    task::{XTaskExt, with_xprocess},
 };
 
 use crate::{
@@ -34,125 +35,123 @@ pub fn sys_mmap(
     fd: i32,
     offset: isize,
 ) -> LinuxResult<isize> {
-    with_xprocess(|xprocess| {
-        let mut aspace = xprocess.uspace().aspace.lock();
-        let mut permission_flags = MmapProt::from_bits_truncate(prot);
-        let map_flags = MmapFlags::from_bits_truncate(flags);
-        debug!(
-            "sys_mmap: addr: {:x?}, length: {:x?}, prot: {:?}, flags: {:?}, fd: {:?}, offset: {:?}",
-            addr, length, permission_flags, map_flags, fd, offset
-        );
-        if map_flags.contains(MmapFlags::PRIVATE) && map_flags.contains(MmapFlags::SHARED) {
+    let xprocess = XTaskExt::from_task(&current()).xprocess();
+    let mut aspace = xprocess.uspace().aspace.lock();
+    let mut permission_flags = MmapProt::from_bits_truncate(prot);
+    let map_flags = MmapFlags::from_bits_truncate(flags);
+    debug!(
+        "sys_mmap: addr: {:x?}, length: {:x?}, prot: {:?}, flags: {:?}, fd: {:?}, offset: {:?}",
+        addr, length, permission_flags, map_flags, fd, offset
+    );
+    if map_flags.contains(MmapFlags::PRIVATE) && map_flags.contains(MmapFlags::SHARED) {
+        return Err(LinuxError::EINVAL);
+    }
+    if permission_flags.contains(MmapProt::WRITE) && !permission_flags.contains(MmapProt::READ) {
+        permission_flags.insert(MmapProt::READ);
+    }
+    if !map_flags.contains(MmapFlags::ANONYMOUS) && !FD_TABLE.is_assigned(fd as _) {
+        return Err(LinuxError::EBADF);
+    }
+
+    let page_size = if map_flags.contains(MmapFlags::HUGE_1G) {
+        PageSize::Size1G
+    } else if map_flags.contains(MmapFlags::HUGE) {
+        PageSize::Size2M
+    } else {
+        PageSize::Size4K
+    };
+    let start = addr.align_down(page_size);
+    let end = (addr + length).align_up(page_size);
+    let aligned_length = end - start;
+    debug!(
+        "start: {:x?}, end: {:x?}, aligned_length: {:x?}, page_size: {:?}",
+        start, end, aligned_length, page_size
+    );
+
+    let start_addr = if map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE) {
+        if start == 0 {
             return Err(LinuxError::EINVAL);
         }
-        if permission_flags.contains(MmapProt::WRITE) && !permission_flags.contains(MmapProt::READ)
-        {
-            permission_flags.insert(MmapProt::READ);
+        let dst_addr = VirtAddr::from(start);
+
+        if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
+            // Remove any existing VMA mappings in the range before unmapping
+            let vaddr_range = VirtAddrRange::from_start_size(dst_addr, aligned_length);
+            xprocess.remove_overlapping_regions(vaddr_range);
+            aspace.unmap(dst_addr, aligned_length)?;
         }
-        if !map_flags.contains(MmapFlags::ANONYMOUS) && !FD_TABLE.is_assigned(fd as _) {
-            return Err(LinuxError::EBADF);
-        }
-
-        let page_size = if map_flags.contains(MmapFlags::HUGE_1G) {
-            PageSize::Size1G
-        } else if map_flags.contains(MmapFlags::HUGE) {
-            PageSize::Size2M
-        } else {
-            PageSize::Size4K
-        };
-        let start = addr.align_down(page_size);
-        let end = (addr + length).align_up(page_size);
-        let aligned_length = end - start;
-        debug!(
-            "start: {:x?}, end: {:x?}, aligned_length: {:x?}, page_size: {:?}",
-            start, end, aligned_length, page_size
-        );
-
-        let start_addr = if map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE) {
-            if start == 0 {
-                return Err(LinuxError::EINVAL);
-            }
-            let dst_addr = VirtAddr::from(start);
-
-            if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
-                // Remove any existing VMA mappings in the range before unmapping
-                let vaddr_range = VirtAddrRange::from_start_size(dst_addr, aligned_length);
-                xprocess.remove_overlapping_regions(vaddr_range);
-                aspace.unmap(dst_addr, aligned_length)?;
-            }
-            dst_addr
-        } else {
-            aspace
-                .find_free_area(
-                    VirtAddr::from(start),
-                    aligned_length,
-                    VirtAddrRange::new(aspace.base(), aspace.end()),
-                    page_size,
-                )
-                .or(aspace.find_free_area(
-                    aspace.base(),
-                    aligned_length,
-                    VirtAddrRange::new(aspace.base(), aspace.end()),
-                    page_size,
-                ))
-                .ok_or(LinuxError::ENOMEM)?
-        };
-
-        let populate = map_flags.contains(MmapFlags::POPULATE);
-        match map_flags & MmapFlags::TYPE {
-            MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => {
-                aspace.map_shared(
-                    start_addr,
-                    aligned_length,
-                    permission_flags.into(),
-                    None,
-                    page_size,
-                )?;
-            }
-            MmapFlags::PRIVATE => {
-                aspace.map_alloc(
-                    start_addr,
-                    aligned_length,
-                    permission_flags.into(),
-                    populate,
-                    page_size,
-                )?;
-            }
-            _ => return Err(LinuxError::EINVAL),
-        }
-
-        if populate
-            || (map_flags.contains(MmapFlags::SHARED) && !map_flags.contains(MmapFlags::ANONYMOUS))
-        {
-            let file = File::from_fd(fd, FileFlags::READ, FileFlags::empty())
-                .map_err(|_| LinuxError::EACCES)?;
-            let file_size = file.len()? as usize;
-            if offset < 0 || offset as usize >= file_size {
-                warn!(
-                    "offset out of range: {:?}, file_size: {:?}",
-                    offset, file_size
-                );
-                return Err(LinuxError::EINVAL);
-            }
-            let offset = offset as usize;
-            let len = core::cmp::min(length, file_size - offset);
-            let mut buf = vec![0u8; len];
-            file.read_at(&mut buf, offset as u64)?;
-            aspace.write(start_addr, &buf, page_size)?;
-        } else if !map_flags.contains(MmapFlags::ANONYMOUS) {
-            // Create and add VMA mapping region
-            let file = File::from_fd(fd, FileFlags::READ, FileFlags::empty())
-                .map_err(|_| LinuxError::EACCES)?;
-            xprocess.add_region(MmapRegion::new(
-                VirtAddrRange::from_start_size(start_addr, aligned_length),
-                FileWrapper(file.clone_inner()),
-                if offset < 0 { 0 } else { offset },
+        dst_addr
+    } else {
+        aspace
+            .find_free_area(
+                VirtAddr::from(start),
+                aligned_length,
+                VirtAddrRange::new(aspace.base(), aspace.end()),
                 page_size,
-            ))?;
-        }
+            )
+            .or(aspace.find_free_area(
+                aspace.base(),
+                aligned_length,
+                VirtAddrRange::new(aspace.base(), aspace.end()),
+                page_size,
+            ))
+            .ok_or(LinuxError::ENOMEM)?
+    };
 
-        Ok(start_addr.as_usize() as _)
-    })
+    let populate = map_flags.contains(MmapFlags::POPULATE);
+    match map_flags & MmapFlags::TYPE {
+        MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => {
+            aspace.map_shared(
+                start_addr,
+                aligned_length,
+                permission_flags.into(),
+                None,
+                page_size,
+            )?;
+        }
+        MmapFlags::PRIVATE => {
+            aspace.map_alloc(
+                start_addr,
+                aligned_length,
+                permission_flags.into(),
+                populate,
+                page_size,
+            )?;
+        }
+        _ => return Err(LinuxError::EINVAL),
+    }
+
+    if populate
+        || (map_flags.contains(MmapFlags::SHARED) && !map_flags.contains(MmapFlags::ANONYMOUS))
+    {
+        let file = File::from_fd(fd, FileFlags::READ, FileFlags::empty())
+            .map_err(|_| LinuxError::EACCES)?;
+        let file_size = file.len()? as usize;
+        if offset < 0 || offset as usize >= file_size {
+            warn!(
+                "offset out of range: {:?}, file_size: {:?}",
+                offset, file_size
+            );
+            return Err(LinuxError::EINVAL);
+        }
+        let offset = offset as usize;
+        let len = core::cmp::min(length, file_size - offset);
+        let mut buf = vec![0u8; len];
+        file.read_at(&mut buf, offset as u64)?;
+        aspace.write(start_addr, &buf, page_size)?;
+    } else if !map_flags.contains(MmapFlags::ANONYMOUS) {
+        // Create and add VMA mapping region
+        let file = File::from_fd(fd, FileFlags::READ, FileFlags::empty())
+            .map_err(|_| LinuxError::EACCES)?;
+        xprocess.add_region(MmapRegion::new(
+            VirtAddrRange::from_start_size(start_addr, aligned_length),
+            FileWrapper(file.clone_inner()),
+            if offset < 0 { 0 } else { offset },
+            page_size,
+        ))?;
+    }
+
+    Ok(start_addr.as_usize() as _)
 }
 
 /// Unmap files or devices from memory.

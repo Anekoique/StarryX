@@ -252,11 +252,9 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg2().into(),
             tf.arg3().into(),
         ),
-        Sysno::timerfd_gettime => sys_timerfd_gettime(
-            tf.arg0() as _,
-            tf.arg1().into(),
-            tf.arg2().into(),
-        ),
+        Sysno::timerfd_gettime => {
+            sys_timerfd_gettime(tf.arg0() as _, tf.arg1().into(), tf.arg2().into())
+        }
 
         // fs stat
         #[cfg(target_arch = "x86_64")]

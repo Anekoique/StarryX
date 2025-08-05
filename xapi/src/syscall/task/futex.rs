@@ -1,11 +1,10 @@
 use core::sync::atomic::Ordering;
 
 use axerrno::{LinuxError, LinuxResult};
+use axtask::{TaskExtRef, current};
 
-use axuspace::{nullable, UserConstPtr, UserPtr, UserSpaceAccess};
-use xcore::task::{
-    FutexKey, XProcess, XThread, get_thread, with_uspace, with_xprocess, with_xthread,
-};
+use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xcore::task::{FutexKey, XProcess, XThread, get_thread, with_uspace, with_xthread};
 
 use crate::{
     ctypes::{
@@ -34,116 +33,114 @@ pub fn sys_futex(
 ) -> LinuxResult<isize> {
     debug!("futex {:?} {} {}", uaddr.address(), futex_op, value);
 
-    with_xprocess(|xprocess| {
-        let uspace = xprocess.uspace();
-        let futex_table = &xprocess.futex_table;
+    let xprocess = current().task_ext().xprocess();
+    let uspace = xprocess.uspace();
+    let futex_table = &xprocess.futex_table;
 
-        let key = FutexKey::new(uaddr.address().as_usize());
-        let command = futex_op & (FUTEX_CMD_MASK as u32);
-        match command {
-            FUTEX_WAIT | FUTEX_WAIT_BITSET => {
-                let uaddr_val = uspace.read(uaddr)?;
-                if uaddr_val != value {
-                    return Err(LinuxError::EAGAIN);
-                }
-                let timeout = nullable!(uspace.read(timeout))?
-                    .map(timespec::to_time_value)
-                    .transpose()?;
-                let mut first_call = true;
-                let mut mismatches = false;
-                let condition = || {
-                    if first_call {
-                        mismatches = uaddr_val != value;
-                        first_call = false;
-                        mismatches
-                    } else {
-                        true
-                    }
-                };
-
-                let futex = futex_table.get_or_insert(&key);
-
-                if command == FUTEX_WAIT_BITSET {
-                    with_xthread(|xthread| {
-                        xthread.futex_bitset.store(value3, Ordering::SeqCst);
-                    });
-                }
-
-                if let Some(timeout) = timeout {
-                    if futex.wq.wait_timeout_until(timeout, condition) {
-                        return Err(LinuxError::ETIMEDOUT);
-                    }
+    let key = FutexKey::new(uaddr.address().as_usize());
+    let command = futex_op & (FUTEX_CMD_MASK as u32);
+    match command {
+        FUTEX_WAIT | FUTEX_WAIT_BITSET => {
+            let uaddr_val = uspace.read(uaddr)?;
+            if uaddr_val != value {
+                return Err(LinuxError::EAGAIN);
+            }
+            let timeout = nullable!(uspace.read(timeout))?
+                .map(timespec::to_time_value)
+                .transpose()?;
+            let mut first_call = true;
+            let mut mismatches = false;
+            let condition = || {
+                if first_call {
+                    mismatches = uaddr_val != value;
+                    first_call = false;
+                    mismatches
                 } else {
-                    futex.wq.wait_until(condition);
+                    true
                 }
-                if mismatches {
-                    return Err(LinuxError::EAGAIN);
-                }
+            };
 
-                if futex.owner_dead.swap(false, Ordering::SeqCst) {
-                    Err(LinuxError::EOWNERDEAD)
-                } else {
-                    Ok(0)
-                }
+            let futex = futex_table.get_or_insert(&key);
+
+            if command == FUTEX_WAIT_BITSET {
+                with_xthread(|xthread| {
+                    xthread.futex_bitset.store(value3, Ordering::SeqCst);
+                });
             }
-            FUTEX_WAKE | FUTEX_WAKE_BITSET => {
-                let futex = futex_table.get(&key);
-                let mut count = 0;
-                if let Some(futex) = futex {
-                    futex.wq.notify_all_if(false, |_| {
-                        if count >= value {
-                            false
-                        } else {
-                            let wake = if command == FUTEX_WAKE_BITSET {
-                                let bitset = with_xthread(|xthread| {
-                                    xthread.futex_bitset.load(Ordering::SeqCst)
-                                });
-                                (bitset & value3) != 0
-                            } else {
-                                true
-                            };
-                            count += wake as u32;
-                            wake
-                        }
-                    });
+
+            if let Some(timeout) = timeout {
+                if futex.wq.wait_timeout_until(timeout, condition) {
+                    return Err(LinuxError::ETIMEDOUT);
                 }
-                axtask::yield_now();
-                Ok(count as isize)
+            } else {
+                futex.wq.wait_until(condition);
             }
-            FUTEX_REQUEUE | FUTEX_CMP_REQUEUE => {
-                if (value as i32) < 0 {
-                    return Err(LinuxError::EINVAL);
-                }
-
-                if command == FUTEX_CMP_REQUEUE && uspace.read(uaddr)? != value3 {
-                    return Err(LinuxError::EAGAIN);
-                }
-                let value2 = timeout.address().as_usize() as u32;
-                if (value2 as i32) < 0 {
-                    return Err(LinuxError::EINVAL);
-                }
-
-                let futex = futex_table.get(&key);
-                let key2 = FutexKey::new(uaddr2.address().as_usize());
-                let futex2 = futex_table.get_or_insert(&key2);
-
-                let mut count = 0;
-                if let Some(futex) = futex {
-                    for _ in 0..value {
-                        if !futex.wq.notify_one(false) {
-                            break;
-                        }
-                        count += 1;
-                    }
-                    if count == value as isize {
-                        count += futex.wq.requeue(value2 as usize, &futex2.wq) as isize;
-                    }
-                }
-                Ok(count)
+            if mismatches {
+                return Err(LinuxError::EAGAIN);
             }
-            _ => Err(LinuxError::ENOSYS),
+
+            if futex.owner_dead.swap(false, Ordering::SeqCst) {
+                Err(LinuxError::EOWNERDEAD)
+            } else {
+                Ok(0)
+            }
         }
-    })
+        FUTEX_WAKE | FUTEX_WAKE_BITSET => {
+            let futex = futex_table.get(&key);
+            let mut count = 0;
+            if let Some(futex) = futex {
+                futex.wq.notify_all_if(false, |_| {
+                    if count >= value {
+                        false
+                    } else {
+                        let wake = if command == FUTEX_WAKE_BITSET {
+                            let bitset =
+                                with_xthread(|xthread| xthread.futex_bitset.load(Ordering::SeqCst));
+                            (bitset & value3) != 0
+                        } else {
+                            true
+                        };
+                        count += wake as u32;
+                        wake
+                    }
+                });
+            }
+            axtask::yield_now();
+            Ok(count as isize)
+        }
+        FUTEX_REQUEUE | FUTEX_CMP_REQUEUE => {
+            if (value as i32) < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+
+            if command == FUTEX_CMP_REQUEUE && uspace.read(uaddr)? != value3 {
+                return Err(LinuxError::EAGAIN);
+            }
+            let value2 = timeout.address().as_usize() as u32;
+            if (value2 as i32) < 0 {
+                return Err(LinuxError::EINVAL);
+            }
+
+            let futex = futex_table.get(&key);
+            let key2 = FutexKey::new(uaddr2.address().as_usize());
+            let futex2 = futex_table.get_or_insert(&key2);
+
+            let mut count = 0;
+            if let Some(futex) = futex {
+                for _ in 0..value {
+                    if !futex.wq.notify_one(false) {
+                        break;
+                    }
+                    count += 1;
+                }
+                if count == value as isize {
+                    count += futex.wq.requeue(value2 as usize, &futex2.wq) as isize;
+                }
+            }
+            Ok(count)
+        }
+        _ => Err(LinuxError::ENOSYS),
+    }
 }
 
 /// Get robust futex list head for a thread.
@@ -193,16 +190,14 @@ fn handle_futex_death(entry: *mut robust_list, offset: i64) -> LinuxResult<()> {
         .ok_or(LinuxError::EINVAL)?;
     let address: usize = address.try_into().map_err(|_| LinuxError::EINVAL)?;
 
-    with_xprocess(|xprocess| {
-        let futex_table = &xprocess.futex_table;
+    let futex_table = &current().task_ext().xprocess().futex_table;
 
-        let Some(futex) = futex_table.get(&FutexKey::new(address)) else {
-            return Ok(());
-        };
-        futex.owner_dead.store(true, Ordering::SeqCst);
-        futex.wq.notify_one(false);
-        Ok(())
-    })
+    let Some(futex) = futex_table.get(&FutexKey::new(address)) else {
+        return Ok(());
+    };
+    futex.owner_dead.store(true, Ordering::SeqCst);
+    futex.wq.notify_one(false);
+    Ok(())
 }
 
 pub fn exit_robust_list(head: &mut robust_list_head) -> LinuxResult<()> {
