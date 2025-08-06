@@ -87,7 +87,7 @@ pub unsafe fn write_page_table_root0(root_paddr: PhysAddr) {
 /// NOTE: Compiler optimize inline on release mode, kernel raise error about
 /// page table. So we prohibit inline operation.
 #[inline(never)]
-pub unsafe fn write_page_table_root(root_paddr: PhysAddr) {
+pub fn write_page_table_root(root_paddr: PhysAddr) {
     let old_root = read_page_table_root();
     trace!("set page table root: {:#x} => {:#x}", old_root, root_paddr);
 

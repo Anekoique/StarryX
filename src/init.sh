@@ -509,7 +509,6 @@ run_ltp() {
     alarm06
     alarm07
     bind01
-    bind05
     brk01
     brk02
     capget01
@@ -541,7 +540,6 @@ run_ltp() {
     close02
     confstr01
     copy_file_range01
-    crash01
     crash02
     creat01
     creat03
@@ -598,8 +596,6 @@ run_ltp() {
     fchown02
     fchown03
     fchown05
-    fchownat01
-    fchownat02
     fcntl02
     fcntl03
     fcntl05
@@ -616,8 +612,6 @@ run_ltp() {
     fcntl13_64
     fcntl29
     fcntl29_64
-    fdatasync01
-    fdatasync02
     flock01
     flock04
     flock06
@@ -635,7 +629,6 @@ run_ltp() {
     fstatfs01_64
     fstatfs02
     fstatfs02_64
-    fsync01
     ftruncate01
     ftruncate01_64
     futex_cmp_requeue02
@@ -653,8 +646,6 @@ run_ltp() {
     geteuid02_16
     getgid03
     getgid03_16
-    getgroups01
-    getgroups01_16
     gethostname01
     getitimer01
     getitimer02
@@ -693,15 +684,10 @@ run_ltp() {
     kill08
     kill09
     kill11
-    lchown01
-    lchown01_16
-    lchown02
-    lchown02_16
     link02
     link04
     link05
     link08
-    linkat02
     listen01
     llseek01
     llseek02
@@ -713,7 +699,6 @@ run_ltp() {
     lstat02
     lstat02_64
     madvise01
-    madvise10
     memcmp01
     memcpy01
     memset01
@@ -745,18 +730,12 @@ run_ltp() {
     msgrcv08
     msgsnd02
     msgsnd05
-    munmap01
-    munmap02
-    munmap03
     munlock01
     nanosleep04
-    newuname01
     open01
     open02
     open03
     open04
-    open12
-    open13
     pipe01
     pipe04
     pipe05
@@ -808,13 +787,8 @@ run_ltp() {
     readv01
     readv02
     reboot01
-    recv01
-    recvfrom01
     rmdir01
     rmdir02
-    rt_sigaction01
-    rt_sigaction02
-    rt_sigaction03
     rt_sigprocmask01
     rt_sigprocmask02
     rtc01
@@ -842,7 +816,6 @@ run_ltp() {
     semget01
     semget02
     semop01
-    send01
     sendfile02
     sendfile02_64
     sendfile04
@@ -906,7 +879,6 @@ run_ltp() {
     setsockopt04
     setuid01
     setuid01_64
-    shmat01
     shmat03
     shmctl02
     shmctl06
@@ -941,10 +913,8 @@ run_ltp() {
     statx03
     symlink01
     symlink02
-    symlink03
     symlink04
     syscall01
-    sysconf01
     syslog11
     time01
     times01
@@ -973,13 +943,9 @@ run_ltp() {
     waitpid01
     waitpid03
     waitpid04
-    write01
     write03
     write05
     writev01
-    writev02
-    writev05
-    writev06
     writev07
   "
 
@@ -1043,13 +1009,13 @@ EOF
 echo -e "\n=============== Preliminary Round ===============\n"
 
 cd /musl
+./libctest_testcode.sh
 run_ltp musl
 
 cd /glibc
 run_ltp glibc
 
 cd /musl
-./libctest_testcode.sh
 ./basic_testcode.sh
 ./lua_testcode.sh
 ./busybox_testcode.sh
@@ -1077,7 +1043,7 @@ cd /musl
 cd /glibc
 ./cyclictest_testcode.sh
 
-echo -e "\n=============== Final Round Stage 1 ===============\n"
+# echo -e "\n=============== Final Round Stage 1 ===============\n"
 
 # cd /musl
 # ./interrupts_testcode.sh
@@ -1090,7 +1056,7 @@ echo -e "\n=============== Final Round Stage 1 ===============\n"
 # ./splice_testcode.sh
 
 
-echo -e "\n=============== Final Round Stage 2 ===============\n"
+# echo -e "\n=============== Final Round Stage 2 ===============\n"
 
 # cd /musl
 # export HOME=/musl

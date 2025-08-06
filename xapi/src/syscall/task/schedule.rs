@@ -64,17 +64,6 @@ pub fn sys_sched_getaffinity(
     cpuset_size: usize,
     mask: UserPtr<u8>,
 ) -> LinuxResult<isize> {
-    fn cpumask_test(cpumask: &AxCpuMask, cpu_id: usize) -> bool {
-        if cpu_id >= axconfig::SMP {
-            return false;
-        }
-
-        if axconfig::SMP == 1 {
-            cpu_id == 0 && !cpumask.is_empty()
-        } else {
-            !cpumask.is_empty()
-        }
-    }
     if cpuset_size == 0 {
         return Err(LinuxError::EINVAL);
     }
@@ -89,7 +78,7 @@ pub fn sys_sched_getaffinity(
         }
 
         for cpu_id in 0..axconfig::SMP.min(len * 8) {
-            if cpumask_test(&cpumask, cpu_id) {
+            if cpumask.get(cpu_id) {
                 mask_slice[cpu_id / 8] |= 1 << (cpu_id % 8);
             }
         }

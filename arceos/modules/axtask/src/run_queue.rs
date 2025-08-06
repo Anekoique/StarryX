@@ -236,14 +236,11 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
     ///
     /// This function is used to add a new task to the scheduler.
     pub fn add_task(&mut self, task: AxTaskRef) {
-        warn!("add_task: {}", task.id_name());
-        warn!("run_queue: {}", self.inner.cpu_id);
         debug!(
             "task add: {} on run_queue {}",
             task.id_name(),
             self.inner.cpu_id
         );
-        warn!("add_task: {}", task.id_name());
         assert!(task.is_ready());
         self.inner.scheduler.lock().add_task(task);
     }
@@ -543,7 +540,7 @@ impl AxRunQueue {
             !axhal::arch::irqs_enabled(),
             "IRQs must be disabled during scheduling"
         );
-        trace!(
+        debug!(
             "context switch: {} -> {}",
             prev_task.id_name(),
             next_task.id_name()
@@ -672,7 +669,6 @@ pub(crate) unsafe fn clear_prev_task_on_cpu() {
 }
 pub(crate) fn init() {
     let cpu_id = this_cpu_id();
-    warn!("init run_queue: {}", cpu_id);
 
     // Create the `idle` task (not current task).
     const IDLE_TASK_STACK_SIZE: usize = 4096;
