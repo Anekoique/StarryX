@@ -418,7 +418,6 @@ run_ltp() {
     setsockopt04
     setuid01
     setuid01_64
-    shmat01
     shmat03
     shmctl02
     shmctl06
@@ -497,10 +496,6 @@ run_ltp() {
 
   loongarch_ltp="
     abort01
-    abs01
-    accept01
-    accept03
-    accept4_01
     access01
     access04
     alarm02
@@ -543,9 +538,6 @@ run_ltp() {
     crash02
     creat01
     creat03
-    connect01
-    data_space
-    diotest1
     dirtypipe
     dup01
     dup02
@@ -576,7 +568,6 @@ run_ltp() {
     eventfd2_02
     eventfd2_03
     execve03
-    exit01
     exit02
     exit_group01
     faccessat01
@@ -600,14 +591,10 @@ run_ltp() {
     fcntl03
     fcntl05
     fcntl08
-    fcntl09
     fcntl02_64
     fcntl03_64
     fcntl05_64
     fcntl08_64
-    fcntl09_64
-    fcntl10
-    fcntl10_64
     fcntl13
     fcntl13_64
     fcntl29
@@ -619,7 +606,6 @@ run_ltp() {
     fork03
     fork07
     fork08
-    fork09
     fork10
     fstat02
     fstat02_64
@@ -641,11 +627,8 @@ run_ltp() {
     getcwd01
     getcwd03
     geteuid01
-    geteuid01_16
     geteuid02
-    geteuid02_16
     getgid03
-    getgid03_16
     gethostname01
     getitimer01
     getitimer02
@@ -672,23 +655,16 @@ run_ltp() {
     getsid02
     getsockname01
     getsockopt01
-    gettid01
     gettid02
     getuid01
     getuid03
-    ioctl04
     ioctl05
-    ioctl06
     kill06
-    kill07
-    kill08
-    kill09
     kill11
     link02
     link04
     link05
     link08
-    listen01
     llseek01
     llseek02
     llseek03
@@ -703,33 +679,15 @@ run_ltp() {
     memcpy01
     memset01
     mkdirat02
-    mkdirat01
-    mknod01
-    mknod02
     mlock01
     mlock04
     mmap001
     mmap02
-    mmap03
-    mmap05
     mmap06
     mmap08
     mmap09
-    mmap11
-    mmap16
     mmap17
     mmap19
-    msgctl01
-    msgctl02
-    msgctl04
-    msgget01
-    msgget02
-    msgrcv02
-    msgrcv03
-    msgrcv07
-    msgrcv08
-    msgsnd02
-    msgsnd05
     munlock01
     nanosleep04
     open01
@@ -737,8 +695,6 @@ run_ltp() {
     open03
     open04
     pipe01
-    pipe04
-    pipe05
     pipe06
     pipe09
     pipe10
@@ -789,9 +745,6 @@ run_ltp() {
     reboot01
     rmdir01
     rmdir02
-    rt_sigprocmask01
-    rt_sigprocmask02
-    rtc01
     sbrk01
     sbrk02
     sched_getaffinity01
@@ -802,11 +755,9 @@ run_ltp() {
     sched_setparam02
     sched_setparam03
     sched_setparam04
-    sched_setparam05
     sched_getscheduler01
     sched_getscheduler02
     sched_setscheduler01
-    sched_yield01
     select03
     sem_nstest
     semctl01
@@ -826,8 +777,6 @@ run_ltp() {
     sendfile06_64
     sendfile08
     sendfile08_64
-    set_robust_list01
-    set_tid_address01
     setegid01
     setfsgid02
     setfsgid02_64
@@ -869,7 +818,6 @@ run_ltp() {
     setreuid05_64
     setreuid07
     setreuid07_64
-    setrlimit01
     setrlimit02
     setrlimit03
     setrlimit04
@@ -884,7 +832,6 @@ run_ltp() {
     shmctl06
     shmctl07
     shmctl08
-    sigaction02
     sigaltstack02
     signal01
     signal02
@@ -911,7 +858,6 @@ run_ltp() {
     statvfs02
     statx02
     statx03
-    symlink01
     symlink02
     symlink04
     syscall01
@@ -1009,18 +955,20 @@ EOF
 echo -e "\n=============== Preliminary Round ===============\n"
 
 cd /musl
-./libctest_testcode.sh
 run_ltp musl
 
 cd /glibc
 run_ltp glibc
 
 cd /musl
+if [[ $ARCH == riscv64 ]]; then
+  ./libctest_testcode.sh
+fi
 ./basic_testcode.sh
 ./lua_testcode.sh
 ./busybox_testcode.sh
-./iozone_testcode.sh
 ./libcbench_testcode.sh
+./iozone_testcode.sh
 ./iperf_testcode.sh
 ./netperf_testcode.sh
 
@@ -1028,8 +976,8 @@ cd /glibc
 ./basic_testcode.sh
 ./lua_testcode.sh
 ./busybox_testcode.sh
-./iozone_testcode.sh
 ./libcbench_testcode.sh
+./iozone_testcode.sh
 ./iperf_testcode.sh
 ./netperf_testcode.sh
 

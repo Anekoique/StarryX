@@ -58,33 +58,14 @@ fn main() {
     axprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
     xcore::fs::init_root().expect("Failed to mount vfs");
 
-    if matches!(option_env!("AX_TESTCASE"), Some(val) if val != "oscomp") {
-        let testcases = option_env!("AX_TESTCASES_LIST")
-            .unwrap_or_else(|| "Please specify the testcases list by making user_apps")
-            .split(',');
+    let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];
 
-        for testcase in testcases {
-            let Some(args) = shlex::split(testcase) else {
-                error!("Failed to parse testcase: {:?}", testcase);
-                continue;
-            };
-            if args.is_empty() {
-                continue;
-            }
-            info!("Running user task: {:?}", args);
-            let exit_code = entry::run_user_app(&args, &[]);
-            info!("User task {:?} exited with code: {:?}", args, exit_code);
-        }
-    } else {
-        let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];
+    let init = include_str!("init.sh");
 
-        let init = include_str!("init.sh");
-
-        info!("Running init script");
-        let args = ["/musl/busybox", "sh", "-c", init]
-            .map(|s| s.to_string())
-            .to_vec();
-        let exit_code = entry::run_user_app(&args, &envs);
-        info!("Init script exited with code: {:?}", exit_code);
-    }
+    info!("Running init script");
+    let args = ["/musl/busybox", "sh", "-c", init]
+        .map(|s| s.to_string())
+        .to_vec();
+    let exit_code = entry::run_user_app(&args, &envs);
+    info!("Init script exited with code: {:?}", exit_code);
 }

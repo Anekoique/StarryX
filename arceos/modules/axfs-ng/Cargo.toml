@@ -32,7 +32,7 @@ slab = { version = "0.4.9", default-features = false }
 
 [dependencies.lwext4_rust]
 git = "https://github.com/Anekoique/lwext4_rust"
-rev = "54f3b7d"
+rev = "7f649b6"
 default-features = false
 optional = true
 

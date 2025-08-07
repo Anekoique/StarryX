@@ -19,3 +19,4 @@ apps/*/build/
 **/actual.out
 kernel-*
 /vendor
+/testsuits

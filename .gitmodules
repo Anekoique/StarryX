@@ -1,3 +1,0 @@
-[submodule "testsuits"]
-	path = testsuits
-	url = https://github.com/oscomp/testsuits-for-oskernel.git

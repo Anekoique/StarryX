@@ -76,11 +76,14 @@ impl axalloc::AxAllocIf for AxPageCacheImpl {
     fn evict_cache(num_pages: usize) -> axalloc::AllocResult {
         let caches = PAGE_CACHE_MANAGER.caches.write();
         let mut total_evicted = 0;
-        caches.iter().for_each(|(_, cache)| {
+        for (_, cache) in caches.iter() {
             if let Ok(count) = cache.evict() {
                 total_evicted += count;
             }
-        });
+            if total_evicted >= num_pages {
+                break;
+            }
+        }
         error!(
             "Evicted {} pages from cache, expected {}",
             total_evicted, num_pages

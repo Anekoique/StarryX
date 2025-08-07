@@ -1,195 +1,66 @@
-# ==============================================================================
-# StarryX Build System
-# ==============================================================================
-AX_ROOT ?= $(PWD)/arceos
-AX_TESTCASE ?= oscomp
-ARCH ?= x86_64
-LOG ?= off
-N ?= 1
-FEATURES ?= fp_simd,lwext4_rs
-export AX_TESTCASES_LIST=$(shell cat ./apps/$(AX_TESTCASE)/testcase_list | tr '\n' ',')
-
+export ARCH := riscv64
+export LOG := off
+export N := 1
+export A := $(PWD)
+export FEATURES := fp_simd,lwext4_rs
 export NO_AXSTD := y
 export AX_LIB := axfeat
 
-ifeq ($(ARCH), x86_64)
-  TARGET := x86_64-unknown-none
-else ifeq ($(ARCH), aarch64)
-  ifeq ($(findstring fp_simd,$(FEATURES)),)
-    TARGET := aarch64-unknown-none-softfloat
-  else
-    TARGET := aarch64-unknown-none
-  endif
-else ifeq ($(ARCH), riscv64)
-  TARGET := riscv64gc-unknown-none-elf
+IMG_URL = https://github.com/oscomp/testsuits-for-oskernel/releases/download/pre-20250615/
+DOCKER = docker.educg.net/cg/os-contest:20250714
+
+ifeq ($(ARCH), riscv64)
+	IMG := sdcard-rv.img
 else ifeq ($(ARCH), loongarch64)
-  TARGET := loongarch64-unknown-none
+	IMG := sdcard-la.img
 else
-  $(error ARCH must be one of: x86_64, aarch64, riscv64, loongarch64)
+	$(error Unsupported architecture: $(ARCH))
 endif
 
-# ==============================================================================
-# Main Targets
-# ==============================================================================
-.DEFAULT_GOAL := all
-all: oscomp_build
+all: oscomp
 
-set_env:
-	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/config/config.toml.temp > .cargo/config.toml
-
-vf2_config:
-	@$(MAKE) defconfig ARCH=riscv64 PLAT_NAME=riscv64-visionfive2
-
-oscomp_build:
-	@echo "Building for OS Competition..."
+oscomp:
 	@mkdir -p .cargo
-	@sed -e "s|%AX_ROOT%|$(AX_ROOT)|g" xcore/src/config/config.toml.temp > .cargo/config.toml
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=riscv64 BUS=mmio
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) oscomp_binary ARCH=loongarch64
+	@cp xcore/src/config/config.toml.temp .cargo/config.toml
+	@if [ -d bin ]; then cp -r bin/* ~/.cargo/bin; fi
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=riscv64 BUS=mmio build
+	cp $$(basename $(PWD))_riscv64-qemu-virt.bin kernel-rv
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=loongarch64 build
+	cp $$(basename $(PWD))_loongarch64-qemu-virt.elf kernel-la
 
-oscomp_binary: defconfig
-	@echo "Building for $(ARCH) architecture..."
-	@if [ -d "$(PWD)/bin" ]; then cp -r $(PWD)/bin/* /root/.cargo/bin; fi
-	@$(MAKE) -C $(AX_ROOT) A=$(PWD) build
-	@if [ "$(ARCH)" = "riscv64" ]; then \
-		cp $$(basename $(PWD))_$(ARCH)-qemu-virt.bin kernel-rv; \
-	else \
-		cp $$(basename $(PWD))_$(ARCH)-qemu-virt.elf kernel-la; \
+qemu_run:
+	@if [ ! -f $(IMG) ]; then \
+		wget $(IMG_URL)/$(IMG).xz; \
+		xz -d $(IMG).xz; \
 	fi
+	cp $(IMG) arceos/disk.img
+	$(MAKE) run
 
-vf2: vf2_config
-	@echo "Building for VisionFive2..."
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 \
-		$(MAKE) -C $(AX_ROOT) A=$(PWD) build \
-			PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 BUS=mmio \
-			FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2
+rv:
+	@$(MAKE) ARCH=riscv64 BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk qemu_run
+
+la:
+	@$(MAKE) ARCH=loongarch64 BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk qemu_run
+
+vf2:
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 \
+		BUS=mmio FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2 build
 	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
 
-# ==============================================================================
-# Run Targets
-# ==============================================================================
-oscomp_run: defconfig setup_disk_image set_env
-	@echo "Running OS competition test..."
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk LOG=$(LOG) run
-
-rv: defconfig set_env
-	@echo "Running OS competition test for RISC-V..."
-	@cp $(PWD)/sdcard-rv.img $(AX_ROOT)/disk.img
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk LOG=$(LOG) run
-
-la: defconfig set_env
-	@echo "Running OS competition test for LoongArch..."
-	@cp $(PWD)/sdcard-la.img $(AX_ROOT)/disk.img
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk LOG=$(LOG) run
-
-oscomp_debug: defconfig setup_disk_image
-	@echo "Starting debug session..."
-	@$(MAKE) AX_TESTCASE=oscomp BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) debug
-
-# ==============================================================================
-# User Application Targets
-# ==============================================================================
-user_apps:
-	@echo "Building user applications for $(AX_TESTCASE)..."
-	@$(MAKE) -C ./apps/$(AX_TESTCASE) ARCH=$(ARCH) build
-	@echo "Creating disk image..."
-	@if [ -z "$$(command -v sudo)" ]; then \
-		./build_img.sh -a $(ARCH) -file ./apps/$(AX_TESTCASE)/build/$(ARCH) -s 20 -fs ext4; \
-	else \
-		sudo ./build_img.sh -a $(ARCH) -file ./apps/$(AX_TESTCASE)/build/$(ARCH) -s 20 -fs ext4; \
-	fi
-	@mv ./disk.img $(AX_ROOT)/disk.img
-
-run_apps:
-	@$(MAKE) AX_TESTCASE=$(AX_TESTCASE) ARCH=$(ARCH) BLK=y NET=y FEATURES=$(FEATURES) LOG=$(LOG) ACCEL=n run
-
-# ==============================================================================
-# Development Targets
-# ==============================================================================
-clippy: defconfig
-	@echo "Running clippy checks..."
-	@AX_CONFIG_PATH=$(PWD)/.axconfig.toml cargo clippy \
-		--target $(TARGET) --all-features -- -D warnings -A clippy::new_without_default
+clippy: 
+	@AX_CONFIG_PATH=.axconfig.toml cargo clippy --all-features -- -D warnings -A clippy::new_without_default
 
 switch:
-	@echo "Switching to target $$N..."; \
-	cp sdcard-rv$$N.img.bak sdcard-rv.img;
+	cp sdcard-rv$(N).img.bak sdcard-rv.img
+	cp sdcard-la$(N).img.bak sdcard-la.img
 
-defconfig build run justrun debug disasm:
-	@$(MAKE) -C $(AX_ROOT) A=$(PWD) $@
+build run debug disasm: defconfig
+	@$(MAKE) -C arceos $@
 
-setup_disk_image:
-	@echo "Setting up disk image for $(ARCH)..."
-	@if [ ! -f $(PWD)/sdcard-$(ARCH).img ]; then \
-		echo "Downloading disk image..."; \
-		wget https://github.com/Azure-stars/testsuits-for-oskernel/releases/download/v0.2/sdcard-$(ARCH).img.gz; \
-		gunzip $(PWD)/sdcard-$(ARCH).img.gz; \
-	fi
-	@cp $(PWD)/sdcard-$(ARCH).img $(AX_ROOT)/disk.img
+defconfig:
+	@$(MAKE) -C arceos $@
 
-DOCKER ?= docker.educg.net/cg/os-contest:20250714
 docker:
 	docker run --rm -it -v .:/code --entrypoint bash -w /code --privileged $(DOCKER)
 
-# ==============================================================================
-# Clean Target
-# ==============================================================================
-clean:
-	@echo "Cleaning build artifacts..."
-	@$(MAKE) -C $(AX_ROOT) A=$(PWD) ARCH=$(ARCH) clean
-	@for dir in $$(ls ./apps 2>/dev/null || echo ""); do \
-		if [ -d "./apps/$$dir" ] && [ -f "./apps/$$dir/Makefile" ]; then \
-			echo "Cleaning $$dir..."; \
-			$(MAKE) -C ./apps/$$dir clean; \
-		fi; \
-	done
-	@cargo clean
-	@rm -f kernel-rv kernel-la .cargo/config.toml
-	@echo "Clean completed!"
-
-# ==============================================================================
-# Help Target
-# ==============================================================================
-help:
-	@echo "StarryX Build System"
-	@echo "==================="
-	@echo ""
-	@echo "Main targets:"
-	@echo "  all              - Build for OS competition (default)"
-	@echo "  oscomp_build     - Build kernels for OS competition"
-	@echo "  oscomp_run       - Run OS competition test"
-	@echo "  rv               - Run RISC-V specific test"
-	@echo "  la               - Run LoongArch specific test"
-	@echo "  oscomp_debug     - Debug OS competition"
-	@echo ""
-	@echo "Development targets:"
-	@echo "  build            - Build the kernel"
-	@echo "  run              - Build and run the kernel"
-	@echo "  debug            - Build and debug the kernel"
-	@echo "  clippy           - Run code linting"
-	@echo "  switch <from> <to> - Switch between different disk images"
-	@echo "  clean            - Clean all build artifacts"
-	@echo ""
-	@echo "User application targets:"
-	@echo "  user_apps        - Build user applications"
-	@echo "  run_apps         - Run user applications"
-	@echo ""
-	@echo "Configuration variables:"
-	@echo "  ARCH=<arch>      - Target architecture (x86_64, aarch64, riscv64, loongarch64)"
-	@echo "  AX_TESTCASE=<tc> - Test case to build (default: oscomp)"
-	@echo "  LOG=<level>      - Log level (default: off)"
-	@echo "  FEATURES=<feat>  - Build features (default: fp_simd,lwext4_rs)"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make oscomp_run ARCH=riscv64 LOG=info"
-	@echo "  make user_apps AX_TESTCASE=libc ARCH=aarch64"
-	@echo "  make clean ARCH=x86_64"
-
-# ==============================================================================
-# Phony Targets
-# ==============================================================================
-.PHONY: all oscomp_build oscomp_binary
-.PHONY: oscomp_run rv la oscomp_debug
-.PHONY: user_apps run_apps
-.PHONY: clippy switch defconfig build run justrun debug disasm
-.PHONY: setup_disk_image clean help
+.PHONY: all oscomp qemu_run rv la vf2 clippy switch build run debug disasm defconfig docker
