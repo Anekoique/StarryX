@@ -14,7 +14,7 @@ else
     $(error "Unknown ARCH! It should be riscv64 or loongarch64")
 endif
 
-all: git busybox
+all: busybox bash
 
 
 git: .PHONY
@@ -34,6 +34,17 @@ busybox: .PHONY
 	make -C busybox CC="$(CC) -static" STRIP=$(STRIP) -j
 	cp busybox/busybox $(DESTDIR)/
 
+bash: .PHONY
+	cd bash && \
+	CC=$(CC) AR=$(PREFIX)ar RANLIB=$(PREFIX)ranlib \
+	./configure \
+		--host=$(HOST) \
+		--enable-static-link \
+		--without-bash-malloc \
+		--disable-job-control && \
+	make -j16 && \
+	$(STRIP) bash && \
+	cp bash $(DESTDIR)/
 	
 clean:
 	make -C busybox clean

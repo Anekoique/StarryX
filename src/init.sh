@@ -952,44 +952,44 @@ tcp     6       TCP
 udp     17      UDP
 EOF
 
-echo -e "\n=============== Preliminary Round ===============\n"
-
-cd /musl
-run_ltp musl
-
-cd /glibc
-run_ltp glibc
-
-cd /musl
-if [[ $ARCH == riscv64 ]]; then
-  ./libctest_testcode.sh
-fi
-./basic_testcode.sh
-./lua_testcode.sh
-./busybox_testcode.sh
-./libcbench_testcode.sh
-./iozone_testcode.sh
-./iperf_testcode.sh
-./netperf_testcode.sh
-
-cd /glibc
-./basic_testcode.sh
-./lua_testcode.sh
-./busybox_testcode.sh
-./libcbench_testcode.sh
-./iozone_testcode.sh
-./iperf_testcode.sh
-./netperf_testcode.sh
-
-cd /musl
-timeout 420 ./lmbench_testcode.sh
-cd /glibc
-timeout 420 ./lmbench_testcode.sh
-
-cd /musl
-./cyclictest_testcode.sh
-cd /glibc
-./cyclictest_testcode.sh
+# echo -e "\n=============== Preliminary Round ===============\n"
+# 
+# cd /musl
+# run_ltp musl
+# 
+# cd /glibc
+# run_ltp glibc
+# 
+# cd /musl
+# if [[ $ARCH == riscv64 ]]; then
+#   ./libctest_testcode.sh
+# fi
+# ./basic_testcode.sh
+# ./lua_testcode.sh
+# ./busybox_testcode.sh
+# ./libcbench_testcode.sh
+# ./iozone_testcode.sh
+# ./iperf_testcode.sh
+# ./netperf_testcode.sh
+# 
+# cd /glibc
+# ./basic_testcode.sh
+# ./lua_testcode.sh
+# ./busybox_testcode.sh
+# ./libcbench_testcode.sh
+# ./iozone_testcode.sh
+# ./iperf_testcode.sh
+# ./netperf_testcode.sh
+# 
+# cd /musl
+# timeout 420 ./lmbench_testcode.sh
+# cd /glibc
+# timeout 420 ./lmbench_testcode.sh
+# 
+# cd /musl
+# ./cyclictest_testcode.sh
+# cd /glibc
+# ./cyclictest_testcode.sh
 
 # echo -e "\n=============== Final Round Stage 1 ===============\n"
 
@@ -1019,3 +1019,8 @@ cd /glibc
 # cp -r ./usr/share /usr
 # cp ./usr/bin/git /bin
 # ./git_testcode.sh
+
+echo -e "\n================ Linux APPs ================\n"
+
+cd /musl
+./bash

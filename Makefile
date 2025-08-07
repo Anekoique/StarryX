@@ -47,8 +47,11 @@ vf2:
 		BUS=mmio FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2 build
 	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
 
-clippy: 
-	@AX_CONFIG_PATH=.axconfig.toml cargo clippy --all-features -- -D warnings -A clippy::new_without_default
+sdcard:
+	@cp xtest/sdcard-rv.img .
+
+clippy:
+	@AX_CONFIG_PATH=$(PWD)/.axconfig.toml cargo clippy --all-features -- -D warnings -A clippy::new_without_default
 
 switch:
 	cp sdcard-rv$(N).img.bak sdcard-rv.img
@@ -63,4 +66,4 @@ defconfig:
 docker:
 	docker run --rm -it -v .:/code --entrypoint bash -w /code --privileged $(DOCKER)
 
-.PHONY: all oscomp qemu_run rv la vf2 clippy switch build run debug disasm defconfig docker
+.PHONY:
