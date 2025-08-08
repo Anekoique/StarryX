@@ -1,6 +1,8 @@
 pub mod loopx;
+pub mod tty;
 
 pub use loopx::LoopDevice;
+pub use tty::Tty;
 
 use alloc::{format, string::ToString, sync::Arc};
 use core::any::Any;
@@ -173,6 +175,19 @@ fn create_dev_root(fs: Arc<VirtFs>) -> DirMaker {
     .add(
         "stderr",
         VirtFile::new_symlink(fs.clone(), || "/proc/self/fd/2".to_string()),
+    )
+    .add(
+        "tty",
+        VirtDevice::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(5, 0),
+            tty::Tty::new(),
+        ),
+    )
+    .add(
+        "fd",
+        VirtFile::new_symlink(fs.clone(), || "/proc/self/fd".to_string()),
     )
     .add("shm", VirtDir::<()>::builder(fs.clone(), None).build());
 

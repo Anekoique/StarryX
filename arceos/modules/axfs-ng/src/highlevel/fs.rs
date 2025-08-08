@@ -353,7 +353,11 @@ impl<M: RawMutex> FsContext<M> {
 
     /// Convenience method to open a file for writing
     pub fn write_file(&self, path: impl AsRef<Path>) -> VfsResult<FsFile<M>> {
-        let options = OpenOptions::new().write(true).truncate(true).clone();
+        let options = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .truncate(true)
+            .clone();
         self.open(&options, path)?.into_file()
     }
 

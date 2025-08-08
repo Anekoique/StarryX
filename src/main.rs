@@ -7,7 +7,13 @@ extern crate axlog;
 extern crate alloc;
 extern crate axruntime;
 
-use alloc::{format, string::ToString, vec::Vec};
+use alloc::{format, string::ToString, sync::Arc, vec::Vec};
+
+use axerrno::LinuxResult;
+use axfs_ng::{FS_CONTEXT, FileFlags};
+use axsync::Mutex;
+use xapi::File;
+use xcore::fs::{FD_TABLE, FdTable};
 
 mod entry;
 mod mm;
@@ -52,11 +58,39 @@ fn print_logo() {
     }
 }
 
+fn init_stdio() -> LinuxResult<()> {
+    let fd_table = FdTable::new();
+    let file = Arc::new(Mutex::new(
+        FS_CONTEXT.lock().write_file("/dev/tty").unwrap(),
+    ));
+    fd_table.add_file_like(
+        0,
+        Arc::new(File::from_shared(file.clone())),
+        FileFlags::READ,
+        false,
+    )?;
+    fd_table.add_file_like(
+        1,
+        Arc::new(File::from_shared(file.clone())),
+        FileFlags::WRITE,
+        false,
+    )?;
+    fd_table.add_file_like(
+        2,
+        Arc::new(File::from_shared(file.clone())),
+        FileFlags::READ | FileFlags::WRITE,
+        false,
+    )?;
+    FD_TABLE.init_new(fd_table);
+    Ok(())
+}
+
 #[unsafe(no_mangle)]
 fn main() {
     print_logo();
     axprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
     xcore::fs::init_root().expect("Failed to mount vfs");
+    init_stdio().expect("Failed to init stdio");
 
     let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];
 

@@ -22,12 +22,13 @@ use xcore::{
 use crate::{
     ctypes::{
         AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, BLKGETSIZE, BLKGETSIZE64, BLKRAGET, BLKRASET,
-        BLKROGET, BLKROSET, LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_SET_FD, LOOP_SET_STATUS, UTIME_NOW,
-        UTIME_OMIT, linux_dirent64,
+        BLKROGET, BLKROSET, LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_SET_FD, LOOP_SET_STATUS, TCGETS,
+        TCSETS, TIOCGWINSZ, TIOCSWINSZ, UTIME_NOW,
+        UTIME_OMIT, linux_dirent64, winsize, termios,
         sys::{rtc_time, utimbuf},
         timespec, timeval,
     },
-    fs::{Directory, File, Stdin, Stdout, with_fs, with_location},
+    fs::{Directory, File, with_fs, with_location},
     time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
 };
 
@@ -41,12 +42,6 @@ use crate::{
 /// * `argp` - The argument to the request. It is a pointer to a memory location
 pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
     trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
-    let f = get_file_like(fd)?;
-
-    if f.is::<Stdin>() || f.is::<Stdout>() {
-        return Ok(0);
-    }
-
     let device = get_file_like(fd)?
         .into_any()
         .downcast::<File>()
@@ -134,6 +129,26 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
                     warn!("unknown ioctl for loop device: {op}");
                     return Err(LinuxError::ENOTTY);
                 }
+            }
+        } else if let Some(tty) = ops.downcast_ref::<dev::Tty>() {
+            match op as u32 {
+                TIOCGWINSZ => {
+                    let ws = tty.get_winsize();
+                    uspace.write(argp.cast::<winsize>(), ws)?;
+                }
+                TIOCSWINSZ => {
+                    let ws = uspace.read(argp.cast::<winsize>())?;
+                    tty.set_winsize(ws);
+                }
+                TCGETS => {
+                    let t = tty.get_termios();
+                    uspace.write(argp.cast::<termios>(), t)?;
+                }
+                TCSETS => {
+                    let t = uspace.read(argp.cast::<termios>())?;
+                    tty.set_termios(t);
+                }
+                _ => return Err(LinuxError::ENOTTY),
             }
         }
 

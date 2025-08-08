@@ -134,6 +134,18 @@ impl FdTable {
         result
     }
 
+    /// Add a file-like object with flags
+    pub fn add_file_like(
+        &self,
+        fd: usize,
+        file: Arc<dyn FileLike>,
+        flags: FileFlags,
+        cloexec: bool,
+    ) -> Result<(), LinuxError> {
+        let file = Arc::new(XFile::new(file, flags));
+        self.add_at_with_flags(fd, file, cloexec)
+    }
+
     /// Check if file descriptor has CLOEXEC flag
     pub fn has_cloexec(&self, fd: usize) -> bool {
         self.is_assigned(fd)
