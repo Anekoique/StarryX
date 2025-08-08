@@ -311,7 +311,7 @@ impl<M: RawMutex> FsContext<M> {
                     NodePermission::from_bits_truncate(options.get_mode() as _),
                     options.get_user(),
                 )?;
-                if options.get_directory() && loc.is_symlink() {
+                if loc.is_symlink() {
                     self.resolve(path)?
                 } else {
                     loc.clone()

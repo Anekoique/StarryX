@@ -922,7 +922,6 @@ export PATH=/bin
 
 mkdir -v /lib
 mkdir -v /usr
-mkdir -v /etc/
 mkdir -v -p /var/tmp
 
 cp /glibc/lib/libc.so.6 /lib/libc.so.6
@@ -942,15 +941,6 @@ ln -v -s /lib /usr/lib
 ln -v -s /lib /usr/lib64
 
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
-
-echo "root:x:0:0:root:/root:/bin/bash" >/etc/passwd
-echo "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" >>/etc/passwd
-cat >/etc/protocols <<EOF
-ip      0       IP
-icmp    1       ICMP
-tcp     6       TCP
-udp     17      UDP
-EOF
 
 # echo -e "\n=============== Preliminary Round ===============\n"
 # 
@@ -1023,4 +1013,4 @@ EOF
 echo -e "\n================ Linux APPs ================\n"
 
 cd /musl
-./bash
+sh

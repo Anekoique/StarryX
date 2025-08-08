@@ -45,6 +45,10 @@ pub trait FileLike: Send + Sync {
     fn get_location(&self) -> Option<Location<RawMutex>> {
         None
     }
+
+    fn len(&self) -> LinuxResult<u64> {
+        Ok(0)
+    }
 }
 
 #[derive(Clone)]
@@ -99,6 +103,7 @@ impl XFile {
     pub fn set_nonblocking(&self, nonblocking: bool);
     pub fn is_nonblocking(&self) -> bool;
     pub fn get_location(&self) -> Option<Location<RawMutex>>;
+    pub fn len(&self) -> LinuxResult<u64>;
 }
 
 #[derive(Debug, Clone, Copy)]

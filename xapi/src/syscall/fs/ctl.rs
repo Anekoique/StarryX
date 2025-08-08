@@ -12,7 +12,10 @@ use chrono::{Datelike, Timelike};
 
 use axuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xcore::{
-    fs::{FileLike, get_file_like, vfs::dev, virt_fs::VirtDevice},
+    fs::{
+        FileLike, get_file_like,
+        vfs::{VirtDevice, dev},
+    },
     task::with_uspace,
 };
 

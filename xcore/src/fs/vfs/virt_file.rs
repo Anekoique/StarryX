@@ -5,7 +5,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::{any::Any, cmp::Ordering, iter};
+use core::{any::Any, iter};
 
 use axfs_ng_vfs::{
     DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, FilesystemOps, Metadata,
@@ -18,9 +18,14 @@ use inherit_methods_macro::inherit_methods;
 
 use super::virt_fs::{VirtFs, VirtNode, VirtNodeOps};
 
+/// Type alias for directory maker function
+pub type DirMaker =
+    Arc<dyn Fn(WeakDirEntry<RawMutex>) -> Arc<dyn DirNodeOps<RawMutex>> + Send + Sync>;
+
 pub trait VirtFileOps: Send + Sync {
-    fn read_all(&self) -> VfsResult<Cow<[u8]>>;
-    fn write_all(&self, data: &[u8], offset: u64) -> VfsResult<usize>;
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
+    fn write_at(&self, data: &[u8], offset: u64) -> VfsResult<usize>;
+    fn len(&self) -> VfsResult<u64>;
 }
 
 impl<F, R> VirtFileOps for F
@@ -28,12 +33,38 @@ where
     F: Fn() -> R + Send + Sync + 'static,
     R: Into<Vec<u8>>,
 {
-    fn read_all(&self) -> VfsResult<Cow<[u8]>> {
-        Ok(Cow::Owned((self)().into()))
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
+        let data = self().into();
+        if offset >= data.len() as u64 {
+            return Ok(0);
+        }
+        let data = &data[offset as usize..];
+        let read = data.len().min(buf.len());
+        buf[..read].copy_from_slice(&data[..read]);
+        Ok(read)
     }
 
-    fn write_all(&self, _data: &[u8], _offset: u64) -> VfsResult<usize> {
+    fn write_at(&self, _data: &[u8], _offset: u64) -> VfsResult<usize> {
         Err(VfsError::EBADF)
+    }
+
+    fn len(&self) -> VfsResult<u64> {
+        Ok(self().into().len() as u64)
+    }
+}
+
+pub trait VirtDirOps: Send + Sync {
+    fn read_dir(&self) -> impl Iterator<Item = Cow<str>>;
+    fn lookup(&self, name: &str) -> Option<VirtNodeOps>;
+}
+
+impl VirtDirOps for () {
+    fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
+        iter::empty()
+    }
+
+    fn lookup(&self, _name: &str) -> Option<VirtNodeOps> {
+        None
     }
 }
 
@@ -75,67 +106,31 @@ impl NodeOps<RawMutex> for VirtFile {
     }
 
     fn len(&self) -> VfsResult<u64> {
-        Ok(self.ops.read_all()?.len() as u64)
+        self.ops.len()
     }
 }
 
 impl FileNodeOps<RawMutex> for VirtFile {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
-        let data = self.ops.read_all()?;
-        if offset >= data.len() as u64 {
-            return Ok(0);
-        }
-        let data = &data[offset as usize..];
-        let read = data.len().min(buf.len());
-        buf[..read].copy_from_slice(&data[..read]);
-        Ok(read)
+        self.ops.read_at(buf, offset)
     }
 
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
-        self.ops.write_all(buf, offset)
+        self.ops.write_at(buf, offset)
     }
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
-        let mut data = self.ops.read_all()?.into_owned();
-        data.extend_from_slice(buf);
-        self.ops.write_all(&data, 0)?;
-        Ok((buf.len(), data.len() as u64))
+        let length = self.ops.len()?;
+        let written = self.ops.write_at(buf, length)?;
+        Ok((written, length + written as u64))
     }
 
-    fn set_len(&self, len: u64) -> VfsResult<()> {
-        let data = self.ops.read_all()?;
-        match len.cmp(&(data.len() as u64)) {
-            Ordering::Less => self.ops.write_all(&data[..len as usize], 0).map(|_| ()),
-            Ordering::Greater => {
-                let mut new_data = data.into_owned();
-                new_data.resize(len as usize, 0);
-                self.ops.write_all(&new_data, 0).map(|_| ())
-            }
-            Ordering::Equal => Ok(()),
-        }
+    fn set_len(&self, _len: u64) -> VfsResult<()> {
+        Err(VfsError::EACCES)
     }
 
-    fn set_symlink(&self, target: &str) -> VfsResult<()> {
-        self.ops.write_all(target.as_bytes(), 0).map(|_| ())
-    }
-}
-
-/// Type alias for directory maker function
-pub type DirMaker =
-    Arc<dyn Fn(WeakDirEntry<RawMutex>) -> Arc<dyn DirNodeOps<RawMutex>> + Send + Sync>;
-
-pub trait VirtDirOps: Send + Sync {
-    fn read_dir(&self) -> impl Iterator<Item = Cow<str>>;
-    fn lookup(&self, name: &str) -> Option<VirtNodeOps>;
-}
-
-impl VirtDirOps for () {
-    fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
-        iter::empty()
-    }
-
-    fn lookup(&self, _name: &str) -> Option<VirtNodeOps> {
-        None
+    fn set_symlink(&self, _target: &str) -> VfsResult<()> {
+        Err(VfsError::EACCES)
     }
 }
 

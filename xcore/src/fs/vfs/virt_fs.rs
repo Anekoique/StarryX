@@ -3,13 +3,29 @@ use core::{any::Any, time::Duration};
 
 use axfs_ng_vfs::{
     DeviceId, DirEntry, DirNode, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate,
-    NodeOps, NodePermission, NodeType, Reference, StatFs, VfsError, VfsResult,
+    NodeOps, NodePermission, NodeType, Reference, StatFs, VfsError, VfsResult, path::MAX_NAME_LEN,
 };
 use axsync::{Mutex, RawMutex};
 use inherit_methods_macro::inherit_methods;
 use slab::Slab;
 
-use super::{dummy_stat, virt_file::DirMaker};
+use super::virt_file::DirMaker;
+
+/// Create a dummy statfs for virtual filesystems
+pub(crate) fn dummy_stat(fs_type: u32) -> StatFs {
+    StatFs {
+        fs_type,
+        block_size: 4096,
+        blocks: 0,
+        blocks_free: 0,
+        blocks_available: 0,
+        file_count: 0,
+        free_file_count: 0,
+        name_length: MAX_NAME_LEN as _,
+        fragment_size: 0,
+        mount_flags: 0,
+    }
+}
 
 /// Virtual filesystem implementation
 pub struct VirtFs {

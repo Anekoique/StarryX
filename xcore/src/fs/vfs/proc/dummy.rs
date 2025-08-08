@@ -1,6 +1,5 @@
 /// Dummy memory information (Linux-style /proc/meminfo)
-pub const DUMMY_MEMINFO: &str = r#"
-MemTotal:        8192000 kB
+pub const DUMMY_MEMINFO: &str = r#"MemTotal:        8192000 kB
 MemFree:         6144000 kB
 MemAvailable:    6144000 kB
 Buffers:               0 kB
@@ -54,8 +53,7 @@ DirectMap1G:           0 kB
 "#;
 
 /// Dummy CPU information (Linux-style /proc/cpuinfo)
-pub const DUMMY_CPUINFO: &str = r#"
-processor	: 0
+pub const DUMMY_CPUINFO: &str = r#"processor	: 0
 vendor_id	: StarryOS
 cpu family	: 6
 model		: 42
@@ -83,14 +81,12 @@ power management:
 
 "#;
 
-pub const DUMMY_MOUNTINFO: &str = r#"
-proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+pub const DUMMY_MOUNTINFO: &str = r#"proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 devtmpfs /dev devtmpfs rw,nosuid,relatime 0 0
 tmpfs /tmp tmpfs rw,relatime 0 0
 "#;
 
-pub const DUMMY_MAPS: &str = r#"
-00400000-00401000 r-xp 00000000 08:01 1000000000000000 /bin/sh
+pub const DUMMY_MAPS: &str = r#"00400000-00401000 r-xp 00000000 08:01 1000000000000000 /bin/sh
 00401000-00402000 r--p 00000000 08:01 1000000000000000 /bin/sh
 "#;
 

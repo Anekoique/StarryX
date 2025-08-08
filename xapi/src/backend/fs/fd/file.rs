@@ -60,14 +60,6 @@ impl File {
             .unwrap_or_else(|| inner.write_at(buf, offset))
     }
 
-    pub fn len(&self) -> LinuxResult<u64> {
-        let inner = self.inner();
-        Ok(PAGE_CACHE_MANAGER
-            .get_cache(inner.inode()?)
-            .map(|cache| cache.get_size())
-            .unwrap_or(inner.len()?))
-    }
-
     pub fn set_len(&self, len: u64) -> LinuxResult<()> {
         let inner = self.inner();
         PAGE_CACHE_MANAGER
@@ -151,6 +143,14 @@ impl FileLike for File {
 
     fn get_location(&self) -> Option<Location<RawMutex>> {
         Some(self.inner().inner().clone())
+    }
+
+    fn len(&self) -> LinuxResult<u64> {
+        let inner = self.inner();
+        Ok(PAGE_CACHE_MANAGER
+            .get_cache(inner.inode()?)
+            .map(|cache| cache.get_size())
+            .unwrap_or(inner.len()?))
     }
 }
 

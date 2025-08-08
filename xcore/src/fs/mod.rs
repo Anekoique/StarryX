@@ -4,39 +4,20 @@
 //! - `/dev` - Device filesystem (devfs)
 //! - `/tmp` - Temporary filesystem (tmpfs)
 //! - `/proc` - Process information filesystem (procfs)
+#![allow(dead_code)]
+#![allow(clippy::len_without_is_empty)]
 
 mod fd;
 mod file;
+pub mod vfs;
 
 pub use fd::*;
 pub use file::*;
 
-pub mod vfs;
-pub mod virt_file;
-pub mod virt_fs;
-
-pub use vfs::dev::*;
-
 use axerrno::LinuxResult;
 use axfs_ng::FS_CONTEXT;
-use axfs_ng_vfs::{Filesystem, NodePermission, StatFs, path::MAX_NAME_LEN};
+use axfs_ng_vfs::{Filesystem, NodePermission};
 use axsync::RawMutex;
-
-/// Create a dummy statfs for virtual filesystems
-pub(crate) fn dummy_stat(fs_type: u32) -> StatFs {
-    StatFs {
-        fs_type,
-        block_size: 4096,
-        blocks: 0,
-        blocks_free: 0,
-        blocks_available: 0,
-        file_count: 0,
-        free_file_count: 0,
-        name_length: MAX_NAME_LEN as _,
-        fragment_size: 0,
-        mount_flags: 0,
-    }
-}
 
 /// Initialize a virtual filesystem at the given path
 fn mount_fs(path: &str, fs: Filesystem<RawMutex>, permissions: NodePermission) -> LinuxResult<()> {
