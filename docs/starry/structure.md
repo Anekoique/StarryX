@@ -10,3 +10,8 @@
 2. Starry API：关于POSIX API的核心逻辑实现。我们将API划分为syscall，backend和utils三个模块，其中syscall模块封装了标准的POSIX接口，backend模块调用外部组件为syscall的实现提供数据结构的抽象和具体实现的支持，utils模块调用外部模块并封装给beckend和syscall复用，从而保证了模块的层次清晰
 3. Starry Modules：支持宏内核实现POSIX接口的关键组件。与ArceOS的组件化开发原则一致，我们希望Starry中实现的功能可以被其他内核架构复用，我们将他们抽象为各个组件并与具体内核功能解耦。他们与ArceOS Modules共同支撑了Core与API的实现
 
+## ArceOS架构分析
+
+![structure](./images/ArceOS.svg)
+
+本章将描述基座代码ArceOS 的整体架构和设计理念，介绍其作为组件化操作系统的特殊内核形态，以及如何基于其高度灵活性和可扩展性实现宏内核扩展。
