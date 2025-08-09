@@ -1,0 +1,11 @@
+[package]
+name = "xvma"
+version = "0.1.0"
+edition = "2024"
+authors = ["Anekoique <ctolu01@gmail.com>"]
+
+[dependencies]
+axerrno = "0.1"
+memory_addr = "0.4"
+page_table_multiarch = "0.5.5"
+spin = "0.9"

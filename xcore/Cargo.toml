@@ -13,17 +13,19 @@ axfs-ng-vfs.workspace = true
 axhal.workspace = true
 axlog.workspace = true
 axmm.workspace = true
+axnet.workspace = true
 axns.workspace = true
 axsync.workspace = true
 axtask.workspace = true
 axio.workspace = true
 axalloc.workspace = true
 
-axprocess.workspace = true
-axsignal.workspace = true
-axuspace.workspace = true
-axvma.workspace = true
-page_cache.workspace = true
+xcache.workspace = true
+xprocess.workspace = true
+xsignal.workspace = true
+xuspace.workspace = true
+xvma.workspace = true
+xutils.workspace = true
 
 axerrno.workspace = true
 linkme.workspace = true
@@ -39,6 +41,8 @@ xmas-elf = "0.9"
 cfg-if = "1.0"
 lazy_static = "1.5"
 flatten_objects = "0.2.4"
+page_table_entry = "0.5.5"
+ctor_bare = "0.2.1"
 
 chrono = { version = "0.4.41", default-features = false }
 bitmaps = { version = "3.2.1", default-features = false }

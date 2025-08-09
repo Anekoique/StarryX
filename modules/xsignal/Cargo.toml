@@ -1,0 +1,31 @@
+[package]
+name = "xsignal"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axerrno = "0.1"
+bitflags = "2.6"
+
+axconfig.workspace = true
+axhal = { workspace = true, features = ["uspace"] }
+axtask = { workspace = true, features = [
+    "multitask",
+] }
+
+xprocess.workspace = true
+xuspace.workspace = true
+
+page_table_multiarch.workspace = true
+
+cfg-if = "1.0.0"
+linux-raw-sys = { version = "0.9.3", default-features = false, features = [
+    "general",
+    "no_std",
+] }
+log = "0.4"
+strum_macros = "0.27.1"
+lock_api = "0.4.12"
+derive_more = { version = "2.0.1", default-features = false, features = [
+    "full",
+] }

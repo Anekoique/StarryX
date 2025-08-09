@@ -1,17 +1,18 @@
+use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use alloc::{sync::Arc, vec::Vec};
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 use axfs_ng_vfs::FileNodeOps;
 use axmm::{AddrSpace, PageIter4K};
 use axsync::{Mutex, RawMutex};
-use axuspace::UserSpaceAccess;
-use axvma::{MmapRegion, VmFile, VmaManager};
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
-use page_cache::{InodeOps, PageOps};
 use page_table_multiarch::{MappingFlags, PageSize};
 use spin::RwLock;
+use xcache::{InodeOps, PageOps};
+
+use xuspace::UserSpaceAccess;
+use xvma::{MmapRegion, VmFile, VmaManager};
 
 use super::PAGE_CACHE_MANAGER;
 

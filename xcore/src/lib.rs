@@ -31,11 +31,15 @@ extern crate alloc;
 pub mod config;
 /// Virtual filesystem implementations and operations
 pub mod fs;
+/// IPC management
+pub mod ipc;
 /// Memory management and address space operations
 pub mod mm;
-/// Process resource limits and management
-pub mod resources;
+/// Network management
+pub mod net;
+/// System management
+pub mod sys;
 /// Task and process management with signal handling
 pub mod task;
-/// Timer and time tracking for processes
-pub mod time;
+
+pub use sys::*;

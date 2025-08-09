@@ -7,12 +7,12 @@
 #![allow(dead_code)]
 #![allow(clippy::len_without_is_empty)]
 
-mod fd;
-mod file;
+pub mod api;
+pub mod fd;
+pub mod file;
 pub mod vfs;
 
-pub use fd::*;
-pub use file::*;
+pub use api::*;
 
 use axerrno::LinuxResult;
 use axfs_ng::FS_CONTEXT;

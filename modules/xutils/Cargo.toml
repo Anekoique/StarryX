@@ -1,0 +1,17 @@
+[package]
+name = "xutils"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+axhal.workspace = true
+axfs-ng.workspace = true
+axlog.workspace = true
+
+axerrno.workspace = true
+bitflags.workspace = true
+bitmaps = { version = "3.2.1", default-features = false }
+linux-raw-sys = { workspace = true, features = ["ioctl"] }

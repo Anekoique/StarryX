@@ -4,14 +4,15 @@ use alloc::{
     sync::{Arc, Weak},
 };
 
-use axfs_ng_vfs::{VfsResult};
-use axprocess::{Process, Thread};
+use axfs_ng_vfs::VfsResult;
 use weak_map::StrongRef;
+use xprocess::{Process, Thread};
 
 use super::DUMMY_MAPS;
 use crate::{
     fs::{
-        FD_TABLE, XFile,
+        fd::FD_TABLE,
+        file::XFile,
         vfs::{
             DirMaker, VirtDir, VirtDirBuilder, VirtDirOps, VirtFile, VirtFileOps, VirtFs,
             VirtNodeOps,
@@ -75,7 +76,10 @@ fn create_fd_root(fs: Arc<VirtFs>, proc: Arc<Process>) -> VirtDirBuilder<()> {
     for fd in fd_table.ids() {
         root.add(
             fd.to_string(),
-            VirtFile::new(fs.clone(), FdOps(fd_table.get(fd as _).unwrap().downgrade())),
+            VirtFile::new(
+                fs.clone(),
+                FdOps(fd_table.get(fd as _).unwrap().downgrade()),
+            ),
         );
     }
     root

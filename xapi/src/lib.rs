@@ -7,8 +7,11 @@
 extern crate axlog;
 extern crate alloc;
 
-pub mod backend;
-mod syscall;
-pub mod utils;
+pub mod fs;
+pub mod ipc;
+pub mod mm;
+pub mod net;
+pub mod sys;
+pub mod task;
 
-pub use {backend::*, syscall::*, utils::*};
+pub use {fs::*, ipc::*, mm::*, net::*, sys::*, task::*};

@@ -1,15 +1,16 @@
 use core::time::Duration;
 
 use axerrno::{LinuxError, LinuxResult};
-use axprocess::{Process, ProcessGroup, Thread};
-use axsignal::{
-    SignalInfo,
-    api::{ProcessSignalManager, ThreadSignalManager},
-};
 use axsync::RawMutex;
 use axtask::WaitQueue;
 
-use crate::task::{XProcess, XThread};
+use xprocess::{Process, ProcessGroup, Thread};
+use xsignal::{
+    SignalInfo,
+    api::{ProcessSignalManager, ThreadSignalManager},
+};
+
+use crate::task::{XProcess, XThread, with_xthread};
 
 pub type ProcessSignal = ProcessSignalManager<RawMutex, WaitQueueWrapper>;
 pub type ThreadSignal = ThreadSignalManager<RawMutex, WaitQueueWrapper>;
@@ -22,7 +23,7 @@ impl Default for WaitQueueWrapper {
     }
 }
 
-impl axsignal::api::WaitQueue for WaitQueueWrapper {
+impl xsignal::api::WaitQueue for WaitQueueWrapper {
     fn wait_timeout(&self, timeout: Option<Duration>) -> bool {
         if let Some(timeout) = timeout {
             self.0.wait_timeout(timeout)
@@ -66,4 +67,8 @@ pub fn send_signal_process_group(pg: &ProcessGroup, sig: SignalInfo) -> usize {
         count += send_signal_process(&proc, sig.clone()).is_ok() as usize;
     }
     count
+}
+
+pub fn have_signals() -> bool {
+    with_xthread(|xthread| !xthread.signal.pending().is_empty())
 }

@@ -13,20 +13,21 @@ use core::{
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::UspaceContext;
 use axns::{AxNamespace, AxNamespaceIf};
-use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
-use axsignal::{
-    Signo,
-    api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
-};
 use axsync::Mutex;
 use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
-use axuspace::{UserPtr, UserSpaceAccess, nullable};
-use axvma::MmapRegion;
 use inherit_methods_macro::inherit_methods;
-use linux_raw_sys::general::SCHED_RR;
 use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
+
+use xprocess::{Pid, Process, ProcessGroup, Session, Thread};
+use xsignal::{
+    Signo,
+    api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
+};
+use xuspace::{UserPtr, UserSpaceAccess, nullable};
+use xutils::ctypes::SCHED_RR;
+use xvma::MmapRegion;
 
 use crate::{
     mm::{FileWrapper, XUserSpace},

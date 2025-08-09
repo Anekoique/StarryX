@@ -1,8 +1,8 @@
 use core::any::Any;
 
-use axio::{BufReader, Read};
 use axerrno::AxResult;
 use axfs_ng_vfs::VfsResult;
+use axio::{BufReader, Read};
 use axsync::Mutex;
 use linux_raw_sys::general::{termios, winsize};
 
@@ -25,7 +25,7 @@ fn console_write_bytes(buf: &[u8]) -> AxResult<usize> {
 
 struct Stdin;
 
-impl Read for Stdin{
+impl Read for Stdin {
     // Non-blocking read, returns number of bytes read.
     fn read(&mut self, buf: &mut [u8]) -> AxResult<usize> {
         let mut read_len = 0;
@@ -39,7 +39,7 @@ impl Read for Stdin{
         Ok(read_len)
     }
 }
-    
+
 /// Simple TTY device backed by the platform console with basic state.
 pub struct Tty {
     reader: Mutex<BufReader<Stdin>>,

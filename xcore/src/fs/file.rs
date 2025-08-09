@@ -8,9 +8,10 @@ use axhal::time::TimeValue;
 use axio::PollState;
 use axsync::RawMutex;
 use inherit_methods_macro::inherit_methods;
-use linux_raw_sys::general::{stat, statx, statx_timestamp};
 
-use super::{add_file_like, get_file_like};
+use xutils::ctypes::{stat, statx, statx_timestamp};
+
+use super::fd::{add_file_like, get_file_like};
 
 pub trait FileLike: Send + Sync {
     fn read(&self, buf: &mut [u8]) -> LinuxResult<usize>;

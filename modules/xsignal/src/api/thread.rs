@@ -1,0 +1,297 @@
+use core::{alloc::Layout, time::Duration};
+
+use alloc::sync::Arc;
+use axhal::arch::TrapFrame;
+use lock_api::{Mutex, RawMutex};
+use page_table_multiarch::MappingFlags;
+use xuspace::{UserSpaceAccess, check_region};
+
+use crate::{
+    DefaultSignalAction, PendingSignals, SignalAction, SignalActionFlags, SignalDisposition,
+    SignalInfo, SignalOSAction, SignalSet, SignalStack, Signo, arch::UContext,
+};
+
+use super::{ProcessSignalManager, WaitQueue};
+
+struct SignalFrame {
+    ucontext: UContext,
+    siginfo: SignalInfo,
+    tf: TrapFrame,
+}
+
+/// Thread-level signal manager.
+pub struct ThreadSignalManager<M, WQ> {
+    /// The process-level signal manager
+    proc: Arc<ProcessSignalManager<M, WQ>>,
+
+    /// The pending signals
+    pending: Mutex<M, PendingSignals>,
+    /// The set of signals currently blocked from delivery.
+    blocked: Mutex<M, SignalSet>,
+    /// The stack used by signal handlers
+    stack: Mutex<M, SignalStack>,
+}
+
+impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
+    /// Creates a new thread signal manager
+    ///
+    /// # Arguments
+    /// * `proc` - The process-level signal manager that this thread belongs to
+    pub fn new(proc: Arc<ProcessSignalManager<M, WQ>>) -> Self {
+        Self {
+            proc,
+            pending: Mutex::new(PendingSignals::new()),
+            blocked: Mutex::new(SignalSet::default()),
+            stack: Mutex::new(SignalStack::default()),
+        }
+    }
+
+    fn dequeue_signal(&self, mask: &SignalSet) -> Option<SignalInfo> {
+        self.pending
+            .lock()
+            .dequeue_signal(mask)
+            .or_else(|| self.proc.dequeue_signal(mask))
+    }
+
+    fn handle_signal<A: UserSpaceAccess>(
+        &self,
+        uspace: &A,
+        tf: &mut TrapFrame,
+        restore_blocked: SignalSet,
+        sig: &SignalInfo,
+        action: &SignalAction,
+    ) -> Option<SignalOSAction> {
+        let signo = sig.signo();
+        info!("Handle signal: {:?} {}", signo, axtask::current().id_name());
+        match action.disposition {
+            SignalDisposition::Default => match signo.default_action() {
+                DefaultSignalAction::Terminate => Some(SignalOSAction::Terminate),
+                DefaultSignalAction::CoreDump => Some(SignalOSAction::CoreDump),
+                DefaultSignalAction::Stop => Some(SignalOSAction::Stop),
+                DefaultSignalAction::Ignore => None,
+                DefaultSignalAction::Continue => Some(SignalOSAction::Continue),
+            },
+            SignalDisposition::Ignore => None,
+            SignalDisposition::Handler(handler) => {
+                info!("handle with handler");
+                let layout = Layout::new::<SignalFrame>();
+                let stack = self.stack.lock();
+                let sp = if stack.disabled() || !action.flags.contains(SignalActionFlags::ONSTACK) {
+                    tf.sp()
+                } else {
+                    stack.sp
+                };
+                drop(stack);
+
+                // TODO: check if stack is large enough
+                let aligned_sp = (sp - layout.size()) & !(layout.align() - 1);
+
+                let frame_ptr = aligned_sp as *mut SignalFrame;
+                // SAFETY: pointer is valid
+                let frame = unsafe { &mut *frame_ptr };
+
+                check_region(uspace, aligned_sp.into(), layout, MappingFlags::WRITE)
+                    .map_err(|_| panic!("Failed to check signal frame"))
+                    .ok();
+
+                *frame = SignalFrame {
+                    ucontext: UContext::new(tf, restore_blocked),
+                    siginfo: sig.clone(),
+                    tf: *tf,
+                };
+
+                tf.set_ip(handler as usize);
+                tf.set_sp(aligned_sp);
+                tf.set_arg0(signo as _);
+                tf.set_arg1(&frame.siginfo as *const _ as _);
+                tf.set_arg2(&frame.ucontext as *const _ as _);
+
+                let restorer = action
+                    .restorer
+                    .map_or(self.proc.default_restorer, |f| f as _);
+                #[cfg(target_arch = "x86_64")]
+                tf.push_ra(restorer);
+                #[cfg(not(target_arch = "x86_64"))]
+                tf.set_ra(restorer);
+
+                let mut add_blocked = action.mask;
+                if !action.flags.contains(SignalActionFlags::NODEFER) {
+                    add_blocked.add(signo);
+                }
+
+                if action.flags.contains(SignalActionFlags::RESETHAND) {
+                    self.proc.actions.lock()[signo] = SignalAction::default();
+                }
+                *self.blocked.lock() |= add_blocked;
+                Some(SignalOSAction::Handler)
+            }
+        }
+    }
+
+    /// Checks pending signals and handle them.
+    ///
+    /// Returns the signal number and the action the OS should take, if any.
+    pub fn check_signals<A: UserSpaceAccess>(
+        &self,
+        uspace: &A,
+        tf: &mut TrapFrame,
+        restore_blocked: Option<SignalSet>,
+    ) -> Option<(SignalInfo, SignalOSAction)> {
+        let actions = self.proc.actions.lock();
+
+        let blocked = self.blocked.lock();
+        let mask = !*blocked;
+        let restore_blocked = restore_blocked.unwrap_or_else(|| *blocked);
+        drop(blocked);
+
+        loop {
+            let sig = self.dequeue_signal(&mask)?;
+            let action = &actions[sig.signo()];
+            if let Some(os_action) = self.handle_signal(uspace, tf, restore_blocked, &sig, action) {
+                break Some((sig, os_action));
+            }
+        }
+    }
+
+    /// Checks for fatal signals that cannot be blocked or ignored
+    ///
+    /// Fatal signals like SIGKILL and SIGSTOP have special handling - they
+    /// cannot be blocked, caught, or ignored. This method specifically checks
+    /// for these signals and returns the appropriate OS action.
+    ///
+    /// # Returns
+    /// A tuple of (signal_info, os_action) if a fatal signal is pending,
+    /// or `None` if no fatal signals are pending.
+    pub fn check_fatal_signals(&self) -> Option<(SignalInfo, SignalOSAction)> {
+        // Create a signal set containing only SIGKILL and SIGSTOP
+        let mut fatal_signals = SignalSet::default();
+        fatal_signals.add(Signo::SIGKILL);
+        fatal_signals.add(Signo::SIGSTOP);
+        fatal_signals.add(Signo::SIGSEGV);
+
+        // Check if any of these fatal signals are pending
+        // These signals cannot be blocked, so we don't need to check the blocked mask
+        if let Some(sig) = self.dequeue_signal(&fatal_signals) {
+            info!("Fatal signal received: {:?}", sig.signo());
+            // For fatal signals, we should use their default actions
+            // SIGKILL terminates, SIGSTOP stops the process
+            let action = match sig.signo() {
+                Signo::SIGKILL => SignalOSAction::Terminate,
+                Signo::SIGSTOP => SignalOSAction::Stop,
+                Signo::SIGSEGV => SignalOSAction::CoreDump,
+                _ => unreachable!("Only SIGKILL and SIGSTOP should be in fatal_signals"),
+            };
+            Some((sig, action))
+        } else {
+            None
+        }
+    }
+
+    /// Restores the signal frame. Called by `sigreutrn`.
+    pub fn restore<A: UserSpaceAccess>(&self, uspace: &A, tf: &mut TrapFrame) {
+        check_region(
+            uspace,
+            tf.sp().into(),
+            Layout::new::<SignalFrame>(),
+            MappingFlags::WRITE,
+        )
+        .map_err(|_| panic!("Failed to check signal frame"))
+        .ok();
+
+        let frame_ptr = tf.sp() as *const SignalFrame;
+
+        // SAFETY: pointer is valid
+        let frame = unsafe { &*frame_ptr };
+
+        *tf = frame.tf;
+        frame.ucontext.mcontext.restore(tf);
+
+        *self.blocked.lock() = frame.ucontext.sigmask;
+    }
+
+    /// Sends a signal to the thread.
+    ///
+    /// This sends a signal specifically to this thread's pending signal queue.
+    /// For process-wide signals that any thread can handle, use the process-level
+    /// `send_signal` method instead.
+    pub fn send_signal(&self, sig: SignalInfo) {
+        self.pending.lock().put_signal(sig);
+        self.proc.wq.notify_all();
+    }
+
+    /// Gets the blocked signals.
+    pub fn blocked(&self) -> SignalSet {
+        *self.blocked.lock()
+    }
+
+    /// Applies a function to the blocked signals.
+    pub fn with_blocked_mut<R>(&self, f: impl FnOnce(&mut SignalSet) -> R) -> R {
+        f(&mut self.blocked.lock())
+    }
+
+    /// Gets the signal stack.
+    pub fn stack(&self) -> SignalStack {
+        *self.stack.lock()
+    }
+
+    /// Applies a function to the signal stack.
+    pub fn with_stack_mut<R>(&self, f: impl FnOnce(&mut SignalStack) -> R) -> R {
+        f(&mut self.stack.lock())
+    }
+
+    /// Gets current pending signals.
+    pub fn pending(&self) -> SignalSet {
+        self.pending.lock().set | self.proc.pending()
+    }
+
+    /// Suspends execution of the calling thread until one of the signals in
+    /// `set` is pending.
+    ///
+    /// If one of the signals in set is already pending for the calling thread,
+    /// this will return immediately.
+    ///
+    /// Returns the signal that was received, or `None` if the timeout expired.
+    pub fn wait_timeout(
+        &self,
+        mut set: SignalSet,
+        timeout: Option<Duration>,
+    ) -> Option<SignalInfo> {
+        // Non-blocked signals cannot be waited
+        set &= self.blocked();
+
+        if let Some(sig) = self.dequeue_signal(&set) {
+            return Some(sig);
+        }
+
+        let wq = &self.proc.wq;
+        let deadline = timeout.map(|dur| axhal::time::wall_time() + dur);
+
+        // There might be false wakeups, so we need a loop
+        loop {
+            match &deadline {
+                Some(deadline) => {
+                    match deadline.checked_sub(axhal::time::wall_time()) {
+                        Some(dur) => {
+                            if wq.wait_timeout(Some(dur)) {
+                                // timed out
+                                break;
+                            }
+                        }
+                        None => {
+                            // deadline passed
+                            break;
+                        }
+                    }
+                }
+                _ => wq.wait(),
+            }
+
+            if let Some(sig) = self.dequeue_signal(&set) {
+                return Some(sig);
+            }
+        }
+
+        // TODO: EINTR
+        None
+    }
+}

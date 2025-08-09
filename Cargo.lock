@@ -321,6 +321,8 @@ dependencies = [
 [[package]]
 name = "axio"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30aa258a37c25c5e9d3ff45ec80e728ff7c499586e3e40719daf7908f10fd5bd"
 dependencies = [
  "axerrno",
 ]
@@ -379,16 +381,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axprocess"
-version = "0.1.0"
-dependencies = [
- "ctor",
- "kspin",
- "lazyinit",
- "weak-map",
-]
-
-[[package]]
 name = "axruntime"
 version = "0.1.0"
 dependencies = [
@@ -419,26 +411,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axsignal"
-version = "0.1.0"
-dependencies = [
- "axconfig",
- "axerrno",
- "axhal",
- "axprocess",
- "axtask",
- "axuspace",
- "bitflags 2.9.1",
- "cfg-if",
- "derive_more",
- "linux-raw-sys",
- "lock_api",
- "log",
- "page_table_multiarch",
- "strum_macros",
-]
-
-[[package]]
 name = "axsync"
 version = "0.1.0"
 dependencies = [
@@ -465,27 +437,6 @@ dependencies = [
  "percpu",
  "timer_list",
  "weak-map",
-]
-
-[[package]]
-name = "axuspace"
-version = "0.1.0"
-dependencies = [
- "axerrno",
- "log",
- "memory_addr",
- "page_table_multiarch",
- "percpu",
-]
-
-[[package]]
-name = "axvma"
-version = "0.1.0"
-dependencies = [
- "axerrno",
- "memory_addr",
- "page_table_multiarch",
- "spin 0.9.8",
 ]
 
 [[package]]
@@ -1229,18 +1180,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 
 [[package]]
-name = "page_cache"
-version = "0.1.0"
-dependencies = [
- "axerrno",
- "axhal",
- "log",
- "lru",
- "memory_addr",
- "spin 0.9.8",
-]
-
-[[package]]
 name = "page_table_entry"
 version = "0.5.5"
 dependencies = [
@@ -1572,22 +1511,23 @@ dependencies = [
  "axio",
  "axlog",
  "axmm",
- "axprocess",
  "axruntime",
- "axsignal",
  "axsync",
  "axtask",
- "axuspace",
- "axvma",
  "inherit-methods-macro",
  "linkme",
  "linux-raw-sys",
- "page_cache",
  "shlex",
  "spin 0.9.8",
  "syscalls",
  "xapi",
+ "xcache",
  "xcore",
+ "xprocess",
+ "xsignal",
+ "xuspace",
+ "xutils",
+ "xvma",
 ]
 
 [[package]]
@@ -1772,7 +1712,7 @@ checksum = "442887c63f2c839b346c192d047a7c87e73d0689c9157b00b53dcc27dd5ea793"
 [[package]]
 name = "weak-map"
 version = "0.1.1"
-source = "git+https://github.com/Starry-OS/weak-map#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
+source = "git+https://github.com/Starry-OS/weak-map.git#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
 
 [[package]]
 name = "windows-link"
@@ -2000,12 +1940,8 @@ dependencies = [
  "axmm",
  "axnet",
  "axns",
- "axprocess",
- "axsignal",
  "axsync",
  "axtask",
- "axuspace",
- "axvma",
  "bitflags 2.9.1",
  "bitmaps",
  "cfg-if",
@@ -2023,6 +1959,23 @@ dependencies = [
  "spin 0.9.8",
  "x86",
  "xcore",
+ "xprocess",
+ "xsignal",
+ "xuspace",
+ "xutils",
+ "xvma",
+]
+
+[[package]]
+name = "xcache"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "axhal",
+ "log",
+ "lru",
+ "memory_addr",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -2038,17 +1991,15 @@ dependencies = [
  "axio",
  "axlog",
  "axmm",
+ "axnet",
  "axns",
- "axprocess",
- "axsignal",
  "axsync",
  "axtask",
- "axuspace",
- "axvma",
  "bitmaps",
  "cfg-if",
  "chrono",
  "crate_interface",
+ "ctor_bare",
  "flatten_objects",
  "inherit-methods-macro",
  "kernel-elf-parser",
@@ -2058,14 +2009,20 @@ dependencies = [
  "lock_api",
  "memory_addr",
  "numeric-enum-macro",
- "page_cache",
+ "page_table_entry",
  "page_table_multiarch",
  "percpu",
  "rand",
  "slab",
  "spin 0.9.8",
  "weak-map",
+ "xcache",
  "xmas-elf",
+ "xprocess",
+ "xsignal",
+ "xuspace",
+ "xutils",
+ "xvma",
 ]
 
 [[package]]
@@ -2075,6 +2032,70 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42c49817e78342f7f30a181573d82ff55b88a35f86ccaf07fc64b3008f56d1c6"
 dependencies = [
  "zero",
+]
+
+[[package]]
+name = "xprocess"
+version = "0.1.0"
+dependencies = [
+ "ctor",
+ "kspin",
+ "lazyinit",
+ "weak-map",
+]
+
+[[package]]
+name = "xsignal"
+version = "0.1.0"
+dependencies = [
+ "axconfig",
+ "axerrno",
+ "axhal",
+ "axtask",
+ "bitflags 2.9.1",
+ "cfg-if",
+ "derive_more",
+ "linux-raw-sys",
+ "lock_api",
+ "log",
+ "page_table_multiarch",
+ "strum_macros",
+ "xprocess",
+ "xuspace",
+]
+
+[[package]]
+name = "xuspace"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "log",
+ "memory_addr",
+ "page_table_multiarch",
+ "percpu",
+]
+
+[[package]]
+name = "xutils"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "axfs-ng",
+ "axhal",
+ "axlog",
+ "bitflags 2.9.1",
+ "bitmaps",
+ "linux-raw-sys",
+]
+
+[[package]]
+name = "xvma"
+version = "0.1.0"
+dependencies = [
+ "axerrno",
+ "memory_addr",
+ "page_table_multiarch",
+ "spin 0.9.8",
 ]
 
 [[package]]

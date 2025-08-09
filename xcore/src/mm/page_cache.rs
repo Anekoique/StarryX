@@ -1,11 +1,10 @@
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use axerrno::LinuxResult;
 use lazy_static::lazy_static;
-use page_cache::PageCache;
 use spin::RwLock;
+use xcache::PageCache;
 
-use super::XUserSpace;
-use crate::mm::InodeWrapper;
+use super::{InodeWrapper, XUserSpace};
 
 lazy_static! {
     pub static ref PAGE_CACHE_MANAGER: PageCacheManager = PageCacheManager::new();

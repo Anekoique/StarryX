@@ -34,7 +34,7 @@ pub fn copy_from_kernel(aspace: &mut AddrSpace) -> AxResult {
 pub fn map_trampoline(aspace: &mut AddrSpace) -> AxResult {
     aspace.map_linear(
         crate::config::SIGNAL_TRAMPOLINE.into(),
-        virt_to_phys(axsignal::arch::signal_trampoline_address().into()),
+        virt_to_phys(xsignal::arch::signal_trampoline_address().into()),
         PAGE_SIZE_4K,
         MappingFlags::READ | MappingFlags::EXECUTE | MappingFlags::USER,
         PageSize::Size4K,

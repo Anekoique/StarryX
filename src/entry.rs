@@ -1,18 +1,20 @@
 use alloc::{borrow::ToOwned, string::String, sync::Arc};
+
 use axfs_ng::FS_CONTEXT;
 use axhal::arch::UspaceContext;
-use axprocess::{Pid, init_proc};
-use axsignal::Signo;
 use axsync::Mutex;
-use axvma::VmaManager;
-use linux_raw_sys::general::AT_FDCWD;
 use spin::RwLock;
-use xapi::{fs::with_fs, ipc::IPC_MANAGER};
+
 use xcore::{
-    fs::FD_TABLE,
+    fs::{fd::FD_TABLE, with_fs},
+    ipc::IPC_MANAGER,
     mm::{XUserSpace, copy_from_kernel, load_app, load_file, map_trampoline, new_aspace},
     task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task},
 };
+use xprocess::{Pid, init_proc};
+use xsignal::Signo;
+use xutils::ctypes::AT_FDCWD;
+use xvma::VmaManager;
 
 pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     let mut uspace = new_aspace()

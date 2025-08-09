@@ -20,10 +20,10 @@ axns.workspace = true
 axsync.workspace = true
 axtask.workspace = true
 
-axprocess.workspace = true
-axsignal.workspace = true
-axuspace.workspace = true
-axvma.workspace = true
+xprocess.workspace = true
+xsignal.workspace = true
+xuspace.workspace = true
+xvma.workspace = true
 
 axerrno.workspace = true
 bitflags.workspace = true
@@ -35,6 +35,7 @@ page_table_multiarch.workspace = true
 spin.workspace = true
 
 xcore.workspace = true
+xutils.workspace = true
 
 axio = "0.1.1"
 bitmaps = { version = "3.2.1", default-features = false }
