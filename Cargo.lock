@@ -1712,7 +1712,7 @@ checksum = "442887c63f2c839b346c192d047a7c87e73d0689c9157b00b53dcc27dd5ea793"
 [[package]]
 name = "weak-map"
 version = "0.1.1"
-source = "git+https://github.com/Starry-OS/weak-map.git#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
+source = "git+https://github.com/Starry-OS/weak-map#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
 
 [[package]]
 name = "windows-link"
@@ -1943,12 +1943,7 @@ dependencies = [
  "axsync",
  "axtask",
  "bitflags 2.9.1",
- "bitmaps",
  "cfg-if",
- "chrono",
- "ctor_bare",
- "flatten_objects",
- "lazy_static",
  "linkme",
  "linux-raw-sys",
  "memory_addr",
@@ -1995,12 +1990,10 @@ dependencies = [
  "axns",
  "axsync",
  "axtask",
- "bitmaps",
  "cfg-if",
  "chrono",
  "crate_interface",
  "ctor_bare",
- "flatten_objects",
  "inherit-methods-macro",
  "kernel-elf-parser",
  "lazy_static",
@@ -2011,11 +2004,8 @@ dependencies = [
  "numeric-enum-macro",
  "page_table_entry",
  "page_table_multiarch",
- "percpu",
  "rand",
- "slab",
  "spin 0.9.8",
- "weak-map",
  "xcache",
  "xmas-elf",
  "xprocess",
@@ -2081,11 +2071,15 @@ version = "0.1.0"
 dependencies = [
  "axerrno",
  "axfs-ng",
+ "axfs-ng-vfs",
  "axhal",
  "axlog",
  "bitflags 2.9.1",
  "bitmaps",
+ "flatten_objects",
  "linux-raw-sys",
+ "slab",
+ "weak-map",
 ]
 
 [[package]]

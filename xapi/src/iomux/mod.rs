@@ -10,13 +10,13 @@ use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use spin::Mutex;
 
-use xcore::fs::{
-    fd::get_file_like,
-    file::{FileLike, Kstat},
-};
+use xcore::fs::{fd::get_file_like, file::FileLike};
 use xutils::{
-    collections::BTreeMap,
-    ctypes::{epoll_event, fs::IoEvents},
+    collections::btreemap::BTreeMap,
+    ctypes::{
+        epoll_event,
+        fs::{IoEvents, Kstat},
+    },
     time::{TimeValue, wall_time},
 };
 

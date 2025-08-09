@@ -5,12 +5,9 @@ use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use axsync::Mutex;
 
-use xutils::ctypes::{EFD_SEMAPHORE, S_IFIFO};
+use xutils::ctypes::{EFD_SEMAPHORE, S_IFIFO, fs::Kstat};
 
-use crate::{
-    fs::file::{FileLike, Kstat},
-    task::have_signals,
-};
+use crate::{fs::file::FileLike, task::have_signals};
 
 /// EventFd implementation for inter-process communication
 pub struct EventFd {

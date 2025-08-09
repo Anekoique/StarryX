@@ -7,7 +7,7 @@ use axtask::WaitQueue;
 
 use xprocess::Pid;
 use xutils::{
-    collections::BTreeMap,
+    collections::btreemap::BTreeMap,
     ctypes::{
         __kernel_mode_t, __kernel_pid_t, __kernel_time_t, SEMMNI, SEMMNS, SEMVMX, c_long, c_ushort,
     },

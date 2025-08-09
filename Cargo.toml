@@ -7,6 +7,7 @@ exclude = ["arceos", "apps"]
 version = "0.1.0"
 edition = "2024"
 authors = [
+    "Anekoique <ctolu01@gmail.com>",
     "Azure-stars <Azure_stars@126.com>",
     "Yuekai Jia <equation618@gmail.com>",
 ]
@@ -35,12 +36,12 @@ axsync = { path = "arceos/modules/axsync", features = [ "multitask" ] }
 axtask = { path = "arceos/modules/axtask", features = [ "smp" ] }
 axalloc = { path = "arceos/modules/axalloc" }
 
-xcache = { path = "./modules/xcache" }
-xprocess = { path = "./modules/xprocess" }
-xsignal = { path = "./modules/xsignal" }
-xuspace = { path = "./modules/xuspace" }
-xvma = { path = "./modules/xvma" }
-xutils = { path = "./modules/xutils" }
+xcache = { path = "./xmodules/xcache" }
+xprocess = { path = "./xmodules/xprocess" }
+xsignal = { path = "./xmodules/xsignal" }
+xuspace = { path = "./xmodules/xuspace" }
+xvma = { path = "./xmodules/xvma" }
+xutils = { path = "./xmodules/xutils" }
 
 axfs-ng = { path = "./arceos/modules/axfs-ng" }
 axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }

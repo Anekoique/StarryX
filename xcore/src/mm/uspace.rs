@@ -9,8 +9,8 @@ use axsync::{Mutex, RawMutex};
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 use page_table_multiarch::{MappingFlags, PageSize};
 use spin::RwLock;
-use xcache::{InodeOps, PageOps};
 
+use xcache::{InodeOps, PageOps};
 use xuspace::UserSpaceAccess;
 use xvma::{MmapRegion, VmFile, VmaManager};
 

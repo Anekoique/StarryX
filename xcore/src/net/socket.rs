@@ -7,12 +7,9 @@ use axio::{PollState, Read};
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
-use xutils::ctypes::S_IFSOCK;
+use xutils::ctypes::{S_IFSOCK, fs::Kstat};
 
-use crate::fs::{
-    fd::get_file_like,
-    file::{FileLike, Kstat},
-};
+use crate::fs::{fd::get_file_like, file::FileLike};
 
 pub enum Socket {
     Udp(Mutex<UdpSocket>),

@@ -1,17 +1,16 @@
 use alloc::sync::Arc;
-use core::any::Any;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::{
+    any::Any,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
 use axsync::Mutex;
 
-use xutils::ctypes::S_IFIFO;
+use xutils::ctypes::{S_IFIFO, fs::Kstat};
 
-use crate::{
-    fs::file::{FileLike, Kstat},
-    task::have_signals,
-};
+use crate::{fs::file::FileLike, task::have_signals};
 
 #[derive(Copy, Clone, PartialEq)]
 enum RingBufferStatus {

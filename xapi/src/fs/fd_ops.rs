@@ -9,7 +9,8 @@ use xcore::{
     fs::{
         fd::{Directory, FD_TABLE, File, add_file_like, close_file_like, get_file_like},
         file::FileLike,
-        is_virtual_fs, with_fs,
+        vfs::is_virtual_fs,
+        with_fs,
     },
     mm::{InodeWrapper, PAGE_CACHE_MANAGER},
     task::with_uspace,

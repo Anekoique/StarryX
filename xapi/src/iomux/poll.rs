@@ -7,7 +7,7 @@ use xutils::{
     time::{TimeValue, TimeValueLike},
 };
 
-use crate::fs::{PollFd, poll};
+use crate::iomux::{PollFd, poll};
 
 /// Wait for events on file descriptors.
 ///

@@ -16,7 +16,7 @@ use xutils::{
     time::{TimeValue, wall_time},
 };
 
-use crate::{fs::EpollInstance, task::check_fatal_signals};
+use crate::{iomux::EpollInstance, task::check_fatal_signals};
 
 pub fn sys_epoll_create(size: i32) -> LinuxResult<isize> {
     if size <= 0 {

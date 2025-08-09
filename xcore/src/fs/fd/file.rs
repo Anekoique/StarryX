@@ -7,11 +7,10 @@ use axfs_ng_vfs::Location;
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
 
+use xutils::ctypes::fs::{Kstat, metadata_to_kstat};
+
 use crate::{
-    fs::{
-        fd::get_file_like,
-        file::{FileLike, Kstat, metadata_to_kstat},
-    },
+    fs::{fd::get_file_like, file::FileLike},
     mm::PAGE_CACHE_MANAGER,
 };
 

@@ -5,7 +5,8 @@ use alloc::{
 };
 use axfs_ng_vfs::*;
 use axsync::{Mutex, RawMutex};
-use slab::Slab;
+
+use xutils::collections::slab::Slab;
 
 use super::virt_fs::dummy_stat;
 

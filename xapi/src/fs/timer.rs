@@ -2,14 +2,11 @@ use axerrno::LinuxResult;
 use axfs_ng::FileFlags;
 
 use xcore::{
-    fs::{
-        fd::{TimerFd, itimerspec},
-        file::FileLike,
-    },
+    fs::{fd::TimerFd, file::FileLike},
     task::with_uspace,
 };
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
-use xutils::ctypes::{__kernel_clockid_t, TFD_CLOEXEC};
+use xutils::ctypes::{__kernel_clockid_t, TFD_CLOEXEC, sys::itimerspec};
 
 /// Create a new timer file descriptor
 ///

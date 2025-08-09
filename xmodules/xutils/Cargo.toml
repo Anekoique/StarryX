@@ -9,9 +9,14 @@ repository.workspace = true
 [dependencies]
 axhal.workspace = true
 axfs-ng.workspace = true
+axfs-ng-vfs.workspace = true
 axlog.workspace = true
 
 axerrno.workspace = true
 bitflags.workspace = true
+
 bitmaps = { version = "3.2.1", default-features = false }
+flatten_objects = "0.2.4"
 linux-raw-sys = { workspace = true, features = ["ioctl"] }
+weak-map = { git = "https://github.com/Starry-OS/weak-map.git" }
+slab = { version = "0.4.9", default-features = false }

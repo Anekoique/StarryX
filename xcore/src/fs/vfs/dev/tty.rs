@@ -1,12 +1,15 @@
-use core::any::Any;
+use core::{any::Any, ffi::c_void};
 
-use axerrno::AxResult;
+use axerrno::{AxResult, LinuxError};
 use axfs_ng_vfs::VfsResult;
 use axio::{BufReader, Read};
 use axsync::Mutex;
-use linux_raw_sys::general::{termios, winsize};
+
+use xuspace::{UserPtr, UserSpaceAccess};
+use xutils::ctypes::{TCGETS, TCSETS, TIOCGWINSZ, TIOCSWINSZ, termios, winsize};
 
 use super::super::virt_fs::VirtDeviceOps;
+use crate::task::with_uspace;
 
 fn console_read_bytes(buf: &mut [u8]) -> AxResult<usize> {
     let len = axhal::console::read_bytes(buf);
@@ -100,5 +103,30 @@ impl VirtDeviceOps for Tty {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn ioctl(&self, op: usize, argp: UserPtr<c_void>) -> VfsResult<isize> {
+        with_uspace(|uspace| {
+            match op as u32 {
+                TIOCGWINSZ => {
+                    let ws = self.get_winsize();
+                    uspace.write(argp.cast::<winsize>(), ws)?;
+                }
+                TIOCSWINSZ => {
+                    let ws = uspace.read(argp.cast::<winsize>())?;
+                    self.set_winsize(ws);
+                }
+                TCGETS => {
+                    let t = self.get_termios();
+                    uspace.write(argp.cast::<termios>(), t)?;
+                }
+                TCSETS => {
+                    let t = uspace.read(argp.cast::<termios>())?;
+                    self.set_termios(t);
+                }
+                _ => return Err(LinuxError::ENOTTY),
+            }
+            Ok(0)
+        })
     }
 }

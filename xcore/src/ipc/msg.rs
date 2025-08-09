@@ -5,7 +5,7 @@ use axsync::Mutex;
 
 use xprocess::Pid;
 use xutils::{
-    collections::BTreeMap,
+    collections::btreemap::BTreeMap,
     ctypes::ipc::MsgRcvFlags,
     ctypes::{
         __kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, MSGMAX, MSGMNB, MSGMNI,

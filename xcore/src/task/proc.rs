@@ -18,7 +18,6 @@ use axtask::{AxTaskExtIf, TaskExtRef, TaskInner, WaitQueue, current};
 use inherit_methods_macro::inherit_methods;
 use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Once, RwLock};
-use weak_map::WeakMap;
 
 use xprocess::{Pid, Process, ProcessGroup, Session, Thread};
 use xsignal::{
@@ -26,7 +25,7 @@ use xsignal::{
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 use xuspace::{UserPtr, UserSpaceAccess, nullable};
-use xutils::ctypes::SCHED_RR;
+use xutils::{collections::weak_map::WeakMap, ctypes::SCHED_RR};
 use xvma::MmapRegion;
 
 use crate::{

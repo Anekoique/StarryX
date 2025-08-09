@@ -1,5 +1,5 @@
 use alloc::{string::String, sync::Arc};
-use core::{any::Any, time::Duration};
+use core::{any::Any, ffi::c_void, time::Duration};
 
 use axfs_ng_vfs::{
     DeviceId, DirEntry, DirNode, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate,
@@ -7,7 +7,9 @@ use axfs_ng_vfs::{
 };
 use axsync::{Mutex, RawMutex};
 use inherit_methods_macro::inherit_methods;
-use slab::Slab;
+
+use xuspace::UserPtr;
+use xutils::collections::slab::Slab;
 
 use super::virt_file::DirMaker;
 
@@ -200,6 +202,7 @@ pub trait VirtDeviceOps: Send + Sync {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize>;
     fn as_any(&self) -> &dyn Any;
+    fn ioctl(&self, op: usize, argp: UserPtr<c_void>) -> VfsResult<isize>;
 }
 
 impl<F> VirtDeviceOps for F
@@ -216,6 +219,10 @@ where
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn ioctl(&self, _op: usize, _argp: UserPtr<c_void>) -> VfsResult<isize> {
+        Ok(0)
     }
 }
 

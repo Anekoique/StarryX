@@ -8,40 +8,12 @@ use axsync::Mutex;
 use xutils::{
     ctypes::{
         __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, S_IFIFO, TFD_NONBLOCK,
-        TFD_TIMER_ABSTIME, timespec,
+        TFD_TIMER_ABSTIME, fs::Kstat, sys::itimerspec, timespec,
     },
     time::{TimeValue, TimeValueLike, monotonic_time, wall_time},
 };
 
-use crate::{
-    fs::file::{FileLike, Kstat},
-    task::have_signals,
-};
-
-/// Timer specification for timerfd
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct itimerspec {
-    /// Timer interval for periodic timers
-    pub it_interval: timespec,
-    /// Initial expiration time
-    pub it_value: timespec,
-}
-
-impl Default for itimerspec {
-    fn default() -> Self {
-        Self {
-            it_interval: timespec {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            it_value: timespec {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-        }
-    }
-}
+use crate::{fs::file::FileLike, task::have_signals};
 
 /// Internal timer state
 #[derive(Debug, Clone)]

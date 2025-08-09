@@ -10,7 +10,7 @@ use xutils::{
     time::{TimeValue, TimeValueLike},
 };
 
-use crate::fs::{PollFd, convert_to_events, convert_to_rwe, poll};
+use crate::iomux::{PollFd, convert_to_events, convert_to_rwe, poll};
 
 fn do_select(
     nfds: u32,

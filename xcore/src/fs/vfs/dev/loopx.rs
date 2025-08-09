@@ -1,6 +1,7 @@
 use alloc::sync::Arc;
 use core::{
     any::Any,
+    ffi::c_void,
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
@@ -8,9 +9,15 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FsFile;
 use axfs_ng_vfs::{DeviceId, VfsResult};
 use axsync::{Mutex, RawMutex};
-use linux_raw_sys::loop_device::loop_info;
+
+use xuspace::{UserPtr, UserSpaceAccess};
+use xutils::ctypes::{
+    BLKGETSIZE, BLKGETSIZE64, BLKRAGET, BLKRASET, BLKROGET, BLKROSET, LOOP_CLR_FD, LOOP_GET_STATUS,
+    LOOP_SET_FD, LOOP_SET_STATUS, loop_info,
+};
 
 use super::VirtDeviceOps;
+use crate::{fs::fd::get_file_like, task::with_uspace};
 
 /// /dev/loopX devices
 pub struct LoopDevice {
@@ -70,5 +77,70 @@ impl VirtDeviceOps for LoopDevice {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn ioctl(&self, op: usize, argp: UserPtr<c_void>) -> VfsResult<isize> {
+        with_uspace(|uspace| {
+            match op as u32 {
+                LOOP_SET_FD => {
+                    let fd = argp.address().as_usize() as i32;
+                    if fd < 0 {
+                        return Err(LinuxError::EBADF);
+                    }
+                    let f = get_file_like(fd)?;
+                    let Ok(file) = f.into_any().downcast::<crate::fs::fd::File>() else {
+                        return Err(LinuxError::EINVAL);
+                    };
+                    let mut guard = self.file.lock();
+                    if guard.is_some() {
+                        return Err(LinuxError::EBUSY);
+                    }
+                    *guard = Some(file.clone_inner());
+                }
+                LOOP_CLR_FD => {
+                    let mut guard = self.file.lock();
+                    if guard.is_none() {
+                        return Err(LinuxError::ENXIO);
+                    }
+                    *guard = None;
+                }
+                LOOP_GET_STATUS => {
+                    self.get_info(uspace.raw_ptr(argp.cast())?)?;
+                }
+                LOOP_SET_STATUS => {
+                    self.set_info(uspace.raw_ptr(argp.cast())?)?;
+                }
+                BLKGETSIZE | BLKGETSIZE64 => {
+                    let file = self.clone_file()?;
+                    let sectors = file.lock().inner().len()? / 512;
+                    if op as u32 == BLKGETSIZE {
+                        uspace.write(argp.cast::<u32>(), sectors as u32)?;
+                    } else {
+                        uspace.write(argp.cast::<u64>(), sectors * 512)?;
+                    }
+                }
+                BLKROGET => {
+                    uspace.write(argp.cast::<u32>(), self.ro.load(Ordering::Relaxed) as u32)?;
+                }
+                BLKROSET => {
+                    let ro = uspace.read(argp.cast::<u32>())?;
+                    if ro != 0 && ro != 1 {
+                        return Err(LinuxError::EINVAL);
+                    }
+                    self.ro.store(ro != 0, Ordering::Relaxed);
+                }
+                BLKRAGET => {
+                    uspace.write(argp.cast::<u32>(), self.ra.load(Ordering::Relaxed))?;
+                }
+                BLKRASET => {
+                    self.ra
+                        .store(argp.address().as_usize() as _, Ordering::Relaxed);
+                }
+                _ => {
+                    warn!("unknown ioctl for loop device: {op}");
+                    return Err(LinuxError::ENOTTY);
+                }
+            }
+            Ok(0)
+        })
     }
 }

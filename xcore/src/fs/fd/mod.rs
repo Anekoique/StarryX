@@ -15,13 +15,14 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FS_CONTEXT, FileFlags};
 use axns::{ResArc, def_resource};
 use axsync::Mutex;
-use bitmaps::Bitmap;
-use flatten_objects::FlattenObjects;
 use spin::RwLock;
 
 use super::file::{FileLike, XFile};
 use crate::task::with_xprocess;
-use xutils::ctypes::RLIMIT_NOFILE;
+use xutils::{
+    collections::{bitmaps::Bitmap, flatten_objects::FlattenObjects},
+    ctypes::RLIMIT_NOFILE,
+};
 
 pub const AX_FILE_LIMIT: usize = 1024;
 

@@ -5,18 +5,23 @@ pub use loopx::LoopDevice;
 pub use tty::Tty;
 
 use alloc::{format, string::ToString, sync::Arc};
-use core::any::Any;
+use core::{any::Any, ffi::c_void};
 
 use axerrno::LinuxResult;
 use axfs_ng::FsContext;
 use axfs_ng_vfs::{DeviceId, Filesystem, NodeType, VfsResult};
 use axsync::{Mutex, RawMutex};
+use chrono::{Datelike, Timelike};
 use rand::{RngCore, SeedableRng, rngs::SmallRng};
+
+use xuspace::{UserPtr, UserSpaceAccess};
+use xutils::{ctypes::sys::rtc_time, time::wall_time_nanos};
 
 use super::{
     virt_file::{DirMaker, VirtDir, VirtFile},
     virt_fs::{VirtDevice, VirtDeviceOps, VirtFs},
 };
+use crate::task::with_uspace;
 
 pub const RTC0_DEVICE_ID: DeviceId = DeviceId::new(250, 0);
 
@@ -45,6 +50,9 @@ impl VirtDeviceOps for Null {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn ioctl(&self, _op: usize, _argp: UserPtr<c_void>) -> VfsResult<isize> {
+        Ok(0)
+    }
 }
 
 struct Zero;
@@ -59,6 +67,9 @@ impl VirtDeviceOps for Zero {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn ioctl(&self, _op: usize, _argp: UserPtr<c_void>) -> VfsResult<isize> {
+        Ok(0)
+    }
 }
 
 struct Full;
@@ -72,6 +83,9 @@ impl VirtDeviceOps for Full {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn ioctl(&self, _op: usize, _argp: UserPtr<c_void>) -> VfsResult<isize> {
+        Ok(0)
     }
 }
 
@@ -96,6 +110,9 @@ impl VirtDeviceOps for Random {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn ioctl(&self, _op: usize, _argp: UserPtr<c_void>) -> VfsResult<isize> {
+        Ok(0)
+    }
 }
 
 pub struct Rtc;
@@ -108,6 +125,23 @@ impl VirtDeviceOps for Rtc {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn ioctl(&self, _op: usize, argp: UserPtr<c_void>) -> VfsResult<isize> {
+        with_uspace(|uspace| {
+            let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
+            uspace.write(argp.cast::<rtc_time>(), rtc_time {
+                tm_sec: wall.second() as _,
+                tm_min: wall.minute() as _,
+                tm_hour: wall.hour() as _,
+                tm_mday: wall.day() as _,
+                tm_mon: wall.month0() as _,
+                tm_year: (wall.year() - 1900) as _,
+                tm_wday: 0,
+                tm_yday: 0,
+                tm_isdst: 0,
+            })?;
+            Ok(0)
+        })
     }
 }
 

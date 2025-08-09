@@ -1,4 +1,4 @@
-use super::{__kernel_old_time_t, c_int};
+use super::{__kernel_old_time_t, c_int, timespec};
 
 #[repr(C)]
 #[allow(non_camel_case_types, dead_code)]
@@ -31,4 +31,29 @@ pub struct Tms {
 pub struct utimbuf {
     pub actime: __kernel_old_time_t,
     pub modtime: __kernel_old_time_t,
+}
+
+/// Timer specification for timerfd
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct itimerspec {
+    /// Timer interval for periodic timers
+    pub it_interval: timespec,
+    /// Initial expiration time
+    pub it_value: timespec,
+}
+
+impl Default for itimerspec {
+    fn default() -> Self {
+        Self {
+            it_interval: timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            },
+            it_value: timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            },
+        }
+    }
 }

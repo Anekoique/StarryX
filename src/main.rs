@@ -56,7 +56,7 @@ fn print_logo() {
 fn main() {
     print_logo();
     xprocess::Process::new_init(axtask::current().id().as_u64() as _).build();
-    xcore::fs::init_root().expect("Failed to mount vfs");
+    xcore::fs::vfs::init_root().expect("Failed to mount vfs");
     xcore::fs::fd::init_stdio().expect("Failed to init stdio");
 
     let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];

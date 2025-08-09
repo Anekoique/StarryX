@@ -2,19 +2,17 @@ use alloc::ffi::CString;
 use core::{
     ffi::{c_char, c_int, c_void},
     mem::offset_of,
-    sync::atomic::Ordering,
 };
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
-use chrono::{Datelike, Timelike};
 
 use xcore::{
     fs::{
         fd::{Directory, File, get_file_like},
         file::FileLike,
-        vfs::{VirtDevice, dev},
+        vfs::VirtDevice,
         with_fs, with_location,
     },
     task::with_uspace,
@@ -22,13 +20,10 @@ use xcore::{
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::{
     ctypes::{
-        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, BLKGETSIZE, BLKGETSIZE64, BLKRAGET, BLKRASET,
-        BLKROGET, BLKROSET, LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_SET_FD, LOOP_SET_STATUS, TCGETS,
-        TCSETS, TIOCGWINSZ, TIOCSWINSZ, UTIME_NOW, UTIME_OMIT, linux_dirent64,
-        sys::{rtc_time, utimbuf},
-        termios, timespec, timeval, winsize,
+        AT_EMPTY_PATH, AT_FDCWD, AT_REMOVEDIR, UTIME_NOW, UTIME_OMIT, linux_dirent64, sys::utimbuf,
+        timespec, timeval,
     },
-    time::{TimeValue, TimeValueLike, wall_time, wall_time_nanos},
+    time::{TimeValue, TimeValueLike, wall_time},
 };
 
 /// The ioctl() system call manipulates the underlying device parameters
@@ -41,7 +36,7 @@ use xutils::{
 /// * `argp` - The argument to the request. It is a pointer to a memory location
 pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize> {
     trace!("sys_ioctl <= fd: {}, op: {}, argp: {:?}", fd, op, argp);
-    let device = get_file_like(fd)?
+    get_file_like(fd)?
         .into_any()
         .downcast::<File>()
         .and_then(|file| {
@@ -50,109 +45,9 @@ pub fn sys_ioctl(fd: i32, op: usize, argp: UserPtr<c_void>) -> LinuxResult<isize
                 .into_any()
                 .downcast::<VirtDevice>()
         })
-        .map_err(|_| LinuxError::ENOTTY)?;
-    let ops = device.inner().as_any();
-
-    with_uspace(|uspace| {
-        if ops.downcast_ref::<dev::Rtc>().is_some() {
-            let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
-            uspace.write(argp.cast::<rtc_time>(), rtc_time {
-                tm_sec: wall.second() as _,
-                tm_min: wall.minute() as _,
-                tm_hour: wall.hour() as _,
-                tm_mday: wall.day() as _,
-                tm_mon: wall.month0() as _,
-                tm_year: (wall.year() - 1900) as _,
-                tm_wday: 0,
-                tm_yday: 0,
-                tm_isdst: 0,
-            })?;
-        } else if let Some(device) = ops.downcast_ref::<dev::LoopDevice>() {
-            match op as u32 {
-                LOOP_SET_FD => {
-                    let fd = argp.address().as_usize() as i32;
-                    if fd < 0 {
-                        return Err(LinuxError::EBADF);
-                    }
-                    let f = get_file_like(fd)?;
-                    let Ok(file) = f.into_any().downcast::<File>() else {
-                        return Err(LinuxError::EINVAL);
-                    };
-                    let mut guard = device.file.lock();
-                    if guard.is_some() {
-                        return Err(LinuxError::EBUSY);
-                    }
-                    *guard = Some(file.clone_inner());
-                }
-                LOOP_CLR_FD => {
-                    let mut guard = device.file.lock();
-                    if guard.is_none() {
-                        return Err(LinuxError::ENXIO);
-                    }
-                    *guard = None;
-                }
-                LOOP_GET_STATUS => {
-                    device.get_info(uspace.raw_ptr(argp.cast())?)?;
-                }
-                LOOP_SET_STATUS => {
-                    device.set_info(uspace.raw_ptr(argp.cast())?)?;
-                }
-                BLKGETSIZE | BLKGETSIZE64 => {
-                    let file = device.clone_file()?;
-                    let sectors = file.lock().inner().len()? / 512;
-                    if op as u32 == BLKGETSIZE {
-                        uspace.write(argp.cast::<u32>(), sectors as u32)?;
-                    } else {
-                        uspace.write(argp.cast::<u64>(), sectors * 512)?;
-                    }
-                }
-                BLKROGET => {
-                    uspace.write(argp.cast::<u32>(), device.ro.load(Ordering::Relaxed) as u32)?;
-                }
-                BLKROSET => {
-                    let ro = uspace.read(argp.cast::<u32>())?;
-                    if ro != 0 && ro != 1 {
-                        return Err(LinuxError::EINVAL);
-                    }
-                    device.ro.store(ro != 0, Ordering::Relaxed);
-                }
-                BLKRAGET => {
-                    uspace.write(argp.cast::<u32>(), device.ra.load(Ordering::Relaxed))?;
-                }
-                BLKRASET => {
-                    device
-                        .ra
-                        .store(argp.address().as_usize() as _, Ordering::Relaxed);
-                }
-                _ => {
-                    warn!("unknown ioctl for loop device: {op}");
-                    return Err(LinuxError::ENOTTY);
-                }
-            }
-        } else if let Some(tty) = ops.downcast_ref::<dev::Tty>() {
-            match op as u32 {
-                TIOCGWINSZ => {
-                    let ws = tty.get_winsize();
-                    uspace.write(argp.cast::<winsize>(), ws)?;
-                }
-                TIOCSWINSZ => {
-                    let ws = uspace.read(argp.cast::<winsize>())?;
-                    tty.set_winsize(ws);
-                }
-                TCGETS => {
-                    let t = tty.get_termios();
-                    uspace.write(argp.cast::<termios>(), t)?;
-                }
-                TCSETS => {
-                    let t = uspace.read(argp.cast::<termios>())?;
-                    tty.set_termios(t);
-                }
-                _ => return Err(LinuxError::ENOTTY),
-            }
-        }
-
-        Ok(0)
-    })
+        .map_err(|_| LinuxError::ENOTTY)?
+        .inner()
+        .ioctl(op, argp)
 }
 
 /// Change the current working directory.

@@ -9,7 +9,7 @@ use page_table_entry::MappingFlags;
 
 use xprocess::Pid;
 use xutils::{
-    collections::{BTreeMap, BiBTreeMap},
+    collections::btreemap::{BTreeMap, BiBTreeMap},
     ctypes::{
         __kernel_mode_t, __kernel_pid_t, __kernel_size_t, __kernel_time_t, SHMALL, SHMMAX, SHMMIN,
         SHMMNI, c_ushort,

@@ -5,8 +5,8 @@ use alloc::{
 };
 
 use axfs_ng_vfs::VfsResult;
-use weak_map::StrongRef;
 use xprocess::{Process, Thread};
+use xutils::collections::weak_map::StrongRef;
 
 use super::DUMMY_MAPS;
 use crate::{
