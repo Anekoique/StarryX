@@ -9,12 +9,14 @@ build-rv:
 	# rm -fr /code/sdcard/riscv/glibc/usr/libexec/git-core
 	mkdir -p /code/sdcard/riscv/musl
 	cp -fr /code/sdcard/riscv/glibc/* /code/sdcard/riscv/musl
-	# cp scripts/git_testcode.sh /code/sdcard/riscv/glibc
-	# cp scripts/git_testcode.sh /code/sdcard/riscv/musl
 	mkdir -p /code/sdcard/riscv/musl/lib
+	cp /opt/riscv64--musl--bleeding-edge-2020.08-1/riscv64-buildroot-linux-musl/sysroot/lib/libc.so sdcard/riscv/musl/lib
 	mkdir -p /code/sdcard/riscv/glibc/lib
-	# sed -E -i 's/#### OS COMP TEST GROUP ([^ ]+) ([^ ]+) ####/#### OS COMP TEST GROUP \1 \2-musl ####/g' sdcard/riscv/musl/*_testcode.sh
-	# sed -E -i 's/#### OS COMP TEST GROUP ([^ ]+) ([^ ]+) ####/#### OS COMP TEST GROUP \1 \2-glibc ####/g' sdcard/riscv/glibc/*_testcode.sh
+	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/glibc/lib/libc.so
+	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/glibc/lib/
+	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/glibc/lib/libm.so
+	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/glibc/lib/
+	cp /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 sdcard/riscv/glibc/lib/ld-linux-riscv64-lp64d.so.1
 
 build-la:
 	make -f Makefile.sub clean
@@ -27,8 +29,6 @@ build-la:
 	mkdir -p /code/sdcard/loongarch/glibc/lib
 	cp scripts/git_testcode.sh /code/sdcard/loongarch/glibc
 	cp scripts/git_testcode.sh /code/sdcard/loongarch/musl
-	sed -E -i 's/#### OS COMP TEST GROUP ([^ ]+) ([^ ]+) ####/#### OS COMP TEST GROUP \1 \2-musl ####/g' sdcard/loongarch/musl/*_testcode.sh
-	sed -E -i 's/#### OS COMP TEST GROUP ([^ ]+) ([^ ]+) ####/#### OS COMP TEST GROUP \1 \2-glibc ####/g' sdcard/loongarch/glibc/*_testcode.sh
 
 sdcard-rv: build-rv .PHONY
 	dd if=/dev/zero of=sdcard-rv.img count=512 bs=1M

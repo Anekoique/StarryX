@@ -14,7 +14,7 @@ else
     $(error "Unknown ARCH! It should be riscv64 or loongarch64")
 endif
 
-all: busybox bash
+all: busybox gcc
 
 
 git: .PHONY
@@ -46,10 +46,41 @@ bash: .PHONY
 	$(STRIP) bash && \
 	cp bash $(DESTDIR)/
 	
+gcc: .PHONY
+	cd gcc && ./contrib/download_prerequisites
+	mkdir -p gcc-build
+	cd gcc-build && \
+	../gcc/configure \
+		--host=$(CROSS_TARGET) \
+		--target=$(CROSS_TARGET) \
+		--prefix=/usr \
+		--enable-languages=c \
+		--disable-multilib \
+		--disable-nls \
+		--disable-libssp \
+		--disable-libgomp \
+		--disable-libquadmath \
+		--disable-libstdcxx \
+		--disable-threads \
+		--disable-shared \
+		--enable-static \
+		--disable-bootstrap \
+		--disable-checking \
+		--without-headers \
+		--with-newlib && \
+	make -j16 all-gcc && \
+	$(STRIP) gcc/xgcc gcc/cc1 && \
+	cp gcc/xgcc $(DESTDIR)/gcc && \
+	mkdir -p $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0 && \
+	cp gcc/cc1 $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ && \
+	mkdir -p $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0 && \
+	cp gcc/cc1 $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0/
+	
 clean:
 	make -C busybox clean
 	make -C git clean
 	make -C zlib clean
+	rm -rf gcc-build
 	
 
 .PHONY: 
