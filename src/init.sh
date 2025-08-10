@@ -1013,4 +1013,4 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 echo -e "\n================ Linux APPs ================\n"
 
 cd /musl
-./bash
+sh

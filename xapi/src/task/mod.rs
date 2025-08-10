@@ -52,7 +52,13 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
             do_exit(128 + signo as i32, true);
         }
         SignalOSAction::Stop => {
-            // TODO: implement stop
+            // TODO: implement proper process stopping
+            // For now, ignore SIGTTIN/SIGTTOU to allow bash job control to work
+            // without implementing full process suspension
+            if matches!(signo, Signo::SIGTTIN | Signo::SIGTTOU) {
+                debug!("Ignoring {:?} signal for temporary job control compatibility", signo);
+                return true; // Signal handled, don't kill the process
+            }
             do_exit(1, true);
         }
         SignalOSAction::Continue => {
@@ -81,7 +87,6 @@ pub fn check_fatal_signals() {
             do_exit(128 + signo as i32, true);
         }
         SignalOSAction::Stop => {
-            // TODO: implement stop
             do_exit(1, true);
         }
         _ => unreachable!("Only SIGKILL and SIGSTOP should be in fatal_signals"),
