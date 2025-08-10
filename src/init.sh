@@ -916,31 +916,31 @@ run_ltp() {
 
 echo -e "\n=============== Build RootFS ===============\n"
 
-/musl/busybox mkdir -v /bin
-/musl/busybox --install -s /bin
-export PATH=/bin
-
-mkdir -v /lib
-mkdir -v /usr
-mkdir -v -p /var/tmp
-
-cp /glibc/lib/libc.so.6 /lib/libc.so.6
-ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
-ln -v -s /lib/libc.so.6 /lib/libc.so
-ln -v -s /lib/libm.so.6 /lib/libm.so
-if [[ $ARCH == loongarch64 ]]; then
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-  ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
-else
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
-  ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
-fi
-ln -v -s /lib /lib64
-ln -v -s /lib /usr/lib
-ln -v -s /lib /usr/lib64
-
-export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+# /musl/busybox mkdir -v /bin
+# /musl/busybox --install -s /bin
+# export PATH=/bin
+# 
+# mkdir -v /lib
+# mkdir -v /usr
+# mkdir -v -p /var/tmp
+# 
+# cp /glibc/lib/libc.so.6 /lib/libc.so.6
+# ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
+# ln -v -s /lib/libc.so.6 /lib/libc.so
+# ln -v -s /lib/libm.so.6 /lib/libm.so
+# if [[ $ARCH == loongarch64 ]]; then
+#   ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+#   ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+# else
+#   ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+#   ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+#   ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+# fi
+# ln -v -s /lib /lib64
+# ln -v -s /lib /usr/lib
+# ln -v -s /lib /usr/lib64
+# 
+# export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 # echo -e "\n=============== Preliminary Round ===============\n"
 # 
@@ -1010,7 +1010,16 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 # cp ./usr/bin/git /bin
 # ./git_testcode.sh
 
+/bin/busybox --install -s /bin
+export PATH=/bin
+export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+mkdir -v -p /var/tmp
+ln -v -s /lib /lib64
+ln -v -s /lib /usr/lib
+ln -v -s /lib /usr/lib64
+
 echo -e "\n================ Linux APPs ================\n"
 
-cd /musl
-sh
+redis-server --bind 0.0.0.0 &
+sleep 5
+redis-cli

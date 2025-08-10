@@ -3,20 +3,19 @@ DOCKER ?= docker.educg.net/cg/os-contest:20250714
 all: sdcard
 
 build-rv:
-	# make -f Makefile.sub clean
-	mkdir -p sdcard/riscv/
-	make -f Makefile.sub PREFIX=riscv64-linux-gnu- DESTDIR=/code/sdcard/riscv/glibc
-	# rm -fr /code/sdcard/riscv/glibc/usr/libexec/git-core
-	mkdir -p /code/sdcard/riscv/musl
-	cp -fr /code/sdcard/riscv/glibc/* /code/sdcard/riscv/musl
-	mkdir -p /code/sdcard/riscv/musl/lib
-	cp /opt/riscv64--musl--bleeding-edge-2020.08-1/riscv64-buildroot-linux-musl/sysroot/lib/libc.so sdcard/riscv/musl/lib
-	mkdir -p /code/sdcard/riscv/glibc/lib
-	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/glibc/lib/libc.so
-	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/glibc/lib/
-	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/glibc/lib/libm.so
-	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/glibc/lib/
-	cp /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 sdcard/riscv/glibc/lib/ld-linux-riscv64-lp64d.so.1
+	make -f Makefile.sub clean
+	mkdir -p sdcard/riscv/lib
+	mkdir -p sdcard/riscv/usr
+	mkdir -p sdcard/riscv/bin
+	make -f Makefile.sub PREFIX=riscv64-linux-gnu- DESTDIR=/code/sdcard/riscv
+	# rm -fr /code/sdcard/riscv/usr/libexec/git-core
+	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/lib/libc.so
+	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/lib/
+	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/lib/libm.so
+	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/lib/
+	cp /opt/riscv64--musl--bleeding-edge-2020.08-1/riscv64-buildroot-linux-musl/sysroot/lib/libc.so sdcard/riscv/lib/ld-musl-riscv64.so.1
+	cp /opt/riscv64--musl--bleeding-edge-2020.08-1/riscv64-buildroot-linux-musl/sysroot/lib/libc.so sdcard/riscv/lib/ld-musl-riscv64-sf.so.1
+	cp /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 sdcard/riscv/lib/ld-linux-riscv64-lp64d.so.1
 
 build-la:
 	make -f Makefile.sub clean

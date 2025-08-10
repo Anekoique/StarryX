@@ -14,7 +14,7 @@ else
     $(error "Unknown ARCH! It should be riscv64 or loongarch64")
 endif
 
-all: busybox bash gcc
+all: busybox redis
 
 
 git: .PHONY
@@ -32,7 +32,7 @@ endif
 busybox: .PHONY
 	cp config/busybox-config-$(ARCH) busybox/.config
 	make -C busybox CC="$(CC) -static" STRIP=$(STRIP) -j
-	cp busybox/busybox $(DESTDIR)/
+	cp busybox/busybox $(DESTDIR)/bin
 
 bash: .PHONY
 	cd bash && \
@@ -44,7 +44,7 @@ bash: .PHONY
 		--disable-job-control && \
 	make -j16 && \
 	$(STRIP) bash && \
-	cp bash $(DESTDIR)/
+	cp bash $(DESTDIR)/bin
 	
 gcc: .PHONY
 	cd gcc && ./contrib/download_prerequisites
@@ -70,16 +70,37 @@ gcc: .PHONY
 		--with-newlib && \
 	make -j16 all-gcc && \
 	$(STRIP) gcc/xgcc gcc/cc1 && \
-	cp gcc/xgcc $(DESTDIR)/gcc && \
+	cp gcc/xgcc $(DESTDIR)/bin/gcc && \
 	mkdir -p $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0 && \
 	cp gcc/cc1 $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ && \
 	mkdir -p $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0 && \
 	cp gcc/cc1 $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0/
+
+redis: .PHONY
+	cd redis && \
+	make distclean || true && \
+	make -C deps/hiredis CC="$(CC)" AR="$(PREFIX)ar" RANLIB="$(PREFIX)ranlib" static && \
+	make -C deps/linenoise CC="$(CC)" AR="$(PREFIX)ar" RANLIB="$(PREFIX)ranlib" && \
+	cd deps/lua && make CC="$(CC)" AR="$(PREFIX)ar rc" RANLIB="$(PREFIX)ranlib" generic && cd ../.. && \
+	make -C deps/hdr_histogram CC="$(CC)" AR="$(PREFIX)ar" RANLIB="$(PREFIX)ranlib" && \
+	make -C deps/fpconv CC="$(CC)" AR="$(PREFIX)ar" RANLIB="$(PREFIX)ranlib" && \
+	make -C src CC="$(CC)" \
+		LDFLAGS="-static" \
+		MALLOC=libc \
+		BUILD_TLS=no \
+		USE_SYSTEMD=no \
+		OPTIMIZATION=-O2 \
+		redis-server redis-cli && \
+	$(STRIP) src/redis-server src/redis-cli && \
+	mkdir -p $(DESTDIR)/bin && \
+	cp src/redis-server $(DESTDIR)/bin/ && \
+	cp src/redis-cli $(DESTDIR)/bin/
 	
 clean:
+	rm -rf ./sdcard/riscv/*
 	make -C busybox clean
 	make -C git clean
-	make -C zlib clean
+	make -C redis clean
 	rm -rf gcc-build
 	
 

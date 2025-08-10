@@ -190,6 +190,16 @@ pub fn sys_accept(
     Ok(fd)
 }
 
+pub fn sys_accept4(
+    fd: i32,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+    flags: i32,
+) -> LinuxResult<isize> {
+    debug!("sys_accept4 <= fd: {}, flags: {}", fd, flags);
+    sys_accept(fd, addr, addrlen)
+}
+
 /// Send data to a specific address.
 ///
 /// # Arguments
