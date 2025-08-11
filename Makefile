@@ -23,9 +23,9 @@ oscomp:
 	@mkdir -p .cargo
 	@cp xcore/src/config/config.toml.temp .cargo/config.toml
 	@if [ -d bin ]; then cp -r bin/* ~/.cargo/bin; fi
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=riscv64 BUS=mmio build
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=riscv64 BUS=mmio LOG=trace build
 	cp $$(basename $(PWD))_riscv64-qemu-virt.bin kernel-rv
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=loongarch64 build
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=loongarch64 LOG=trace build
 	cp $$(basename $(PWD))_loongarch64-qemu-virt.elf kernel-la
 
 qemu_run:

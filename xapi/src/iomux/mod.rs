@@ -22,9 +22,15 @@ use xutils::{
 
 use crate::task::check_fatal_signals;
 
+#[derive(Clone)]
+pub struct EpollEventInfo {
+    pub event: epoll_event,
+    pub last_state: Option<PollState>, // For edge-triggered support
+}
+
 pub struct EpollInstance {
-    // fd -> epoll_event
-    pub events: Mutex<BTreeMap<i32, epoll_event>>,
+    // fd -> epoll event info
+    pub events: Mutex<BTreeMap<i32, EpollEventInfo>>,
 }
 
 impl EpollInstance {

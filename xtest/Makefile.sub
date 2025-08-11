@@ -14,7 +14,7 @@ else
     $(error "Unknown ARCH! It should be riscv64 or loongarch64")
 endif
 
-all: busybox redis
+all: busybox redis bash gcc
 
 
 git: .PHONY

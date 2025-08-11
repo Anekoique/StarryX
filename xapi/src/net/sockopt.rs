@@ -7,7 +7,7 @@ use xuspace::{UserPtr, UserSpaceAccess};
 use xutils::ctypes::{
     IP_RECVERR, L_IP, L_SOCKET, L_TCP, L_UDP, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP, SO_DONTROUTE,
     SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, SO_SNDBUFFORCE, TCP_CONGESTION,
-    TCP_INFO, TCP_MAXSEG, TCP_NODELAY, socklen_t,
+    TCP_INFO, TCP_KEEPIDLE, TCP_MAXSEG, TCP_NODELAY, socklen_t,
 };
 
 use xcore::{fs::file::FileLike, net::Socket, task::with_uspace};
@@ -107,6 +107,7 @@ pub fn sys_setsockopt(
                     uspace.read(optval.cast::<bool>())
                 })?)?;
             }
+            TCP_KEEPIDLE => return Ok(0),
             _ => return Err(LinuxError::ENOPROTOOPT),
         },
         L_UDP => return Err(LinuxError::ENOPROTOOPT),

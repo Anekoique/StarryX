@@ -10,13 +10,14 @@ use xcore::{
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess};
 use xutils::{
     ctypes::{
-        EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLERR, EPOLLHUP, EPOLLIN,
-        EPOLLOUT, epoll_event,
+        EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLERR, EPOLLET, EPOLLHUP, 
+        EPOLLIN, EPOLLONESHOT, EPOLLOUT, epoll_event,
+        fs::IoEvents,
     },
-    time::{TimeValue, wall_time},
+    time::TimeValue,
 };
 
-use crate::{iomux::EpollInstance, task::check_fatal_signals};
+use crate::iomux::{EpollInstance, PollFd, poll};
 
 pub fn sys_epoll_create(size: i32) -> LinuxResult<isize> {
     if size <= 0 {
@@ -40,6 +41,32 @@ pub fn sys_epoll_create1(flags: i32) -> LinuxResult<isize> {
         flags as u32 & EPOLL_CLOEXEC != 0,
     )?;
     Ok(fd as isize)
+}
+
+/// Check if adding an epoll fd would create a loop
+fn check_epoll_loop(epfd: i32, target_fd: i32, depth: usize) -> LinuxResult<()> {
+    const MAX_EPOLL_DEPTH: usize = 5;
+    
+    if depth > MAX_EPOLL_DEPTH {
+        return Err(LinuxError::EINVAL);
+    }
+    
+    if epfd == target_fd {
+        return Err(LinuxError::EINVAL);
+    }
+    
+    // Check if target_fd is an epoll instance
+    if let Ok(target_file) = get_file_like(target_fd) {
+        if let Ok(target_epoll) = target_file.into_any().downcast::<EpollInstance>() {
+            let target_events = target_epoll.events.lock();
+            // Check if any of the target's monitored fds would create a loop
+            for &monitored_fd in target_events.keys() {
+                check_epoll_loop(epfd, monitored_fd, depth + 1)?;
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 /// Control interface for an epoll file descriptor.
@@ -76,9 +103,15 @@ pub fn sys_epoll_ctl(
                 if events.contains_key(&fd) {
                     return Err(LinuxError::EEXIST);
                 }
-                // FIXME: Check for epoll nesting loops and depth limits
+                // Check for epoll nesting loops
+                check_epoll_loop(epfd, fd, 0)?;
+                
                 let ev = uspace.read(event)?;
-                events.insert(fd, ev);
+                let info = crate::iomux::EpollEventInfo {
+                    event: ev,
+                    last_state: None,
+                };
+                events.insert(fd, info);
             }
             EPOLL_CTL_DEL => {
                 if events.remove(&fd).is_none() {
@@ -90,12 +123,52 @@ pub fn sys_epoll_ctl(
                     return Err(LinuxError::ENOENT);
                 }
                 let ev = uspace.read(event)?;
-                events.insert(fd, ev);
+                let info = crate::iomux::EpollEventInfo {
+                    event: ev,
+                    last_state: events.get(&fd).and_then(|info| info.last_state),
+                };
+                events.insert(fd, info);
             }
             _ => return Err(LinuxError::EINVAL),
         }
         Ok(0)
     })
+}
+
+/// Convert epoll events to IoEvents for poll
+fn epoll_to_ioevents(epoll_events: u32) -> IoEvents {
+    let mut events = IoEvents::empty();
+    if (epoll_events & EPOLLIN) != 0 {
+        events |= IoEvents::IN;
+    }
+    if (epoll_events & EPOLLOUT) != 0 {
+        events |= IoEvents::OUT;
+    }
+    if (epoll_events & EPOLLERR) != 0 {
+        events |= IoEvents::ERR;
+    }
+    if (epoll_events & EPOLLHUP) != 0 {
+        events |= IoEvents::HUP;
+    }
+    events
+}
+
+/// Convert IoEvents back to epoll events
+fn ioevents_to_epoll(io_events: IoEvents) -> u32 {
+    let mut events = 0;
+    if io_events.contains(IoEvents::IN) {
+        events |= EPOLLIN;
+    }
+    if io_events.contains(IoEvents::OUT) {
+        events |= EPOLLOUT;
+    }
+    if io_events.contains(IoEvents::ERR) {
+        events |= EPOLLERR;
+    }
+    if io_events.contains(IoEvents::HUP) {
+        events |= EPOLLHUP;
+    }
+    events
 }
 
 /// Wait for events on an epoll file descriptor.
@@ -114,93 +187,100 @@ pub fn sys_epoll_wait(
     if maxevents <= 0 {
         return Err(LinuxError::EINVAL);
     }
-    let epoll = get_file_like(epfd)?;
-    let epoll = epoll
+    
+    let epoll = get_file_like(epfd)?
         .into_any()
         .downcast::<EpollInstance>()
         .map_err(|_| LinuxError::EINVAL)?;
-    let mut ready = Vec::new();
-    let deadline = if timeout < 0 {
+    
+    let timeout_val = if timeout < 0 {
         None
     } else {
-        Some(wall_time() + TimeValue::from_millis(timeout as u64))
+        Some(TimeValue::from_millis(timeout as u64))
     };
 
-    loop {
-        // Poll network interfaces to update network state
-        axnet::poll_interfaces();
+    // Convert epoll events to PollFd array
+    let mut poll_fds = Vec::new();
+    let mut fd_to_info = Vec::new();
+    {
+        let epoll_events = epoll.events.lock();
+        for (&fd, info) in epoll_events.iter() {
+            let io_events = epoll_to_ioevents(info.event.events);
+            poll_fds.push(PollFd::new(fd, io_events));
+            fd_to_info.push((fd, info.clone()));
+        }
+    }
 
-        ready.clear();
-        for (&fd, &ev) in epoll.events.lock().iter() {
-            match get_file_like(fd) {
-                Ok(f) => match f.poll() {
-                    Ok(state) => {
-                        let mut revents = 0;
-                        if (ev.events & EPOLLIN) != 0 && state.readable {
-                            revents |= EPOLLIN;
-                        }
-                        if (ev.events & EPOLLOUT) != 0 && state.writable {
-                            revents |= EPOLLOUT;
-                        }
-                        // Always report error and hangup conditions
-                        if !state.readable && !state.writable {
-                            // Check if this might be a hangup condition
-                            // This is a heuristic - in a real implementation,
-                            // we'd need more detailed state information
-                            if (ev.events & EPOLLHUP) != 0 {
-                                revents |= EPOLLHUP;
-                            }
-                        }
-                        if revents != 0 {
-                            let mut event = ev;
-                            event.events = revents;
-                            ready.push(event);
-                            if ready.len() >= maxevents as usize {
-                                break;
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        // If poll fails, report error condition
-                        if (ev.events & EPOLLERR) != 0 {
-                            let mut event = ev;
-                            event.events = EPOLLERR;
-                            ready.push(event);
-                            if ready.len() >= maxevents as usize {
-                                break;
-                            }
-                        }
-                    }
-                },
-                Err(_) => {
-                    // File descriptor is invalid, report error
-                    if (ev.events & EPOLLERR) != 0 {
-                        let mut event = ev;
-                        event.events = EPOLLERR;
-                        ready.push(event);
-                        if ready.len() >= maxevents as usize {
-                            break;
-                        }
-                    }
+    // Use the common poll implementation
+    let ready_count = poll(&mut poll_fds, timeout_val)?;
+    
+    if ready_count == 0 {
+        return Ok(0);
+    }
+
+    // Convert results back to epoll format
+    let mut ready_events = Vec::new();
+    let mut epoll_events = epoll.events.lock();
+    
+    for (poll_fd, (fd, info)) in poll_fds.iter().zip(fd_to_info.iter()) {
+        if poll_fd.revents.is_empty() {
+            continue;
+        }
+
+        let current_revents = ioevents_to_epoll(poll_fd.revents);
+        let is_edge_triggered = (info.event.events & EPOLLET) != 0;
+        let is_oneshot = (info.event.events & EPOLLONESHOT) != 0;
+        
+        // For edge-triggered mode, only report events if state changed
+        let should_report = if is_edge_triggered {
+            // Compare with last known state
+            let state_changed = match &info.last_state {
+                Some(last) => {
+                    let last_readable = last.readable;
+                    let last_writable = last.writable;
+                    let current_readable = poll_fd.revents.contains(IoEvents::IN);
+                    let current_writable = poll_fd.revents.contains(IoEvents::OUT);
+                    
+                    (current_readable && !last_readable) || 
+                    (current_writable && !last_writable) ||
+                    poll_fd.revents.contains(IoEvents::ERR | IoEvents::HUP)
                 }
+                None => true, // First time, always report
+            };
+            
+            if state_changed {
+                // Update last state for edge-triggered
+                let mut updated_info = info.clone();
+                updated_info.last_state = Some(axio::PollState {
+                    readable: poll_fd.revents.contains(IoEvents::IN),
+                    writable: poll_fd.revents.contains(IoEvents::OUT),
+                });
+                epoll_events.insert(*fd, updated_info);
             }
-        }
+            
+            state_changed
+        } else {
+            // Level-triggered: always report
+            true
+        };
 
-        if !ready.is_empty() || timeout == 0 {
-            break;
-        }
-
-        if let Some(d) = deadline {
-            if wall_time() >= d {
+        if should_report {
+            let mut event = info.event;
+            event.events = current_revents;
+            ready_events.push(event);
+            
+            // Remove fd for EPOLLONESHOT
+            if is_oneshot {
+                epoll_events.remove(fd);
+            }
+            
+            if ready_events.len() >= maxevents as usize {
                 break;
             }
         }
-
-        // Check for fatal signals before yielding
-        check_fatal_signals();
-        axtask::yield_now();
     }
-    let n = ready.len().min(maxevents as usize);
-    with_uspace(|uspace| uspace.write_slice(events, &ready[..n]))?;
+
+    let n = ready_events.len();
+    with_uspace(|uspace| uspace.write_slice(events, &ready_events[..n]))?;
     Ok(n as isize)
 }

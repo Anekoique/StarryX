@@ -16,11 +16,6 @@ use crate::task::with_uspace;
 
 fn console_read_bytes(buf: &mut [u8]) -> AxResult<usize> {
     let len = axhal::console::read_bytes(buf);
-    for c in &mut buf[..len] {
-        if *c == b'\r' {
-            *c = b'\n';
-        }
-    }
     Ok(len)
 }
 
@@ -157,7 +152,7 @@ impl VirtDeviceOps for Tty {
             }
         };
 
-        // Handle echoing for raw mode - ECHO IMMEDIATELY 
+        // Handle echoing for raw mode - ECHO IMMEDIATELY
         if read_len > 0 && should_echo && !is_canonical {
             // Echo the characters back immediately for raw mode
             console_write_bytes(&buf[..read_len])?;
@@ -211,10 +206,12 @@ impl VirtDeviceOps for Tty {
                 }
                 TCGETS => {
                     let t = self.get_termios();
+                    debug!("TTY ioctl: TCGETS: {:?}", t);
                     uspace.write(argp.cast::<termios>(), t)?;
                 }
                 TCSETS | TCSETSW | TCSETSF => {
                     let t = uspace.read(argp.cast::<termios>())?;
+                    debug!("TTY ioctl: TCSETS: {:?}", t);
                     self.set_termios(t);
                 }
                 _ => return Err(LinuxError::ENOTTY),

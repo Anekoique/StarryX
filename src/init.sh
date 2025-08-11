@@ -7,6 +7,9 @@ run_ltp() {
   export LTP_DEV_FS_TYPE=tmpfs
   export LTP_SINGLE_FS_TYPE=tmpfs
 
+  test_ltp="
+  "
+
   riscv_ltp="
     abort01
     abs01
@@ -82,8 +85,10 @@ run_ltp() {
     epoll_ctl01
     epoll_ctl02
     epoll_ctl03
+    epoll_wait01
     epoll_wait03
     epoll_wait04
+    epoll_wait06
     epoll_wait07
     epoll_pwait02
     eventfd2_01
@@ -560,8 +565,10 @@ run_ltp() {
     epoll_ctl01
     epoll_ctl02
     epoll_ctl03
+    epoll_wait01
     epoll_wait03
     epoll_wait04
+    epoll_wait06
     epoll_wait07
     epoll_pwait02
     eventfd2_01
@@ -903,7 +910,7 @@ run_ltp() {
       echo "FAIL LTP CASE $f : 0"
     done
   else
-    for f in $riscv_ltp; do
+    for f in $test_ltp; do
       echo "RUN LTP CASE $f"
       ./$f
       echo "FAIL LTP CASE $f : 0"
@@ -914,8 +921,8 @@ run_ltp() {
   echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
-echo -e "\n=============== Build RootFS ===============\n"
-
+# echo -e "\n=============== Build RootFS ===============\n"
+# 
 # /musl/busybox mkdir -v /bin
 # /musl/busybox --install -s /bin
 # export PATH=/bin
@@ -941,7 +948,7 @@ echo -e "\n=============== Build RootFS ===============\n"
 # ln -v -s /lib /usr/lib64
 # 
 # export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
-
+# 
 # echo -e "\n=============== Preliminary Round ===============\n"
 # 
 # cd /musl
@@ -1010,16 +1017,18 @@ echo -e "\n=============== Build RootFS ===============\n"
 # cp ./usr/bin/git /bin
 # ./git_testcode.sh
 
-/bin/busybox --install -s /bin
-export PATH=/bin
-export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
-mkdir -v -p /var/tmp
-ln -v -s /lib /lib64
-ln -v -s /lib /usr/lib
-ln -v -s /lib /usr/lib64
+# ==================================================================#
 
-echo -e "\n================ Linux APPs ================\n"
-
-redis-server --bind 0.0.0.0 &
-sleep 5
-redis-cli
+ /bin/busybox --install -s /bin
+ export PATH=/bin
+ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+ mkdir -v -p /var/tmp
+ ln -v -s /lib /lib64
+ ln -v -s /lib /usr/lib
+ ln -v -s /lib /usr/lib64
+ 
+ echo -e "\n================ Linux APPs ================\n"
+ 
+ redis-server --bind 0.0.0.0 &
+ sleep 2
+ redis-cli
