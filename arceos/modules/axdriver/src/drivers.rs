@@ -218,5 +218,7 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(feature = "ramdisk")]
+#[cfg(all(feature = "ramdisk", target_arch = "riscv64"))]
 init_ramdisk!("./sdcard-rv.img");
+#[cfg(all(feature = "ramdisk", target_arch = "loongarch64"))]
+init_ramdisk!("./sdcard-la.img");

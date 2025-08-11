@@ -1,0 +1,64 @@
+# Architecture identifier.
+arch = "loongarch64"
+# Platform identifier.
+platform = "loongarch64-2k1000"
+
+#
+# Platform configs
+#
+[plat]
+# Platform family.
+family = "loongarch64-2k1000"
+
+# Base address of the whole physical memory.
+phys-memory-base = "0x9000_0000_9000_0000"        # uint
+# Size of the whole physical memory. (2G)
+phys-memory-size = 0x4000_0000         # uint
+# Base physical address of the kernel image.
+kernel-base-paddr = "0x9000_0000_9200_0000"       # uint
+
+# Base virtual address of the kernel image.
+kernel-base-vaddr = "0xffff_0000_9200_0000"     # uint
+# Linear mapping offset, for quick conversions between physical and virtual
+# addresses.
+phys-virt-offset = "0x6fff_0000_0000_0000"      # uint
+# Offset of bus address and phys address. some boards, the bus address is
+# different from the physical address.
+phys-bus-offset = 0                             # uint
+# Kernel address space base.
+kernel-aspace-base = "0xffff_0000_0000_0000"    # uint
+# Kernel address space size.
+kernel-aspace-size = "0x0000_ffff_ffff_f000"    # uint
+
+#
+# Device specifications
+#
+[devices]
+# MMIO regions with format (`base_paddr`, `size`).
+mmio-regions = [
+    [0x1800_0000, 0x0200_0000],  # PCI memory ranges
+    [0x1fe2_0000, 0xf], # uart0
+    [0x6000_0000, 0x2000_0000],  # PCI memory ranges
+    [0xfe_0000_0000, 0x2000_0000]  # PCI config space
+]           # [(uint, uint)]
+# VirtIO MMIO regions with format (`base_paddr`, `size`).
+virtio-mmio-regions = []    # [(uint, uint)]
+# Base physical address of the PCIe ECAM space.
+pci-ecam-base = 0xfe_0000_0000             # uint
+# End PCI bus number.
+pci-bus-end = 0x7f                      # uint
+# PCI device memory ranges.
+pci-ranges = [
+    [0x1800_8000, 0x8000],        # PIO space
+    [0x6000_0000, 0x2000_0000],   # 32-bit MMIO space
+    [0, 0],                       # 64-bit MMIO space (none)
+]                                  # [(uint, uint)]
+
+# UART
+uart-paddr = 0x1fe20000                 # uint
+
+# Timer interrupt frequency in Hz.
+timer-frequency = 100_000_000           # uint
+
+# RTC
+rtc-paddr = 0x1fe27800               # uint

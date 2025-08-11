@@ -47,6 +47,11 @@ vf2:
 		BUS=mmio FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2 build
 	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
 
+2k1000: 
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) PLAT_NAME=loongarch64-2k1000 ARCH=loongarch64 \
+		FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=1 build
+	sudo cp StarryX_loongarch64-2k1000.bin /srv/tftp/
+
 sdcard:
 	@cp xtest/sdcard-rv.img .
 
