@@ -1019,16 +1019,23 @@ run_ltp() {
 
 # ==================================================================#
 
- /bin/busybox --install -s /bin
- export PATH=/bin
- export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
- mkdir -v -p /var/tmp
- ln -v -s /lib /lib64
- ln -v -s /lib /usr/lib
- ln -v -s /lib /usr/lib64
- 
- echo -e "\n================ Linux APPs ================\n"
- 
- redis-server --bind 0.0.0.0 &
- sleep 2
- redis-cli
+echo -e "\n=============== Build RootFS ===============\n"
+
+/bin/busybox --install -s /bin
+export PATH=/bin
+export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+mkdir -v -p /var/tmp
+ln -v -s /lib /lib64
+ln -v -s /lib /usr/lib
+ln -v -s /lib /usr/lib64
+
+echo -e "\n================ Linux APPs ================\n"
+
+# echo -e "\n================ Redis ================\n"
+# 
+# redis-server --bind 0.0.0.0 &
+# sleep 2
+# redis-cli
+
+echo -e "\n================ Bash ================\n"
+bash
