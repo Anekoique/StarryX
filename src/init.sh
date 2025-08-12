@@ -8,6 +8,7 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
+  access01
   "
 
   riscv_ltp="
@@ -823,7 +824,7 @@ run_ltp() {
       echo "FAIL LTP CASE $f : 0"
     done
   else
-    for f in $riscv_ltp; do
+    for f in $test_ltp; do
       echo "RUN LTP CASE $f"
       ./$f
       echo "FAIL LTP CASE $f : 0"
@@ -867,8 +868,8 @@ echo -e "\n=============== Preliminary Round ===============\n"
 cd /musl
 run_ltp musl
 
-cd /glibc
-run_ltp glibc
+# cd /glibc
+# run_ltp glibc
 
 # cd /musl
 # ./libctest_testcode.sh

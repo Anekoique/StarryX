@@ -21,7 +21,7 @@ use xutils::ctypes::{
     F_SETLK, FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, O_RDWR, O_WRONLY, fs::flags_to_options,
 };
 
-use crate::sys::{sys_getegid, sys_geteuid};
+use crate::task::{sys_getegid, sys_geteuid};
 
 fn add_to_fd(
     path: &str,

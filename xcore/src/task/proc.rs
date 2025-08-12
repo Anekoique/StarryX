@@ -31,7 +31,9 @@ use xvma::MmapRegion;
 use crate::{
     mm::{FileWrapper, XUserSpace},
     resources::Rlimits,
-    task::{FutexKey, FutexTable, ProcessSignal, ThreadSignal, with_current},
+    task::{
+        FutexKey, FutexTable, ProcessSignal, ThreadSignal, cred::ProcessCredentials, with_current,
+    },
     time::{TimeStat, time_stat_switch_from_old_task},
 };
 
@@ -189,6 +191,7 @@ pub struct XProcess {
     pub signal: Arc<ProcessSignal>,
     pub rlimits: RwLock<Rlimits>,
     pub futex_table: FutexTable,
+    pub credentials: ProcessCredentials,
 }
 
 impl XProcess {
@@ -211,6 +214,7 @@ impl XProcess {
             )),
             rlimits: RwLock::new(rlimits.unwrap_or_default()),
             futex_table: FutexTable::new(),
+            credentials: ProcessCredentials::default(),
         }
     }
 
@@ -259,6 +263,28 @@ impl XProcess {
     ) -> Vec<MmapRegion<FileWrapper>>;
     pub fn clear_regions(&self);
     pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()>;
+}
+
+#[inherit_methods(from = "self.credentials")]
+impl XProcess {
+    pub fn uid(&self) -> u32;
+    pub fn set_uid(&self, uid: u32);
+    pub fn gid(&self) -> u32;
+    pub fn set_gid(&self, gid: u32);
+    pub fn fsuid(&self) -> u32;
+    pub fn set_fsuid(&self, fsuid: u32);
+    pub fn fsgid(&self) -> u32;
+    pub fn set_fsgid(&self, fsgid: u32);
+    pub fn euid(&self) -> u32;
+    pub fn set_euid(&self, euid: u32);
+    pub fn egid(&self) -> u32;
+    pub fn set_egid(&self, egid: u32);
+    pub fn suid(&self) -> u32;
+    pub fn set_suid(&self, suid: u32);
+    pub fn sgid(&self) -> u32;
+    pub fn set_sgid(&self, sgid: u32);
+    pub fn sup_group(&self) -> Arc<Mutex<Vec<u32>>>;
+    pub fn set_sup_group(&self, sup_group: Vec<u32>);
 }
 
 struct AxTaskExtImpl;

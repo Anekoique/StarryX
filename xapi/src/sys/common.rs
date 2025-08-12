@@ -14,65 +14,6 @@ use xcore::{
     task::{processes, with_uspace},
 };
 
-/// Get real user ID of the calling process.
-///
-/// # Arguments
-/// None
-pub fn sys_getuid() -> LinuxResult<isize> {
-    Ok(0)
-}
-
-/// Set real user ID of the calling process.
-///
-/// # Arguments
-/// * `uid` - User ID to set
-pub fn sys_setuid(_uid: u32) -> LinuxResult<isize> {
-    Ok(0)
-}
-
-/// Get effective user ID of the calling process.
-///
-/// # Arguments
-/// None
-pub fn sys_geteuid() -> LinuxResult<isize> {
-    Ok(0)
-}
-
-/// Set real and effective user IDs of the calling process.
-///
-/// # Arguments
-/// * `uid` - User ID to set
-/// * `euid` - Effective user ID to set
-pub fn sys_setreuid(_uid: u32, _euid: u32) -> LinuxResult<isize> {
-    Ok(0)
-}
-
-/// Set real, effective, and saved user IDs of the calling process.
-///
-/// # Arguments
-/// * `uid` - User ID to set
-/// * `euid` - Effective user ID to set
-/// * `suid` - Saved user ID to set
-pub fn sys_setresuid(_uid: u32, _euid: u32, _suid: u32) -> LinuxResult<isize> {
-    Ok(0)
-}
-
-/// Get real group ID of the calling process.
-///
-/// # Arguments
-/// None
-pub fn sys_getgid() -> LinuxResult<isize> {
-    Ok(0)
-}
-
-/// Get effective group ID of the calling process.
-///
-/// # Arguments
-/// None
-pub fn sys_getegid() -> LinuxResult<isize> {
-    Ok(1)
-}
-
 const fn pad_str(info: &str) -> [c_char; 65] {
     let mut data: [c_char; 65] = [0; 65];
     // this needs #![feature(const_copy_from_slice)]

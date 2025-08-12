@@ -434,23 +434,25 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         }
         Sysno::set_robust_list => sys_set_robust_list(tf.arg0().into(), tf.arg1() as _),
 
-        // sys
+        // cred
         Sysno::getuid => sys_getuid(),
         Sysno::setuid => sys_setuid(tf.arg0() as _),
-        Sysno::geteuid => sys_geteuid(),
-        Sysno::setreuid => sys_setreuid(tf.arg0() as _, tf.arg1() as _),
-        Sysno::getresuid => Ok(0),
-        Sysno::setresuid => sys_setresuid(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
-        Sysno::getresgid => Ok(0),
-        Sysno::setresgid => Ok(0),
-        Sysno::getgroups => Ok(0),
-        Sysno::setgroups => Ok(0),
         Sysno::getgid => sys_getgid(),
-        Sysno::setgid => Ok(0),
+        Sysno::setgid => sys_setgid(tf.arg0() as _),
+        Sysno::setfsuid => sys_setfsuid(tf.arg0() as _),
+        Sysno::setfsgid => sys_setfsgid(tf.arg0() as _),
+        Sysno::geteuid => sys_geteuid(),
         Sysno::getegid => sys_getegid(),
-        Sysno::setregid => Ok(0),
-        Sysno::setfsgid => Ok(0),
-        Sysno::setfsuid => Ok(0),
+        Sysno::setreuid => sys_setreuid(tf.arg0() as _, tf.arg1() as _),
+        Sysno::setregid => sys_setregid(tf.arg0() as _, tf.arg1() as _),
+        Sysno::getresuid => sys_getresuid(tf.arg0().into(), tf.arg1().into(), tf.arg2().into()),
+        Sysno::setresuid => sys_setresuid(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::getresgid => sys_getresgid(tf.arg0().into(), tf.arg1().into(), tf.arg2().into()),
+        Sysno::setresgid => sys_setresgid(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::getgroups => sys_getgroups(tf.arg0() as _, tf.arg1().into()),
+        Sysno::setgroups => sys_setgroups(tf.arg0() as _, tf.arg1().into()),
+
+        // sys
         Sysno::getrandom => sys_getrandom(tf.arg0().into(), tf.arg1() as _, tf.arg2() as _),
         Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
         Sysno::sethostname => Ok(0),
@@ -529,7 +531,12 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         ),
         Sysno::listen => sys_listen(tf.arg0() as _, tf.arg1() as _),
         Sysno::accept => sys_accept(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
-        Sysno::accept4 => sys_accept4(tf.arg0() as _, tf.arg1().into(), tf.arg2().into(), tf.arg3() as _),
+        Sysno::accept4 => sys_accept4(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2().into(),
+            tf.arg3() as _,
+        ),
         Sysno::sendto => sys_sendto(
             tf.arg0() as _,
             tf.arg1().into(),

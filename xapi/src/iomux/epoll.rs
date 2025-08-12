@@ -10,9 +10,8 @@ use xcore::{
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess};
 use xutils::{
     ctypes::{
-        EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLERR, EPOLLET, EPOLLHUP, 
-        EPOLLIN, EPOLLONESHOT, EPOLLOUT, epoll_event,
-        fs::IoEvents,
+        EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLERR, EPOLLET, EPOLLHUP,
+        EPOLLIN, EPOLLONESHOT, EPOLLOUT, epoll_event, fs::IoEvents,
     },
     time::TimeValue,
 };
@@ -46,15 +45,15 @@ pub fn sys_epoll_create1(flags: i32) -> LinuxResult<isize> {
 /// Check if adding an epoll fd would create a loop
 fn check_epoll_loop(epfd: i32, target_fd: i32, depth: usize) -> LinuxResult<()> {
     const MAX_EPOLL_DEPTH: usize = 5;
-    
+
     if depth > MAX_EPOLL_DEPTH {
         return Err(LinuxError::EINVAL);
     }
-    
+
     if epfd == target_fd {
         return Err(LinuxError::EINVAL);
     }
-    
+
     // Check if target_fd is an epoll instance
     if let Ok(target_file) = get_file_like(target_fd) {
         if let Ok(target_epoll) = target_file.into_any().downcast::<EpollInstance>() {
@@ -65,7 +64,7 @@ fn check_epoll_loop(epfd: i32, target_fd: i32, depth: usize) -> LinuxResult<()> 
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -105,7 +104,7 @@ pub fn sys_epoll_ctl(
                 }
                 // Check for epoll nesting loops
                 check_epoll_loop(epfd, fd, 0)?;
-                
+
                 let ev = uspace.read(event)?;
                 let info = crate::iomux::EpollEventInfo {
                     event: ev,
@@ -187,12 +186,12 @@ pub fn sys_epoll_wait(
     if maxevents <= 0 {
         return Err(LinuxError::EINVAL);
     }
-    
+
     let epoll = get_file_like(epfd)?
         .into_any()
         .downcast::<EpollInstance>()
         .map_err(|_| LinuxError::EINVAL)?;
-    
+
     let timeout_val = if timeout < 0 {
         None
     } else {
@@ -213,7 +212,7 @@ pub fn sys_epoll_wait(
 
     // Use the common poll implementation
     let ready_count = poll(&mut poll_fds, timeout_val)?;
-    
+
     if ready_count == 0 {
         return Ok(0);
     }
@@ -221,7 +220,7 @@ pub fn sys_epoll_wait(
     // Convert results back to epoll format
     let mut ready_events = Vec::new();
     let mut epoll_events = epoll.events.lock();
-    
+
     for (poll_fd, (fd, info)) in poll_fds.iter().zip(fd_to_info.iter()) {
         if poll_fd.revents.is_empty() {
             continue;
@@ -230,7 +229,7 @@ pub fn sys_epoll_wait(
         let current_revents = ioevents_to_epoll(poll_fd.revents);
         let is_edge_triggered = (info.event.events & EPOLLET) != 0;
         let is_oneshot = (info.event.events & EPOLLONESHOT) != 0;
-        
+
         // For edge-triggered mode, only report events if state changed
         let should_report = if is_edge_triggered {
             // Compare with last known state
@@ -240,14 +239,14 @@ pub fn sys_epoll_wait(
                     let last_writable = last.writable;
                     let current_readable = poll_fd.revents.contains(IoEvents::IN);
                     let current_writable = poll_fd.revents.contains(IoEvents::OUT);
-                    
-                    (current_readable && !last_readable) || 
-                    (current_writable && !last_writable) ||
-                    poll_fd.revents.contains(IoEvents::ERR | IoEvents::HUP)
+
+                    (current_readable && !last_readable)
+                        || (current_writable && !last_writable)
+                        || poll_fd.revents.contains(IoEvents::ERR | IoEvents::HUP)
                 }
                 None => true, // First time, always report
             };
-            
+
             if state_changed {
                 // Update last state for edge-triggered
                 let mut updated_info = info.clone();
@@ -257,7 +256,7 @@ pub fn sys_epoll_wait(
                 });
                 epoll_events.insert(*fd, updated_info);
             }
-            
+
             state_changed
         } else {
             // Level-triggered: always report
@@ -268,12 +267,12 @@ pub fn sys_epoll_wait(
             let mut event = info.event;
             event.events = current_revents;
             ready_events.push(event);
-            
+
             // Remove fd for EPOLLONESHOT
             if is_oneshot {
                 epoll_events.remove(fd);
             }
-            
+
             if ready_events.len() >= maxevents as usize {
                 break;
             }

@@ -1,4 +1,5 @@
 mod clone;
+mod cred;
 mod ctl;
 mod execve;
 mod exit;
@@ -9,6 +10,7 @@ mod thread;
 mod wait;
 
 pub use self::clone::*;
+pub use self::cred::*;
 pub use self::ctl::*;
 pub use self::execve::*;
 pub use self::exit::*;
@@ -56,7 +58,10 @@ pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> 
             // For now, ignore SIGTTIN/SIGTTOU to allow bash job control to work
             // without implementing full process suspension
             if matches!(signo, Signo::SIGTTIN | Signo::SIGTTOU) {
-                debug!("Ignoring {:?} signal for temporary job control compatibility", signo);
+                debug!(
+                    "Ignoring {:?} signal for temporary job control compatibility",
+                    signo
+                );
                 return true; // Signal handled, don't kill the process
             }
             do_exit(1, true);
