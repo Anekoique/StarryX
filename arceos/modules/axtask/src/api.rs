@@ -228,16 +228,18 @@ pub fn register_task(task_ref: &AxTaskRef) {
     debug!("Task registered: {}", task_ref.id_name());
 }
 
-/// Get a task reference by its TaskId.
+/// Get a weak task reference by its TaskId.
 ///
-/// Returns `Some(AxTaskRef)` if the task exists and is still alive,
-/// `None` if the task doesn't exist or has been dropped.
+/// Returns `Some(WeakAxTaskRef)` if the task exists and is still alive (weak can still
+/// fail to upgrade later), or `None` if the task doesn't exist.
 ///
 /// This is similar to the `current()` function but works for any task ID.
 #[cfg(feature = "multitask")]
-pub fn get_task_by_id(task_id: TaskId) -> Option<AxTaskRef> {
+pub fn get_task_by_id(task_id: TaskId) -> Option<WeakAxTaskRef> {
     let table = TASK_TABLE.lock();
-    table.get(&task_id.as_u64())
+    table
+        .get(&task_id.as_u64())
+        .map(|task_ref| Arc::downgrade(&task_ref))
 }
 
 /// Execute a function with a task reference.
@@ -248,6 +250,8 @@ pub fn with_task<R>(id: TaskId, f: impl FnOnce(&AxTaskRef) -> R) -> Option<R> {
     if id.as_u64() == 0 {
         Some(f(current().as_task_ref()))
     } else {
-        get_task_by_id(id).map(|task| f(&task))
+        get_task_by_id(id)
+            .and_then(|weak_task| weak_task.upgrade())
+            .map(|task| f(&task))
     }
 }

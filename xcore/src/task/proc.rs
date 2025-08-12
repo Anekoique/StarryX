@@ -144,6 +144,10 @@ impl XThread {
         thread.data::<Self>().unwrap()
     }
 
+    pub fn from_thread_static(thread: &Arc<Thread>) -> &'static XThread {
+        unsafe { &*(thread.data::<Self>().unwrap() as *const Self) }
+    }
+
     pub fn clear_child_tid(&self) -> usize {
         self.clear_child_tid.load(Ordering::Relaxed)
     }

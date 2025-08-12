@@ -1,7 +1,8 @@
 pub mod api;
-mod cred;
+pub mod cred;
 pub mod futex;
 pub mod proc;
 pub mod signal;
+pub mod stat;
 
-pub use {api::*, futex::*, proc::*, signal::*};
+pub use {stat::*, api::*, futex::*, proc::*, signal::*};

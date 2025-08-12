@@ -5,7 +5,8 @@ use alloc::{
 };
 
 use axfs_ng_vfs::VfsResult;
-use xprocess::{Process, Thread};
+use axtask::{TaskExtRef, TaskInner, get_task_by_id};
+
 use xutils::collections::weak_map::StrongRef;
 
 use super::DUMMY_MAPS;
@@ -18,7 +19,7 @@ use crate::{
             VirtNodeOps,
         },
     },
-    task::{XProcess, get_thread, processes},
+    task::{XProcess, processes},
 };
 
 pub(crate) struct ProcPidOps(pub(crate) Arc<VirtFs>);
@@ -32,9 +33,9 @@ impl VirtDirOps for ProcPidOps {
 
     fn lookup(&self, name: &str) -> Option<VirtNodeOps> {
         let tid = name.parse::<u32>().ok()?;
-        get_thread(tid)
-            .ok()
-            .map(|thread| VirtNodeOps::Dir(create_tid_root(self.0.clone(), thread)))
+        get_task_by_id(tid.into())
+            .and_then(|weak| weak.upgrade())
+            .map(|task| VirtNodeOps::Dir(create_tid_root(self.0.clone(), task.inner())))
     }
 }
 
@@ -53,24 +54,31 @@ impl VirtFileOps for FdOps {
     }
 }
 
-fn create_tid_root(fs: Arc<VirtFs>, thread: Arc<Thread>) -> DirMaker {
+fn create_tid_root(fs: Arc<VirtFs>, task: &TaskInner) -> DirMaker {
     let mut root = VirtDir::<()>::builder(fs.clone(), None);
-    let proc = thread.process();
-    let xproc = XProcess::from_process_static(proc);
-    let fd_root = create_fd_root(fs.clone(), proc.clone());
+    let thread = task.task_ext().thread();
+    let xproc = XProcess::from_thread_static(&thread);
+    let fd_root = create_fd_root(fs.clone(), xproc);
+    let status = crate::task::status(task);
+    let stat = crate::task::stat(task);
 
     root.add(
         "exe",
-        VirtFile::new_symlink(fs.clone(), || xproc.exe_path.read().to_string()),
+        VirtFile::new_symlink(fs.clone(), move || xproc.exe_path.read().to_string()),
     )
     .add("maps", VirtFile::new(fs.clone(), || DUMMY_MAPS.to_string()))
-    .add("fd", fd_root.build());
+    .add("fd", fd_root.build())
+    .add(
+        "status",
+        VirtFile::new(fs.clone(), move || status.to_string()),
+    )
+    .add("stat", VirtFile::new(fs.clone(), move || stat.to_string()));
 
     root.build()
 }
 
-fn create_fd_root(fs: Arc<VirtFs>, proc: Arc<Process>) -> VirtDirBuilder<()> {
-    let fd_table = FD_TABLE.deref_from(&XProcess::from_process(&proc).ns);
+fn create_fd_root(fs: Arc<VirtFs>, xproc: &XProcess) -> VirtDirBuilder<()> {
+    let fd_table = FD_TABLE.deref_from(&xproc.ns);
     let mut root = VirtDir::<()>::builder(fs.clone(), None);
 
     for fd in fd_table.ids() {

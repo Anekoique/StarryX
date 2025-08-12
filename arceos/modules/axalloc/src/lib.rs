@@ -123,11 +123,12 @@ impl GlobalAllocator {
                     let heap_ptr = match self.alloc_pages(try_size / PAGE_SIZE, PAGE_SIZE) {
                         Ok(ptr) => ptr,
                         Err(err) => {
-                            let _ = crate_interface::call_interface!(
-                                AxAllocIf::evict_cache,
-                                try_size / PAGE_SIZE
-                            )
-                            .map_err(|_| try_size /= 2);
+                            // let _ = crate_interface::call_interface!(
+                            //     AxAllocIf::evict_cache,
+                            //     try_size / PAGE_SIZE
+                            // )
+                            // .map_err(|_| try_size /= 2);
+                            try_size /= 2;
                             if try_size < min_size {
                                 return Err(err);
                             }

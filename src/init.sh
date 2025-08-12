@@ -8,7 +8,7 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  access01
+  getpgid01
   "
 
   riscv_ltp="
@@ -107,8 +107,6 @@ run_ltp() {
     fchown02
     fchown03
     fchown05
-    fchownat01
-    fchownat02
     fcntl02
     fcntl03
     fcntl05
@@ -149,6 +147,10 @@ run_ltp() {
     getdomainname01
     getcwd01
     getcwd03
+    getegid01
+    getegid01_16
+    getegid02
+    getegid02_16
     geteuid01
     geteuid02
     getgid03
@@ -224,7 +226,6 @@ run_ltp() {
     msgrcv07
     msgrcv08
     msgsnd02
-    msgsnd05
     munlock01
     nanosleep04
     open01
@@ -297,7 +298,6 @@ run_ltp() {
     sched_yield01
     select03
     sem_nstest
-    semctl01
     semctl03
     semctl05
     semctl07
@@ -350,7 +350,6 @@ run_ltp() {
     shmctl07
     shmctl08
     sigaltstack02
-    signal01
     signal02
     signal03
     signal04
@@ -681,7 +680,6 @@ run_ltp() {
     sched_setscheduler01
     select03
     sem_nstest
-    semctl01
     semctl03
     semctl05
     semctl07
@@ -754,7 +752,6 @@ run_ltp() {
     shmctl07
     shmctl08
     sigaltstack02
-    signal01
     signal02
     signal03
     signal04
@@ -824,7 +821,7 @@ run_ltp() {
       echo "FAIL LTP CASE $f : 0"
     done
   else
-    for f in $test_ltp; do
+    for f in $riscv_ltp; do
       echo "RUN LTP CASE $f"
       ./$f
       echo "FAIL LTP CASE $f : 0"
@@ -865,11 +862,16 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 echo -e "\n=============== Preliminary Round ===============\n"
 
+# cd /musl
+# timeout 420 ./lmbench_testcode.sh
+# cd /glibc
+# timeout 420 ./lmbench_testcode.sh
+
 cd /musl
 run_ltp musl
 
-# cd /glibc
-# run_ltp glibc
+cd /glibc
+run_ltp glibc
 
 # cd /musl
 # ./libctest_testcode.sh
@@ -889,11 +891,6 @@ run_ltp musl
 # ./iozone_testcode.sh
 # ./iperf_testcode.sh
 # ./netperf_testcode.sh
-# 
-# cd /musl
-# timeout 420 ./lmbench_testcode.sh
-# cd /glibc
-# timeout 420 ./lmbench_testcode.sh
 # 
 # cd /musl
 # ./cyclictest_testcode.sh

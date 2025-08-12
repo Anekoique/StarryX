@@ -20,3 +20,4 @@ apps/*/build/
 kernel-*
 /vendor
 /testsuits
+*.rdb
