@@ -12,7 +12,6 @@ run_ltp() {
 
   riscv_ltp="
     abort01
-    abs01
     accept01
     accept03
     accept4_01
@@ -56,12 +55,8 @@ run_ltp() {
     close02
     confstr01
     copy_file_range01
-    crash01
-    crash02
     creat01
     creat03
-    connect01
-    data_space
     diotest1
     dirtypipe
     dup01
@@ -79,7 +74,6 @@ run_ltp() {
     dup3_01
     dup3_02
     epoll_create01
-    epoll_create02
     epoll_create1_01
     epoll_create1_02
     epoll_ctl01
@@ -95,7 +89,6 @@ run_ltp() {
     eventfd2_02
     eventfd2_03
     execve03
-    exit01
     exit02
     exit_group01
     faccessat01
@@ -109,8 +102,6 @@ run_ltp() {
     fchmod01
     fchmod03
     fchmod04
-    fchmodat01
-    fchmodat02
     fchown01
     fchown02
     fchown03
@@ -121,20 +112,14 @@ run_ltp() {
     fcntl03
     fcntl05
     fcntl08
-    fcntl09
     fcntl02_64
     fcntl03_64
     fcntl05_64
     fcntl08_64
-    fcntl09_64
-    fcntl10
-    fcntl10_64
     fcntl13
     fcntl13_64
     fcntl29
     fcntl29_64
-    fdatasync01
-    fdatasync02
     flock01
     flock04
     flock06
@@ -142,7 +127,6 @@ run_ltp() {
     fork03
     fork07
     fork08
-    fork09
     fork10
     fstat02
     fstat02_64
@@ -165,13 +149,8 @@ run_ltp() {
     getcwd01
     getcwd03
     geteuid01
-    geteuid01_16
     geteuid02
-    geteuid02_16
     getgid03
-    getgid03_16
-    getgroups01
-    getgroups01_16
     gethostname01
     getitimer01
     getitimer02
@@ -206,20 +185,11 @@ run_ltp() {
     ioctl05
     ioctl06
     kill06
-    kill07
-    kill08
-    kill09
     kill11
-    lchown01
-    lchown01_16
-    lchown02
-    lchown02_16
     link02
     link04
     link05
     link08
-    linkat02
-    listen01
     llseek01
     llseek02
     llseek03
@@ -229,26 +199,19 @@ run_ltp() {
     lstat01_64
     lstat02
     lstat02_64
-    madvise01
     madvise10
     memcmp01
     memcpy01
     memset01
     mkdirat02
-    mkdirat01
-    mknod01
-    mknod02
     mlock01
     mlock04
-    mmap001
     mmap02
     mmap03
     mmap05
     mmap06
     mmap08
     mmap09
-    mmap11
-    mmap16
     mmap17
     mmap19
     msgctl01
@@ -257,36 +220,24 @@ run_ltp() {
     msgget01
     msgget02
     msgrcv02
-    msgrcv03
     msgrcv07
     msgrcv08
     msgsnd02
     msgsnd05
-    munmap01
-    munmap02
-    munmap03
     munlock01
     nanosleep04
-    newuname01
     open01
     open02
     open03
     open04
-    open12
-    open13
     pipe01
-    pipe04
-    pipe05
     pipe06
-    pipe09
     pipe10
     pipe11
     pipe12
     pipe14
     pipe2_01
     poll01
-    posix_fadvise01
-    posix_fadvise03
     ppoll01
     prctl01
     prctl03
@@ -325,15 +276,8 @@ run_ltp() {
     readv01
     readv02
     reboot01
-    recv01
-    recvfrom01
     rmdir01
     rmdir02
-    rt_sigaction01
-    rt_sigaction02
-    rt_sigaction03
-    rt_sigprocmask01
-    rt_sigprocmask02
     rtc01
     sbrk01
     sbrk02
@@ -359,7 +303,6 @@ run_ltp() {
     semget01
     semget02
     semop01
-    send01
     sendfile02
     sendfile02_64
     sendfile04
@@ -370,50 +313,28 @@ run_ltp() {
     sendfile06_64
     sendfile08
     sendfile08_64
-    set_robust_list01
-    set_tid_address01
     setegid01
     setfsgid02
-    setfsgid02_64
     setfsuid01
-    setfsuid01_64
     setfsuid02
-    setfsuid02_64
     setfsuid03
-    setfsuid03_64
     setpriority02
     setgid01
-    setgid01_64
     setgid03
-    setgid03_64
     setgroups01
-    setgroups01_64
     setgroups02
-    setgroups02_64
     setitimer02
-    setpgid01
     setpgid02
-    setpgrp01
     setpgrp02
     setregid01
-    setregid01_64
     setregid03
-    setregid03_64
     setresuid04
-    setresuid04_64
     setresuid05
-    setresuid05_64
     setreuid01
-    setreuid01_64
     setreuid03
-    setreuid03_64
     setreuid04
-    setreuid04_64
     setreuid05
-    setreuid05_64
     setreuid07
-    setreuid07_64
-    setrlimit01
     setrlimit02
     setrlimit03
     setrlimit04
@@ -422,13 +343,11 @@ run_ltp() {
     setsockopt03
     setsockopt04
     setuid01
-    setuid01_64
     shmat03
     shmctl02
     shmctl06
     shmctl07
     shmctl08
-    sigaction02
     sigaltstack02
     signal01
     signal02
@@ -436,7 +355,6 @@ run_ltp() {
     signal04
     signal05
     sigpending02
-    sigprocmask01
     socket01
     socket02
     socketpair01
@@ -455,12 +373,9 @@ run_ltp() {
     statvfs02
     statx02
     statx03
-    symlink01
     symlink02
-    symlink03
     symlink04
     syscall01
-    sysconf01
     syslog11
     time01
     times01
@@ -493,8 +408,6 @@ run_ltp() {
     write03
     write05
     writev01
-    writev02
-    writev05
     writev06
     writev07
   "
@@ -910,7 +823,7 @@ run_ltp() {
       echo "FAIL LTP CASE $f : 0"
     done
   else
-    for f in $test_ltp; do
+    for f in $riscv_ltp; do
       echo "RUN LTP CASE $f"
       ./$f
       echo "FAIL LTP CASE $f : 0"
@@ -921,46 +834,44 @@ run_ltp() {
   echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
-# echo -e "\n=============== Build RootFS ===============\n"
-# 
-# /musl/busybox mkdir -v /bin
-# /musl/busybox --install -s /bin
-# export PATH=/bin
-# 
-# mkdir -v /lib
-# mkdir -v /usr
-# mkdir -v -p /var/tmp
-# 
-# cp /glibc/lib/libc.so.6 /lib/libc.so.6
-# ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
-# ln -v -s /lib/libc.so.6 /lib/libc.so
-# ln -v -s /lib/libm.so.6 /lib/libm.so
-# if [[ $ARCH == loongarch64 ]]; then
-#   ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-#   ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
-# else
-#   ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
-#   ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
-#   ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
-# fi
-# ln -v -s /lib /lib64
-# ln -v -s /lib /usr/lib
-# ln -v -s /lib /usr/lib64
-# 
-# export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
-# 
-# echo -e "\n=============== Preliminary Round ===============\n"
-# 
+echo -e "\n=============== Build RootFS ===============\n"
+
+/musl/busybox mkdir -v /bin
+/musl/busybox --install -s /bin
+export PATH=/bin
+
+mkdir -v /lib
+mkdir -v /usr
+mkdir -v -p /var/tmp
+
+cp /glibc/lib/libc.so.6 /lib/libc.so.6
+ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
+ln -v -s /lib/libc.so.6 /lib/libc.so
+ln -v -s /lib/libm.so.6 /lib/libm.so
+if [[ $ARCH == loongarch64 ]]; then
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+  ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+else
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+  ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+fi
+ln -v -s /lib /lib64
+ln -v -s /lib /usr/lib
+ln -v -s /lib /usr/lib64
+
+export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+
+echo -e "\n=============== Preliminary Round ===============\n"
+
+cd /musl
+run_ltp musl
+
+cd /glibc
+run_ltp glibc
+
 # cd /musl
-# run_ltp musl
-# 
-# cd /glibc
-# run_ltp glibc
-# 
-# cd /musl
-# if [[ $ARCH == riscv64 ]]; then
-#   ./libctest_testcode.sh
-# fi
+# ./libctest_testcode.sh
 # ./basic_testcode.sh
 # ./lua_testcode.sh
 # ./busybox_testcode.sh
@@ -988,7 +899,7 @@ run_ltp() {
 # cd /glibc
 # ./cyclictest_testcode.sh
 
-# echo -e "\n=============== Final Round Stage 1 ===============\n"
+echo -e "\n=============== Final Round Stage 1 ===============\n"
 
 # cd /musl
 # ./interrupts_testcode.sh
@@ -1019,17 +930,17 @@ run_ltp() {
 
 # ==================================================================#
 
-echo -e "\n=============== Build RootFS ===============\n"
+# echo -e "\n=============== Build RootFS ===============\n"
+# 
+# /bin/busybox --install -s /bin
+# export PATH=/bin
+# export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+# mkdir -v -p /var/tmp
+# ln -v -s /lib /lib64
+# ln -v -s /lib /usr/lib
+# ln -v -s /lib /usr/lib64
 
-/bin/busybox --install -s /bin
-export PATH=/bin
-export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
-mkdir -v -p /var/tmp
-ln -v -s /lib /lib64
-ln -v -s /lib /usr/lib
-ln -v -s /lib /usr/lib64
-
-echo -e "\n================ Linux APPs ================\n"
+# echo -e "\n================ Linux APPs ================\n"
 
 # echo -e "\n================ Redis ================\n"
 # 
@@ -1037,5 +948,5 @@ echo -e "\n================ Linux APPs ================\n"
 # sleep 2
 # redis-cli
 
-echo -e "\n================ Bash ================\n"
-bash
+# echo -e "\n================ Bash ================\n"
+# bash

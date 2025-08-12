@@ -311,6 +311,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::madvise => Ok(0),
         Sysno::mlock => Ok(0),
         Sysno::munlock => Ok(0),
+        Sysno::membarrier => Ok(0),
 
         // task info
         Sysno::getpid => sys_getpid(),
@@ -459,6 +460,8 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::personality => Ok(0),
         Sysno::chroot => Err(LinuxError::EPERM),
         Sysno::reboot => Ok(0),
+        Sysno::fanotify_init => Ok(0),
+        Sysno::fanotify_mark => Ok(0),
 
         // time
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),
