@@ -32,13 +32,14 @@ pub fn sys_ppoll(
     fds: UserPtr<PollFd>,
     nfds: u32,
     timeout: UserConstPtr<timespec>,
-    _sigmask: UserConstPtr<sigset_t>,
+    sigmask: UserConstPtr<sigset_t>,
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
         let fds = uspace.raw_slice(fds, nfds as usize)?;
         let timeout = nullable!(uspace.read(timeout))?
             .map(timespec::to_time_value)
             .transpose()?;
+        let _sigmask = nullable!(uspace.read(sigmask))?;
         // TODO: handle signal
         poll(fds, timeout)
     })

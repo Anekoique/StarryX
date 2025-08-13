@@ -53,8 +53,18 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg4() as _,
         ),
         Sysno::fchdir => sys_fchdir(tf.arg0() as _),
+        #[cfg(target_arch = "x86_64")]
+        Sysno::mknod => Ok(0),
+        Sysno::mknodat => Ok(0),
         Sysno::flock => Ok(0),
         Sysno::fadvise64 => Ok(0),
+        Sysno::setxattr => Ok(0),
+        Sysno::lsetxattr => Ok(0),
+        Sysno::fsetxattr => Ok(0),
+        Sysno::removexattr => Ok(0),
+        Sysno::lremovexattr => Ok(0),
+        Sysno::fremovexattr => Ok(0),
+        Sysno::listxattr => Ok(0),
 
         // file ops
         Sysno::fchown => sys_fchown(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
@@ -226,6 +236,13 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg2() as _,
             tf.arg3() as _,
         ),
+        Sysno::epoll_pwait2 => sys_epoll_pwait2(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2() as _,
+            tf.arg3().into(),
+            tf.arg4().into(),
+        ),
 
         // fs mount
         Sysno::mount => sys_mount(
@@ -245,7 +262,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         // fd
         Sysno::eventfd2 => sys_eventfd2(tf.arg0() as _, tf.arg1() as _),
         #[cfg(target_arch = "x86_64")]
-        Sysno::eventfd => Ok(0),
+        Sysno::eventfd => sys_eventfd(tf.arg0() as _),
         Sysno::timerfd_create => sys_timerfd_create(tf.arg0() as _, tf.arg1() as _),
         Sysno::timerfd_settime => sys_timerfd_settime(
             tf.arg0() as _,
@@ -256,6 +273,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::timerfd_gettime => {
             sys_timerfd_gettime(tf.arg0() as _, tf.arg1().into(), tf.arg2().into())
         }
+        Sysno::bpf => Ok(0),
 
         // fs stat
         #[cfg(target_arch = "x86_64")]
@@ -308,10 +326,11 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::munmap => sys_munmap(tf.arg0(), tf.arg1() as _),
         Sysno::mprotect => sys_mprotect(tf.arg0(), tf.arg1() as _, tf.arg2() as _),
         Sysno::msync => sys_msync(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
-        Sysno::madvise => Ok(0),
+        Sysno::madvise => sys_madvise(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         Sysno::mlock => Ok(0),
         Sysno::munlock => Ok(0),
         Sysno::membarrier => Ok(0),
+        Sysno::mremap => Ok(0),
 
         // task info
         Sysno::getpid => sys_getpid(),
@@ -455,15 +474,29 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         // sys
         Sysno::getrandom => sys_getrandom(tf.arg0().into(), tf.arg1() as _, tf.arg2() as _),
         Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
-        Sysno::sethostname => Ok(0),
         Sysno::uname => sys_uname(tf.arg0().into()),
         Sysno::sysinfo => sys_sysinfo(tf.arg0().into()),
         Sysno::syslog => sys_syslog(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
+        Sysno::sethostname => Ok(0),
         Sysno::personality => Ok(0),
         Sysno::chroot => Err(LinuxError::EPERM),
         Sysno::reboot => Ok(0),
         Sysno::fanotify_init => Ok(0),
         Sysno::fanotify_mark => Ok(0),
+        Sysno::pkey_alloc => Ok(0),
+        Sysno::pkey_free => Ok(0),
+        Sysno::pkey_mprotect => Ok(0),
+        Sysno::add_key => Ok(0),
+        Sysno::keyctl => Ok(0),
+        Sysno::request_key => Ok(0),
+        Sysno::mincore => Ok(0),
+        Sysno::ptrace => Ok(0),
+        Sysno::mq_timedsend => Ok(0),
+        Sysno::mq_timedreceive => Ok(0),
+        Sysno::mq_notify => Ok(0),
+        Sysno::mq_getsetattr => Ok(0),
+        Sysno::mq_open => Ok(0),
+        Sysno::mq_unlink => Ok(0),
 
         // time
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),
@@ -475,6 +508,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::clock_settime => sys_clock_settime(tf.arg0() as _, tf.arg1().into()),
         Sysno::clock_getres => sys_clock_getres(tf.arg0() as _, tf.arg1().into()),
         Sysno::clock_adjtime => Ok(0),
+        Sysno::adjtimex => Err(LinuxError::EINVAL),
 
         // shm
         Sysno::shmget => sys_shmget(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),

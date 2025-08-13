@@ -24,7 +24,7 @@ pub fn status(task: &TaskInner) -> String {
         .exe_path
         .read()
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or("unknown")
         .to_string();
     let groups = xprocess.sup_group();
@@ -157,23 +157,23 @@ pub fn stat(task: &TaskInner) -> String {
         .exe_path
         .read()
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or("unknown")
         .to_string();
 
     let stat = ProcStat {
-        pid: thread.tid() as u32,
+        pid: thread.tid(),
         comm,
         state,
-        ppid: process.parent().map(|p| p.pid()).unwrap_or(0) as u32,
-        pgrp: process.group().pgid() as u32,
-        session: process.group().session().sid() as u32,
+        ppid: process.parent().map(|p| p.pid()).unwrap_or(0),
+        pgrp: process.group().pgid(),
+        session: process.group().session().sid(),
         priority: xthread.get_priority() as u32,
         num_threads: process.threads().len() as u32,
         rsslim: u64::MAX,
         exit_signal: 17,
         rt_priority: xthread.get_priority() as u32,
-        policy: xthread.get_policy() as u32,
+        policy: xthread.get_policy(),
         exit_code: task.exit_code(),
         ..Default::default()
     };

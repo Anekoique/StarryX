@@ -5,4 +5,4 @@ pub mod proc;
 pub mod signal;
 pub mod stat;
 
-pub use {stat::*, api::*, futex::*, proc::*, signal::*};
+pub use {api::*, futex::*, proc::*, signal::*, stat::*};

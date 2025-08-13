@@ -8,7 +8,8 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  getpgid01
+    epoll_pwait04
+    epoll_pwait05
   "
 
   riscv_ltp="
@@ -18,6 +19,10 @@ run_ltp() {
     accept4_01
     access01
     access04
+    add_key01
+    add_key04
+    adjtimex02
+    adjtimex03
     alarm02
     alarm03
     alarm05
@@ -25,9 +30,12 @@ run_ltp() {
     alarm07
     bind01
     bind05
+    bpf_map01
+    bpf_prog01
     brk01
     brk02
     capget01
+    capget02
     capset01
     capset02
     chdir01
@@ -58,12 +66,15 @@ run_ltp() {
     copy_file_range01
     creat01
     creat03
+    creat06
+    creat08
     diotest1
     dirtypipe
     dup01
     dup02
     dup03
     dup04
+    dup06
     dup07
     dup201
     dup202
@@ -75,6 +86,7 @@ run_ltp() {
     dup3_01
     dup3_02
     epoll_create01
+    epoll_create02
     epoll_create1_01
     epoll_create1_02
     epoll_ctl01
@@ -86,9 +98,12 @@ run_ltp() {
     epoll_wait06
     epoll_wait07
     epoll_pwait02
+    epoll_pwait04
+    epoll_pwait05
     eventfd2_01
     eventfd2_02
     eventfd2_03
+    execve01
     execve03
     exit02
     exit_group01
@@ -187,12 +202,15 @@ run_ltp() {
     ioctl04
     ioctl05
     ioctl06
+    keyctl04
     kill06
     kill11
     link02
     link04
     link05
     link08
+    listxattr03
+    llistxattr03
     llseek01
     llseek02
     llseek03
@@ -202,11 +220,21 @@ run_ltp() {
     lstat01_64
     lstat02
     lstat02_64
+    madvise01
+    madvise02
     madvise10
+    mallinfo01
+    mallinfo02
+    mallopt01
     memcmp01
     memcpy01
     memset01
+    mincore02
+    mincore03
+    mkdir09
     mkdirat02
+    mknod01
+    mknod02
     mlock01
     mlock04
     mmap02
@@ -217,6 +245,12 @@ run_ltp() {
     mmap09
     mmap17
     mmap19
+    mq_notify02
+    mq_notify03
+    mq_open01
+    mq_timedreceive01
+    mq_timedsend01
+    me_unlink01
     msgctl01
     msgctl02
     msgctl04
@@ -240,7 +274,12 @@ run_ltp() {
     pipe14
     pipe2_01
     poll01
+    posix_fadvise01
+    posix_fadvise01_16
+    posix_fadvise03
+    posix_fadvise03_16
     ppoll01
+    pkey01
     prctl01
     prctl03
     prctl04
@@ -257,6 +296,7 @@ run_ltp() {
     preadv201_64
     preadv202
     preadv202_64
+    ptrace11
     pselect02
     pselect02_64
     pselect03
@@ -278,9 +318,11 @@ run_ltp() {
     readv01
     readv02
     reboot01
+    request_key01
+    request_key03
+    request_key05
     rmdir01
     rmdir02
-    rtc01
     sbrk01
     sbrk02
     sched_getaffinity01
@@ -416,15 +458,22 @@ run_ltp() {
     abort01
     access01
     access04
+    add_key01
+    add_key04
+    adjtimex02
+    adjtimex03
     alarm02
     alarm03
     alarm05
     alarm06
     alarm07
     bind01
+    bpf_map01
+    bpf_prog01
     brk01
     brk02
     capget01
+    capget02
     capset01
     capset02
     chdir01
@@ -456,11 +505,14 @@ run_ltp() {
     crash02
     creat01
     creat03
+    creat06
+    creat08
     dirtypipe
     dup01
     dup02
     dup03
     dup04
+    dup06
     dup07
     dup201
     dup202
@@ -484,9 +536,12 @@ run_ltp() {
     epoll_wait06
     epoll_wait07
     epoll_pwait02
+    epoll_pwait04
+    epoll_pwait05
     eventfd2_01
     eventfd2_02
     eventfd2_03
+    execve01
     execve03
     exit02
     exit_group01
@@ -579,12 +634,15 @@ run_ltp() {
     getuid01
     getuid03
     ioctl05
+    ioctl06
     kill06
     kill11
     link02
     link04
     link05
     link08
+    listxattr03
+    llistxattr03
     llseek01
     llseek02
     llseek03
@@ -595,10 +653,20 @@ run_ltp() {
     lstat02
     lstat02_64
     madvise01
+    madvise02
+    madvise10
+    mallinfo01
+    mallinfo02
+    mallopt01
     memcmp01
     memcpy01
     memset01
+    mincore02
+    mincore03
+    mkdir09
     mkdirat02
+    mknod01
+    mknod02
     mlock01
     mlock04
     mmap001
@@ -608,6 +676,12 @@ run_ltp() {
     mmap09
     mmap17
     mmap19
+    mq_notify02
+    mq_notify03
+    mq_open01
+    mq_timedreceive01
+    mq_timedsend01
+    me_unlink01
     munlock01
     nanosleep04
     open01
@@ -624,8 +698,11 @@ run_ltp() {
     pipe2_01
     poll01
     posix_fadvise01
+    posix_fadvise01_16
     posix_fadvise03
+    posix_fadvise03_16
     ppoll01
+    pkey01
     prctl01
     prctl03
     prctl04
@@ -642,6 +719,7 @@ run_ltp() {
     preadv201_64
     preadv202
     preadv202_64
+    ptrace11
     pselect02
     pselect02_64
     pselect03
@@ -663,6 +741,9 @@ run_ltp() {
     readv01
     readv02
     reboot01
+    request_key01
+    request_key03
+    request_key05
     rmdir01
     rmdir02
     sbrk01
@@ -862,10 +943,10 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 echo -e "\n=============== Preliminary Round ===============\n"
 
-# cd /musl
-# timeout 420 ./lmbench_testcode.sh
-# cd /glibc
-# timeout 420 ./lmbench_testcode.sh
+cd /musl
+timeout 420 ./lmbench_testcode.sh
+cd /glibc
+timeout 420 ./lmbench_testcode.sh
 
 cd /musl
 run_ltp musl
@@ -873,29 +954,42 @@ run_ltp musl
 cd /glibc
 run_ltp glibc
 
-# cd /musl
-# ./libctest_testcode.sh
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./busybox_testcode.sh
-# ./libcbench_testcode.sh
-# ./iozone_testcode.sh
-# ./iperf_testcode.sh
-# ./netperf_testcode.sh
-# 
-# cd /glibc
-# ./basic_testcode.sh
-# ./lua_testcode.sh
-# ./busybox_testcode.sh
-# ./libcbench_testcode.sh
-# ./iozone_testcode.sh
-# ./iperf_testcode.sh
-# ./netperf_testcode.sh
-# 
-# cd /musl
-# ./cyclictest_testcode.sh
-# cd /glibc
-# ./cyclictest_testcode.sh
+cd /musl
+./libctest_testcode.sh
+
+./basic_testcode.sh
+
+./lua_testcode.sh
+
+./busybox_testcode.sh
+
+./libcbench_testcode.sh
+
+./iozone_testcode.sh
+
+./iperf_testcode.sh
+
+./netperf_testcode.sh
+
+cd /glibc
+./basic_testcode.sh
+
+./lua_testcode.sh
+
+./busybox_testcode.sh
+
+./libcbench_testcode.sh
+
+./iozone_testcode.sh
+
+./iperf_testcode.sh
+
+./netperf_testcode.sh
+
+cd /musl
+./cyclictest_testcode.sh
+cd /glibc
+./cyclictest_testcode.sh
 
 echo -e "\n=============== Final Round Stage 1 ===============\n"
 

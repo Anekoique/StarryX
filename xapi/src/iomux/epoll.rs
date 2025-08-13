@@ -7,13 +7,13 @@ use xcore::{
     fs::fd::{FD_TABLE, add_file_like, get_file_like},
     task::with_uspace,
 };
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess};
+use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::{
     ctypes::{
         EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLERR, EPOLLET, EPOLLHUP,
-        EPOLLIN, EPOLLONESHOT, EPOLLOUT, epoll_event, fs::IoEvents,
+        EPOLLIN, EPOLLONESHOT, EPOLLOUT, epoll_event, fs::IoEvents, sigset_t, timespec,
     },
-    time::TimeValue,
+    time::{TimeValue, TimeValueLike},
 };
 
 use crate::iomux::{EpollInstance, PollFd, poll};
@@ -282,4 +282,25 @@ pub fn sys_epoll_wait(
     let n = ready_events.len();
     with_uspace(|uspace| uspace.write_slice(events, &ready_events[..n]))?;
     Ok(n as isize)
+}
+
+pub fn sys_epoll_pwait2(
+    epfd: i32,
+    events: UserPtr<epoll_event>,
+    maxevents: i32,
+    timeout: UserConstPtr<timespec>,
+    sigmask: UserConstPtr<sigset_t>,
+) -> LinuxResult<isize> {
+    with_uspace(|uspace| {
+        let timeout = nullable!(uspace.read(timeout))?
+            .map(timespec::to_time_value)
+            .transpose()?;
+        let _sigmask = nullable!(uspace.read(sigmask))?;
+        sys_epoll_wait(
+            epfd,
+            events,
+            maxevents,
+            timeout.unwrap_or(TimeValue::from_millis(0)).as_millis() as i32,
+        )
+    })
 }

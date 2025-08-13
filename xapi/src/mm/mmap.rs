@@ -216,3 +216,15 @@ pub fn sys_msync(_addr: usize, _length: usize, _flags: u32) -> LinuxResult<isize
     warn!("sys_msync: not implemented");
     Ok(0)
 }
+
+pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> LinuxResult<isize> {
+    let madvise = xutils::ctypes::mm::Madv::from_repr(advice).ok_or(LinuxError::EINVAL)?;
+    info!(
+        "[sys_madvise]: addr: {:#x}, len: {:#x}, advice: {:?}",
+        addr, length, madvise
+    );
+    if addr % 4096 != 0 {
+        return Err(LinuxError::EINVAL);
+    }
+    Ok(0)
+}
