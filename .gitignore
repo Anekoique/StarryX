@@ -21,3 +21,4 @@ kernel-*
 /vendor
 /testsuits
 *.rdb
+summary.txt

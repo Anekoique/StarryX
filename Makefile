@@ -47,6 +47,11 @@ vf2:
 		BUS=mmio FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2 build
 	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
 
+vf2-sd:
+	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 \
+		BUS=mmio FEATURES=$(FEATURES),driver-visionfive2-sd LOG=$(LOG) SMP=2 build
+	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
+
 sdcard:
 	@cp xtest/sdcard-rv.img .
 
