@@ -1,6 +1,6 @@
 ## 引言 
 
-![intro](/home/ctoluu/Downloads/intro.drawio.png)
+![intro](./images/intro.drawio.png)
 
 操作系统是计算机系统的核心软件，负责管理和协调硬件与软件资源，为应用程序提供高效、安全的运行环境。操作系统的内核作为其核心组件， 直接管理处理器、内存、存储设备及外设等硬件资源，并通过系统调用接口为用户程序 提供基础服务，从而简化应用程序对底层硬件的访问与管理。根据不同的应用场景和设 计理念，操作系统内核可以采用多种架构，包括宏内核（Monolithic Kernel）、微内核 （Microkernel）、混合内核（Hybrid Kernel）、外核（Exokernel）、库操作系统（Library OS）以及单内核（Unikernel）。这些架构在性能、灵活性、安全性和可维护性等方面各有优劣，适用于不同的计算环境。
 

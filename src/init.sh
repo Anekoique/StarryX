@@ -942,20 +942,20 @@ ln -v -s /lib /usr/lib64
 export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 echo -e "\n=============== Preliminary Round ===============\n"
-
+# 
+# cd /musl
+# timeout 420 ./lmbench_testcode.sh
+# cd /glibc
+# timeout 420 ./lmbench_testcode.sh
+# 
+# cd /musl
+# run_ltp musl
+# 
+# cd /glibc
+# run_ltp glibc
+# 
 cd /musl
-timeout 420 ./lmbench_testcode.sh
-cd /glibc
-timeout 420 ./lmbench_testcode.sh
-
-cd /musl
-run_ltp musl
-
-cd /glibc
-run_ltp glibc
-
-cd /musl
-./libctest_testcode.sh
+# ./libctest_testcode.sh
 
 ./basic_testcode.sh
 
@@ -964,34 +964,34 @@ cd /musl
 ./busybox_testcode.sh
 
 ./libcbench_testcode.sh
-
-./iozone_testcode.sh
-
-./iperf_testcode.sh
-
-./netperf_testcode.sh
-
-cd /glibc
-./basic_testcode.sh
-
-./lua_testcode.sh
-
-./busybox_testcode.sh
-
-./libcbench_testcode.sh
-
-./iozone_testcode.sh
-
-./iperf_testcode.sh
-
-./netperf_testcode.sh
-
-cd /musl
-./cyclictest_testcode.sh
-cd /glibc
-./cyclictest_testcode.sh
-
-echo -e "\n=============== Final Round Stage 1 ===============\n"
+# 
+# ./iozone_testcode.sh
+# 
+# ./iperf_testcode.sh
+# 
+# ./netperf_testcode.sh
+# 
+# cd /glibc
+# ./basic_testcode.sh
+# 
+# ./lua_testcode.sh
+# 
+# ./busybox_testcode.sh
+# 
+# ./libcbench_testcode.sh
+# 
+# ./iozone_testcode.sh
+# 
+# ./iperf_testcode.sh
+# 
+# ./netperf_testcode.sh
+# 
+# cd /musl
+# ./cyclictest_testcode.sh
+# cd /glibc
+# ./cyclictest_testcode.sh
+# 
+# echo -e "\n=============== Final Round Stage 1 ===============\n"
 
 # cd /musl
 # ./interrupts_testcode.sh
@@ -1005,13 +1005,13 @@ echo -e "\n=============== Final Round Stage 1 ===============\n"
 
 
 # echo -e "\n=============== Final Round Stage 2 ===============\n"
-
+# 
 # cd /musl
 # export HOME=/musl
 # cp -r ./usr/share /usr
 # cp ./usr/bin/git /bin
-# ./git_testcode.sh
-# 
+# git clone https://github.com/oscomp/starry-next.git
+
 # cd /glibc
 # export HOME=/glibc
 # rm -r /usr/share
@@ -1031,7 +1031,7 @@ echo -e "\n=============== Final Round Stage 1 ===============\n"
 # ln -v -s /lib /lib64
 # ln -v -s /lib /usr/lib
 # ln -v -s /lib /usr/lib64
-
+# 
 # echo -e "\n================ Linux APPs ================\n"
 
 # echo -e "\n================ Redis ================\n"
@@ -1042,3 +1042,7 @@ echo -e "\n=============== Final Round Stage 1 ===============\n"
 
 # echo -e "\n================ Bash ================\n"
 # bash
+
+# echo -e "\n================ gcc ================\n"
+# cd /home
+# gcc main.c

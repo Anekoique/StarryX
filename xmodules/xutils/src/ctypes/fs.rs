@@ -179,3 +179,15 @@ impl From<Kstat> for statx {
         statx
     }
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FanotifyEventMetadata {
+    pub event_len: u32,
+    pub vers: u8,
+    pub reserved: u8,
+    pub metadata_len: u16,
+    pub mask: u64,
+    pub fd: i32,
+    pub pid: i32,
+}

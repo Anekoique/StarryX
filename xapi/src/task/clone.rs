@@ -95,7 +95,8 @@ fn do_clone(
         };
         let builder = parent.fork(tid);
 
-        let aspace = if flags.contains(CloneFlags::VM) {
+        // FIXME: CloneFlags::VFORK
+        let aspace = if flags.contains(CloneFlags::VM) && !flags.contains(CloneFlags::VFORK) {
             uspace.aspace.clone()
         } else {
             let mut aspace = uspace.aspace.lock().try_clone()?;

@@ -14,7 +14,7 @@ else
     $(error "Unknown ARCH! It should be riscv64 or loongarch64")
 endif
 
-all: busybox redis bash gcc
+all: busybox binutils gcc
 
 
 git: .PHONY
@@ -22,7 +22,7 @@ ifneq (,$(findstring riscv64,$(PREFIX)))
 	cd zlib && CROSS_PREFIX=${CROSS_TARGET}- ./configure && make -j 16 && make DESTDIR=/usr/lib/gcc-cross/riscv64-linux-gnu/11 install
 	cp /usr/lib/gcc-cross/riscv64-linux-gnu/11/usr/local/lib/libz.a /usr/lib/gcc-cross/riscv64-linux-gnu/11/
 	cd git && ./configure --prefix=/usr --build=${CROSS_HOST} --host=${CROSS_TARGET} --with-gitconfig=/etc/gitconfig --with-python=python3 --without-iconv \
-	    ac_cv_fread_reads_directories=yes ac_cv_snprintf_returns_bogus=no && make -j 16 && make install
+	  ac_cv_fread_reads_directories=yes ac_cv_snprintf_returns_bogus=no && make -j 16 && make install
 else ifneq (,$(findstring loongarch64,$(PREFIX)))
 	cd zlib && CROSS_PREFIX=${CROSS_TARGET}- ./configure && make -j 16 && make DESTDIR=/opt/gcc-13.2.0-loongarch64-linux-gnu/sysroot install
 	cd git && ./configure --prefix=/usr --build=${CROSS_HOST} --host=${CROSS_TARGET} --with-gitconfig=/etc/gitconfig --with-python=python3 --without-iconv \
@@ -46,7 +46,27 @@ bash: .PHONY
 	$(STRIP) bash && \
 	cp bash $(DESTDIR)/bin
 	
-gcc: .PHONY
+binutils: .PHONY
+	cd binutils && \
+	./configure \
+		--host=$(CROSS_TARGET) \
+		--target=$(CROSS_TARGET) \
+		--prefix=/usr \
+		--disable-multilib \
+		--disable-nls \
+		--disable-werror && \
+	make -j16 && \
+	$(STRIP) binutils/ar gas/as-new ld/ld-new binutils/nm-new binutils/objcopy binutils/objdump binutils/ranlib binutils/strip-new && \
+	cp binutils/ar $(DESTDIR)/bin/ar && \
+	cp gas/as-new $(DESTDIR)/bin/as && \
+	cp ld/ld-new $(DESTDIR)/bin/ld && \
+	cp binutils/nm-new $(DESTDIR)/bin/nm && \
+	cp binutils/objcopy $(DESTDIR)/bin/objcopy && \
+	cp binutils/objdump $(DESTDIR)/bin/objdump && \
+	cp binutils/ranlib $(DESTDIR)/bin/ranlib && \
+	cp binutils/strip-new $(DESTDIR)/bin/strip
+
+gcc: binutils .PHONY
 	cd gcc && ./contrib/download_prerequisites
 	mkdir -p gcc-build
 	cd gcc-build && \
@@ -68,13 +88,17 @@ gcc: .PHONY
 		--disable-checking \
 		--without-headers \
 		--with-newlib && \
-	make -j16 all-gcc && \
-	$(STRIP) gcc/xgcc gcc/cc1 && \
+	make -j16 all-gcc all-target-libgcc && \
+	$(STRIP) gcc/xgcc gcc/cc1 gcc/collect2 gcc/lto1 gcc/lto-wrapper && \
 	cp gcc/xgcc $(DESTDIR)/bin/gcc && \
 	mkdir -p $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0 && \
-	cp gcc/cc1 $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ && \
+	cp gcc/cc1 gcc/collect2 gcc/lto1 gcc/lto-wrapper $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ && \
+	cp gcc/liblto_plugin.so $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ && \
+	cp $(CROSS_TARGET)/libgcc/libgcc.a $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ && \
+	cp $(CROSS_TARGET)/libgcc/crt*.o $(DESTDIR)/lib/gcc/$(CROSS_TARGET)/13.2.0/ || true && \
 	mkdir -p $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0 && \
-	cp gcc/cc1 $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0/
+	cp gcc/cc1 gcc/collect2 gcc/lto1 gcc/lto-wrapper $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0/ && \
+	cp gcc/liblto_plugin.so $(DESTDIR)/libexec/gcc/$(CROSS_TARGET)/13.2.0/
 
 redis: .PHONY
 	cd redis && \

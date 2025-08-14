@@ -3,12 +3,21 @@ DOCKER ?= docker.educg.net/cg/os-contest:20250714
 all: sdcard
 
 build-rv:
-	make -f Makefile.sub clean
 	mkdir -p sdcard/riscv/lib
 	mkdir -p sdcard/riscv/usr
 	mkdir -p sdcard/riscv/bin
+	mkdir -p sdcard/home
 	make -f Makefile.sub PREFIX=riscv64-linux-gnu- DESTDIR=/code/sdcard/riscv
-	# rm -fr /code/sdcard/riscv/usr/libexec/git-core
+	# Ensure liblto_plugin.so is available for ld.bfd in the guest
+	mkdir -p sdcard/riscv/usr/lib/bfd-plugins
+	sh -c 'for p in \
+		/usr/lib/bfd-plugins/liblto_plugin.so \
+		/usr/lib/gcc-cross/riscv64-linux-gnu/*/liblto_plugin.so \
+		/usr/lib/gcc/riscv64-linux-gnu/*/liblto_plugin.so; do \
+		  for f in $$p; do \
+		    if [ -f "$$f" ]; then cp "$$f" sdcard/riscv/usr/lib/bfd-plugins/; exit 0; fi; \
+		  done; \
+		done; exit 0'
 	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/lib/libc.so
 	cp /usr/riscv64-linux-gnu/lib/libc.so.6 sdcard/riscv/lib/
 	cp /usr/riscv64-linux-gnu/lib/libm.so.6 sdcard/riscv/lib/libm.so
@@ -21,16 +30,25 @@ build-la:
 	make -f Makefile.sub clean
 	mkdir -p sdcard/loongarch/
 	make -f Makefile.sub PREFIX=loongarch64-linux-gnu- DESTDIR=/code/sdcard/loongarch/glibc
-	rm -fr /code/sdcard/loongarch/glibc/usr/libexec/git-core
 	mkdir -p /code/sdcard/loongarch/musl
 	cp -fr /code/sdcard/loongarch/glibc/* /code/sdcard/loongarch/musl
 	mkdir -p /code/sdcard/loongarch/musl/lib
 	mkdir -p /code/sdcard/loongarch/glibc/lib
 	cp scripts/git_testcode.sh /code/sdcard/loongarch/glibc
 	cp scripts/git_testcode.sh /code/sdcard/loongarch/musl
+	# Ensure liblto_plugin.so is available for ld.bfd in the guest
+	mkdir -p sdcard/loongarch/usr/lib/bfd-plugins
+	sh -c 'for p in \
+		/usr/lib/bfd-plugins/liblto_plugin.so \
+		/usr/lib/gcc-cross/loongarch64-linux-gnu/*/liblto_plugin.so \
+		/usr/lib/gcc/loongarch64-linux-gnu/*/liblto_plugin.so; do \
+		  for f in $$p; do \
+		    if [ -f "$$f" ]; then cp "$$f" sdcard/loongarch/usr/lib/bfd-plugins/; exit 0; fi; \
+		  done; \
+		done; exit 0'
 
 sdcard-rv: build-rv .PHONY
-	dd if=/dev/zero of=sdcard-rv.img count=512 bs=1M
+	dd if=/dev/zero of=sdcard-rv.img count=1024 bs=1M
 	mkfs.ext4 sdcard-rv.img
 	mkdir -p mnt
 	mount sdcard-rv.img mnt
@@ -38,7 +56,7 @@ sdcard-rv: build-rv .PHONY
 	umount mnt
 
 sdcard-la: build-la .PHONY
-	dd if=/dev/zero of=sdcard-la.img count=512 bs=1M
+	dd if=/dev/zero of=sdcard-la.img count=1024 bs=1M
 	mkfs.ext4 sdcard-la.img
 	mkdir -p mnt
 	mount sdcard-la.img mnt

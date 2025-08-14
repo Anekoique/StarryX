@@ -1,4 +1,5 @@
 use axhal::paging::MappingFlags;
+use strum::FromRepr;
 
 use super::{
     MAP_ANONYMOUS, MAP_FIXED, MAP_FIXED_NOREPLACE, MAP_HUGE_1GB, MAP_HUGETLB, MAP_NORESERVE,
@@ -65,4 +66,32 @@ impl From<MmapProt> for MappingFlags {
         }
         flags
     }
+}
+
+#[derive(FromRepr, Debug, Eq, PartialEq)]
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+pub enum Madv {
+    MADV_NORMAL = 0,
+    MADV_RANDOM = 1,
+    MADV_SEQUENTIAL = 2,
+    MADV_WILLNEED = 3,
+    MADV_DONTNEED = 4,
+    MADV_FREE = 8,
+    MADV_REMOVE = 9,
+    MADV_DONTFORK = 10,
+    MADV_DOFORK = 11,
+    MADV_MERGEABLE = 12,
+    MADV_UNMERGEABLE = 13,
+    MADV_HUGEPAGE = 14,
+    MADV_NOHUGEPAGE = 15,
+    MADV_DONTDUMP = 16,
+    MADV_DODUMP = 17,
+    MADV_WIPEONFORK = 18,
+    MADV_KEEPONFORK = 19,
+    MADV_COLD = 20,
+    MADV_PAGEOUT = 21,
+    MADV_POPULATE_READ = 22,
+    MADV_POPULATE_WRITE = 23,
+    MADV_HWPOISON = 100,
 }

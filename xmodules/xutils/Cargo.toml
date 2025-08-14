@@ -20,3 +20,4 @@ flatten_objects = "0.2.4"
 linux-raw-sys = { workspace = true, features = ["ioctl"] }
 weak-map = { git = "https://github.com/Starry-OS/weak-map.git" }
 slab = { version = "0.4.9", default-features = false }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
