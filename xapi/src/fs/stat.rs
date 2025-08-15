@@ -12,8 +12,9 @@ use xcore::{
 };
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::ctypes::{
-    __kernel_fsid_t, AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_FOLLOW, R_OK, W_OK, X_OK,
-    fs::metadata_to_kstat, stat, statfs, statx,
+    __kernel_fsid_t, AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_FOLLOW,
+    fs::{AccessMode, metadata_to_kstat},
+    stat, statfs, statx,
 };
 
 /// Get file metadata by path and write into statbuf.
@@ -152,18 +153,23 @@ pub fn sys_faccessat2(
     mode: u32,
     flags: u32,
 ) -> LinuxResult<isize> {
+    let access_mode = AccessMode::from_bits(mode).ok_or(LinuxError::EINVAL)?;
     let path = with_uspace(|uspace| nullable!(uspace.read_str(path)))?;
 
     let mut required_mode = NodePermission::empty();
-    if mode & R_OK != 0 {
+    if access_mode.contains(AccessMode::R_OK) {
         required_mode |= NodePermission::OWNER_READ;
     }
-    if mode & W_OK != 0 {
+    if access_mode.contains(AccessMode::W_OK) {
         required_mode |= NodePermission::OWNER_WRITE;
     }
-    if mode & X_OK != 0 {
+    if access_mode.contains(AccessMode::X_OK) {
         required_mode |= NodePermission::OWNER_EXEC;
     }
+    debug!(
+        "dirfd: {}, path: {:?}, mode: {:?}, flags: {:?}",
+        dirfd, path, mode, flags
+    );
     let required_mode = required_mode.bits();
 
     let file_mode = with_location(dirfd, path, flags, |location| {
@@ -181,7 +187,9 @@ pub fn sys_faccessat2(
     .mode;
 
     let uid = with_xprocess(|process| process.uid());
-    if (file_mode as u16 & required_mode) != required_mode && (mode & X_OK != 0 || uid != 0) {
+    if (file_mode as u16 & required_mode) != required_mode
+        && (access_mode.contains(AccessMode::X_OK) || uid != 0)
+    {
         return Err(LinuxError::EACCES);
     }
 

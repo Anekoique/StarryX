@@ -8,7 +8,7 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  access04
+  getsockname01
   "
 
   riscv_ltp="

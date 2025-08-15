@@ -5,7 +5,7 @@ use axhal::time::TimeValue;
 use super::{
     __kernel_mode_t, O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_EXEC, O_PATH, O_RDONLY,
     O_TRUNC, O_WRONLY, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, c_int, stat, statx,
-    statx_timestamp,
+    statx_timestamp, R_OK, W_OK, X_OK, F_OK,
 };
 
 /// Convert open flags to [`OpenOptions`].
@@ -190,4 +190,15 @@ pub struct FanotifyEventMetadata {
     pub mask: u64,
     pub fd: i32,
     pub pid: i32,
+}
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy)]
+    #[repr(C)]
+    pub struct AccessMode: u32 {
+        const F_OK = F_OK;
+        const R_OK = R_OK;
+        const W_OK = W_OK;
+        const X_OK = X_OK;
+    }
 }

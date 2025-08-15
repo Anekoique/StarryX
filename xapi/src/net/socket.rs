@@ -8,7 +8,7 @@ use axsync::Mutex;
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::ctypes::{
     AF_INET, AF_INET6, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, SOCK_CLOEXEC,
-    SOCK_DGRAM, SOCK_NONBLOCK, SOCK_STREAM, sockaddr, socklen_t,
+    SOCK_DGRAM, SOCK_NONBLOCK, SOCK_STREAM, sockaddr, sockaddr_in, socklen_t,
 };
 
 use xcore::{
@@ -118,7 +118,11 @@ pub fn sys_getsockname(
     debug!("sys_getsockname <= fd: {}, addr: {:?}", fd, local_addr);
 
     with_uspace(|uspace| {
-        uspace.write(addrlen, local_addr.write_to_user(addr)?)?;
+        let len = uspace.read(addrlen)?;
+        if len != size_of::<sockaddr_in>() as socklen_t {
+            return Err(LinuxError::EINVAL);
+        }
+        local_addr.write_to_user(addr)?;
         Ok(0)
     })
 }
@@ -139,7 +143,11 @@ pub fn sys_getpeername(
     debug!("sys_getpeername <= fd: {}, addr: {:?}", fd, peer_addr);
 
     with_uspace(|uspace| {
-        uspace.write(addrlen, peer_addr.write_to_user(addr)?)?;
+        let len = uspace.read(addrlen)?;
+        if len != size_of::<sockaddr_in>() as socklen_t {
+            return Err(LinuxError::EINVAL);
+        }
+        peer_addr.write_to_user(addr)?;
         Ok(0)
     })
 }
