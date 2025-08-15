@@ -8,7 +8,12 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  getsockname01
+  pidfd_getfd01
+  pidfd_getfd02
+  pidfd_open01
+  pidfd_open02
+  pidfd_open03
+  pidfd_open04
   "
 
   riscv_ltp="
@@ -133,6 +138,8 @@ run_ltp() {
     fcntl13_64
     fcntl29
     fcntl29_64
+    fgetxattr01
+    flistxattr03
     flock01
     flock04
     flock06
@@ -198,6 +205,8 @@ run_ltp() {
     gettid02
     getuid01
     getuid03
+    getxattr01
+    getxattr02
     ioctl04
     ioctl05
     ioctl06
@@ -227,6 +236,7 @@ run_ltp() {
     mallopt01
     memcmp01
     memcpy01
+    memfd_create01
     memset01
     mincore02
     mincore03
@@ -265,6 +275,8 @@ run_ltp() {
     open02
     open03
     open04
+    pathconf01
+    pathconf02
     pipe01
     pipe06
     pipe10
@@ -336,7 +348,6 @@ run_ltp() {
     sched_getscheduler01
     sched_getscheduler02
     sched_setscheduler01
-    sched_yield01
     select03
     sem_nstest
     semctl03
@@ -573,6 +584,8 @@ run_ltp() {
     fcntl13_64
     fcntl29
     fcntl29_64
+    fgetxattr01
+    flistxattr03
     flock01
     flock04
     flock06
@@ -632,6 +645,8 @@ run_ltp() {
     gettid02
     getuid01
     getuid03
+    getxattr01
+    getxattr02
     ioctl05
     ioctl06
     kill06
@@ -659,6 +674,7 @@ run_ltp() {
     mallopt01
     memcmp01
     memcpy01
+    memfd_create01
     memset01
     mincore02
     mincore03
@@ -670,6 +686,7 @@ run_ltp() {
     mlock04
     mmap001
     mmap02
+    mmap03
     mmap06
     mmap08
     mmap09

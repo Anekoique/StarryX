@@ -26,7 +26,7 @@ fn check_sigset_size(size: usize) -> LinuxResult<()> {
     Ok(())
 }
 
-fn parse_signo(signo: u32) -> LinuxResult<Signo> {
+pub fn parse_signo(signo: u32) -> LinuxResult<Signo> {
     Signo::from_repr(signo as u8).ok_or(LinuxError::EINVAL)
 }
 
@@ -203,20 +203,20 @@ fn find_thread_in_group(tgid: Pid, tid: Pid) -> LinuxResult<Arc<Thread>> {
     Ok(thr)
 }
 
-fn make_queue_signal_info(
+pub fn make_queue_signal_info(
     tgid: Pid,
     signo: u32,
-    sig: UserPtr<SignalInfo>,
+    info: UserPtr<SignalInfo>,
 ) -> LinuxResult<SignalInfo> {
     with_thread(|thread| {
         let signo = parse_signo(signo)?;
         let uspace = XProcess::from_thread(thread).uspace();
-        let mut sig = uspace.raw_ptr(sig)?.clone();
-        sig.set_signo(signo);
-        if thread.process().pid() != tgid && (sig.code() >= 0 || sig.code() == SI_TKILL) {
+        let mut info = uspace.raw_ptr(info)?.clone();
+        info.set_signo(signo);
+        if thread.process().pid() != tgid && (info.code() >= 0 || info.code() == SI_TKILL) {
             return Err(LinuxError::EPERM);
         }
-        Ok(sig)
+        Ok(info)
     })
 }
 
@@ -228,15 +228,15 @@ fn make_queue_signal_info(
 /// * `sig` - Signal information structure
 /// * `sigsetsize` - Size of the signal set
 pub fn sys_rt_sigqueueinfo(
-    tgid: Pid,
+    pid: Pid,
     signo: u32,
-    sig: UserPtr<SignalInfo>,
+    info: UserPtr<SignalInfo>,
     sigsetsize: usize,
 ) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
 
-    let sig = make_queue_signal_info(tgid, signo, sig)?;
-    send_signal_process(get_process(tgid)?.as_ref(), sig)?;
+    let info = make_queue_signal_info(pid, signo, info)?;
+    send_signal_process(get_process(pid)?.as_ref(), info)?;
     Ok(0)
 }
 
@@ -252,13 +252,13 @@ pub fn sys_rt_tgsigqueueinfo(
     tgid: Pid,
     tid: Pid,
     signo: u32,
-    sig: UserPtr<SignalInfo>,
+    info: UserPtr<SignalInfo>,
     sigsetsize: usize,
 ) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
 
-    let sig = make_queue_signal_info(tgid, signo, sig)?;
-    send_signal_thread(find_thread_in_group(tgid, tid)?.as_ref(), sig)?;
+    let info = make_queue_signal_info(tgid, signo, info)?;
+    send_signal_thread(find_thread_in_group(tgid, tid)?.as_ref(), info)?;
     Ok(0)
 }
 

@@ -7,7 +7,7 @@ use axsync::{Mutex, RawMutex};
 
 use xcore::{
     fs::{
-        fd::{Directory, FD_TABLE, File, add_file_like, close_file_like, get_file_like},
+        fd::{Directory, DummyFd, FD_TABLE, File, add_file_like, close_file_like, get_file_like},
         file::FileLike,
         vfs::is_virtual_fs,
         with_fs,
@@ -211,4 +211,10 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             Ok(0)
         }
     }
+}
+
+pub fn sys_dummy_fd() -> LinuxResult<isize> {
+    DummyFd
+        .add_to_fd_table(FileFlags::READ | FileFlags::WRITE, false)
+        .map(|fd| fd as isize)
 }

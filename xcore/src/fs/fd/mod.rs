@@ -1,10 +1,14 @@
+mod dummy;
 mod event;
 mod file;
+mod pid;
 mod pipe;
 mod timer;
 
+pub use self::dummy::*;
 pub use self::event::*;
 pub use self::file::*;
+pub use self::pid::*;
 pub use self::pipe::*;
 pub use self::timer::*;
 

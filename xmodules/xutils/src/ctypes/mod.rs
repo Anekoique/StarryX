@@ -197,3 +197,6 @@ pub const FAN_INFO: u32 = 0x20;
 pub const FAN_NOFD: c_int = -1;
 pub const FAN_NOPIDFD: c_int = FAN_NOFD;
 pub const FAN_EPIDFD: c_int = -2;
+
+// pidfd
+pub const PIDFD_NONBLOCK: u32 = O_NONBLOCK;

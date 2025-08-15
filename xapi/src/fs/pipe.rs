@@ -11,7 +11,7 @@ use xcore::{
     task::with_uspace,
 };
 use xuspace::{UserPtr, UserSpaceAccess};
-use xutils::ctypes::O_CLOEXEC;
+use xutils::ctypes::{O_CLOEXEC, O_NONBLOCK};
 
 /// Create a pipe with optional flags.
 ///
@@ -23,6 +23,10 @@ pub fn sys_pipe2(fds: UserPtr<[c_int; 2]>, flags: i32) -> LinuxResult<isize> {
     let fate_flags = FileFlags::READ | FileFlags::WRITE;
 
     let (read_end, write_end) = Pipe::new();
+    if flags as u32 & O_NONBLOCK != 0 {
+        read_end.set_nonblocking(true);
+        write_end.set_nonblocking(true);
+    }
     let read_fd = read_end.add_to_fd_table(fate_flags, flags as u32 & O_CLOEXEC != 0)?;
     let write_fd = write_end
         .add_to_fd_table(fate_flags, flags as u32 & O_CLOEXEC != 0)

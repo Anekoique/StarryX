@@ -360,6 +360,9 @@ pub fn processes() -> Vec<Arc<Process>> {
 }
 
 pub fn get_thread(tid: Pid) -> LinuxResult<Arc<Thread>> {
+    if tid == u32::MAX {
+        return Err(LinuxError::EINVAL);
+    }
     if tid == 0 {
         Ok(current().task_ext().thread())
     } else {
@@ -368,6 +371,9 @@ pub fn get_thread(tid: Pid) -> LinuxResult<Arc<Thread>> {
 }
 
 pub fn get_process(pid: Pid) -> LinuxResult<Arc<Process>> {
+    if pid == u32::MAX {
+        return Err(LinuxError::EINVAL);
+    }
     if pid == 0 {
         Ok(current().task_ext().process())
     } else {

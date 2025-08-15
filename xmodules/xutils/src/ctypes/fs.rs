@@ -3,9 +3,9 @@ use axfs_ng_vfs::{DeviceId, Metadata};
 use axhal::time::TimeValue;
 
 use super::{
-    __kernel_mode_t, O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_EXEC, O_PATH, O_RDONLY,
-    O_TRUNC, O_WRONLY, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, c_int, stat, statx,
-    statx_timestamp, R_OK, W_OK, X_OK, F_OK,
+    __kernel_mode_t, F_OK, O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_EXEC, O_PATH,
+    O_RDONLY, O_TRUNC, O_WRONLY, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, R_OK, W_OK,
+    X_OK, c_int, stat, statx, statx_timestamp,
 };
 
 /// Convert open flags to [`OpenOptions`].

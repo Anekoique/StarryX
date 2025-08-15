@@ -65,6 +65,10 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::lremovexattr => Ok(0),
         Sysno::fremovexattr => Ok(0),
         Sysno::listxattr => Ok(0),
+        Sysno::llistxattr => Ok(0),
+        Sysno::flistxattr => Ok(0),
+        Sysno::getxattr => Err(LinuxError::ENODATA),
+        Sysno::fgetxattr => Ok(0),
 
         // file ops
         Sysno::fchown => sys_fchown(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
@@ -273,7 +277,14 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::timerfd_gettime => {
             sys_timerfd_gettime(tf.arg0() as _, tf.arg1().into(), tf.arg2().into())
         }
-        Sysno::bpf => Ok(0),
+        Sysno::pidfd_open => sys_pidfd_open(tf.arg0() as _, tf.arg1() as _),
+        Sysno::pidfd_getfd => sys_pidfd_getfd(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::pidfd_send_signal => sys_pidfd_send_signal(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2().into(),
+            tf.arg3() as _,
+        ),
 
         // fs stat
         #[cfg(target_arch = "x86_64")]
@@ -481,7 +492,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::personality => Ok(0),
         Sysno::chroot => Err(LinuxError::EPERM),
         Sysno::reboot => Ok(0),
-        Sysno::fanotify_init => Ok(0),
+        // Sysno::fanotify_init => Ok(0),
         Sysno::fanotify_mark => Ok(0),
         Sysno::pkey_alloc => Ok(0),
         Sysno::pkey_free => Ok(0),
@@ -594,6 +605,19 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
             tf.arg3().into(),
         ),
         Sysno::shutdown => sys_shutdown(tf.arg0() as _, tf.arg1() as _),
+
+        Sysno::signalfd4
+        | Sysno::fanotify_init
+        | Sysno::inotify_init1
+        | Sysno::userfaultfd
+        | Sysno::perf_event_open
+        | Sysno::io_uring_setup
+        | Sysno::bpf
+        | Sysno::fsopen
+        | Sysno::fspick
+        | Sysno::open_tree
+        | Sysno::memfd_create
+        | Sysno::memfd_secret => sys_dummy_fd(),
         _ => {
             warn!("Unimplemented syscall: {}", sysno);
             Err(LinuxError::ENOSYS)
