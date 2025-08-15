@@ -8,8 +8,7 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-    epoll_pwait04
-    epoll_pwait05
+  access04
   "
 
   riscv_ltp="
@@ -902,7 +901,7 @@ run_ltp() {
       echo "FAIL LTP CASE $f : 0"
     done
   else
-    for f in $riscv_ltp; do
+    for f in $test_ltp; do
       echo "RUN LTP CASE $f"
       ./$f
       echo "FAIL LTP CASE $f : 0"
@@ -948,22 +947,22 @@ echo -e "\n=============== Preliminary Round ===============\n"
 # cd /glibc
 # timeout 420 ./lmbench_testcode.sh
 # 
-# cd /musl
-# run_ltp musl
-# 
+cd /musl
+run_ltp musl
+
 # cd /glibc
 # run_ltp glibc
 # 
-cd /musl
+# cd /musl
 # ./libctest_testcode.sh
-
-./basic_testcode.sh
-
-./lua_testcode.sh
-
-./busybox_testcode.sh
-
-./libcbench_testcode.sh
+# 
+# ./basic_testcode.sh
+# 
+# ./lua_testcode.sh
+# 
+# ./busybox_testcode.sh
+# 
+# ./libcbench_testcode.sh
 # 
 # ./iozone_testcode.sh
 # 

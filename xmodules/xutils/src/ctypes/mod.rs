@@ -15,8 +15,12 @@ pub use linux_raw_sys::{
     },
     loop_device::{LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_SET_FD, LOOP_SET_STATUS, loop_info},
     net::{
-        __kernel_sa_family_t, AF_INET, AF_INET6, AF_UNIX, IP_RECVERR, IPPROTO_ICMP, IPPROTO_IP,
-        IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP,
+        __kernel_sa_family_t, AF_INET, AF_INET6, AF_UNIX, IP_RECVERR, IPPROTO_AH, IPPROTO_BEETPH,
+        IPPROTO_COMP, IPPROTO_DCCP, IPPROTO_EGP, IPPROTO_ENCAP, IPPROTO_ESP, IPPROTO_ETHERNET,
+        IPPROTO_GRE, IPPROTO_ICMP, IPPROTO_IDP, IPPROTO_IGMP, IPPROTO_IP, IPPROTO_IPIP,
+        IPPROTO_IPV6, IPPROTO_L2TP, IPPROTO_MAX, IPPROTO_MPLS, IPPROTO_MPTCP, IPPROTO_MTP,
+        IPPROTO_PIM, IPPROTO_PUP, IPPROTO_RAW, IPPROTO_RSVP, IPPROTO_SCTP, IPPROTO_SMC,
+        IPPROTO_TCP, IPPROTO_TP, IPPROTO_UDP, IPPROTO_UDPLITE, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP,
         SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF,
         SO_SNDBUFFORCE, SOCK_DGRAM, SOCK_STREAM, SOL_SOCKET, TCP_CONGESTION, TCP_INFO,
         TCP_KEEPIDLE, TCP_MAXSEG, TCP_NODELAY, in_addr, in6_addr, sockaddr, sockaddr_in,
@@ -34,6 +38,32 @@ pub const L_IP: i32 = IPPROTO_IP as _;
 pub const L_TCP: i32 = IPPROTO_TCP as _;
 pub const L_UDP: i32 = IPPROTO_UDP as _;
 pub const L_ICMP: i32 = IPPROTO_ICMP as _;
+pub const L_IGMP: i32 = IPPROTO_IGMP as _;
+pub const L_IPIP: i32 = IPPROTO_IPIP as _;
+pub const L_EGP: i32 = IPPROTO_EGP as _;
+pub const L_PUP: i32 = IPPROTO_PUP as _;
+pub const L_IDP: i32 = IPPROTO_IDP as _;
+pub const L_TP: i32 = IPPROTO_TP as _;
+pub const L_DCCP: i32 = IPPROTO_DCCP as _;
+pub const L_IPV6: i32 = IPPROTO_IPV6 as _;
+pub const L_RSVP: i32 = IPPROTO_RSVP as _;
+pub const L_GRE: i32 = IPPROTO_GRE as _;
+pub const L_ESP: i32 = IPPROTO_ESP as _;
+pub const L_AH: i32 = IPPROTO_AH as _;
+pub const L_MTP: i32 = IPPROTO_MTP as _;
+pub const L_BEETPH: i32 = IPPROTO_BEETPH as _;
+pub const L_ENCAP: i32 = IPPROTO_ENCAP as _;
+pub const L_PIM: i32 = IPPROTO_PIM as _;
+pub const L_COMP: i32 = IPPROTO_COMP as _;
+pub const L_L2TP: i32 = IPPROTO_L2TP as _;
+pub const L_SCTP: i32 = IPPROTO_SCTP as _;
+pub const L_UDPLITE: i32 = IPPROTO_UDPLITE as _;
+pub const L_MPLS: i32 = IPPROTO_MPLS as _;
+pub const L_ETHERNET: i32 = IPPROTO_ETHERNET as _;
+pub const L_RAW: i32 = IPPROTO_RAW as _;
+pub const L_SMC: i32 = IPPROTO_SMC as _;
+pub const L_MPTCP: i32 = IPPROTO_MPTCP as _;
+pub const L_MAX: i32 = IPPROTO_MAX as _;
 
 // fs
 pub const O_EXEC: u32 = O_PATH;

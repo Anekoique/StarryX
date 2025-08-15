@@ -8,7 +8,7 @@ use axsync::RawMutex;
 use xcore::{
     fs::{fd::get_file_like, with_file, with_location},
     mm::PAGE_CACHE_MANAGER,
-    task::with_uspace,
+    task::{with_uspace, with_xprocess},
 };
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::ctypes::{
@@ -180,7 +180,8 @@ pub fn sys_faccessat2(
     })?
     .mode;
 
-    if (file_mode as u16 & required_mode) != required_mode {
+    let uid = with_xprocess(|process| process.uid());
+    if (file_mode as u16 & required_mode) != required_mode && (mode & X_OK != 0 || uid != 0) {
         return Err(LinuxError::EACCES);
     }
 

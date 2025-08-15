@@ -172,13 +172,26 @@ pub fn sys_accept(
     addr: UserPtr<sockaddr>,
     addrlen: UserPtr<socklen_t>,
 ) -> LinuxResult<isize> {
-    debug!("sys_accept <= fd: {}", fd);
+    sys_accept4(fd, addr, addrlen, 0)
+}
+
+pub fn sys_accept4(
+    fd: i32,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+    flags: u32,
+) -> LinuxResult<isize> {
+    debug!("sys_accept4 <= fd: {}, flags: {}", fd, flags);
 
     let socket = Socket::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?.accept()?;
 
     let remote_addr = socket.local_addr()?;
+    socket.set_nonblocking(flags & SOCK_NONBLOCK != 0);
     let fd = socket
-        .add_to_fd_table(FileFlags::READ | FileFlags::WRITE, false)
+        .add_to_fd_table(
+            FileFlags::READ | FileFlags::WRITE,
+            flags & SOCK_CLOEXEC != 0,
+        )
         .map(|fd| fd as isize)?;
     debug!("sys_accept => fd: {}, addr: {:?}", fd, remote_addr);
 
@@ -188,16 +201,6 @@ pub fn sys_accept(
     }
 
     Ok(fd)
-}
-
-pub fn sys_accept4(
-    fd: i32,
-    addr: UserPtr<sockaddr>,
-    addrlen: UserPtr<socklen_t>,
-    flags: i32,
-) -> LinuxResult<isize> {
-    debug!("sys_accept4 <= fd: {}, flags: {}", fd, flags);
-    sys_accept(fd, addr, addrlen)
 }
 
 /// Send data to a specific address.
