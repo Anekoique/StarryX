@@ -4,7 +4,7 @@ use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FileFlags;
 
 use xcore::{
-    fs::fd::{FD_TABLE, add_file_like, get_file_like},
+    fs::fd::{EpollEventInfo, EpollInstance, FD_TABLE, add_file_like, get_file_like},
     task::with_uspace,
 };
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
@@ -16,7 +16,7 @@ use xutils::{
     time::{TimeValue, TimeValueLike},
 };
 
-use crate::iomux::{EpollInstance, PollFd, poll};
+use crate::iomux::{PollFd, poll};
 
 pub fn sys_epoll_create(size: i32) -> LinuxResult<isize> {
     if size <= 0 {
@@ -106,7 +106,7 @@ pub fn sys_epoll_ctl(
                 check_epoll_loop(epfd, fd, 0)?;
 
                 let ev = uspace.read(event)?;
-                let info = crate::iomux::EpollEventInfo {
+                let info = EpollEventInfo {
                     event: ev,
                     last_state: None,
                 };
@@ -122,7 +122,7 @@ pub fn sys_epoll_ctl(
                     return Err(LinuxError::ENOENT);
                 }
                 let ev = uspace.read(event)?;
-                let info = crate::iomux::EpollEventInfo {
+                let info = EpollEventInfo {
                     event: ev,
                     last_state: events.get(&fd).and_then(|info| info.last_state),
                 };

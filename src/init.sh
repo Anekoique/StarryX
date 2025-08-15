@@ -8,12 +8,7 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  pidfd_getfd01
-  pidfd_getfd02
-  pidfd_open01
-  pidfd_open02
-  pidfd_open03
-  pidfd_open04
+  splice01
   "
 
   riscv_ltp="
@@ -277,6 +272,10 @@ run_ltp() {
     open04
     pathconf01
     pathconf02
+    pidfd_getfd02
+    pidfd_open01
+    pidfd_open02
+    pidfd_open04
     pipe01
     pipe06
     pipe10
@@ -396,11 +395,16 @@ run_ltp() {
     setsockopt03
     setsockopt04
     setuid01
+    setxattr01
+    setxattr02
+    shmat01
     shmat03
+    shmat04
     shmctl02
     shmctl06
     shmctl07
     shmctl08
+    shmdt02
     sigaltstack02
     signal02
     signal03
@@ -704,6 +708,12 @@ run_ltp() {
     open02
     open03
     open04
+    pathconf01
+    pathconf02
+    pidfd_getfd02
+    pidfd_open01
+    pidfd_open02
+    pidfd_open04
     pipe01
     pipe06
     pipe09
@@ -843,11 +853,14 @@ run_ltp() {
     setsockopt04
     setuid01
     setuid01_64
+    shmat01
     shmat03
+    shmat04
     shmctl02
     shmctl06
     shmctl07
     shmctl08
+    shmdt02
     sigaltstack02
     signal02
     signal03

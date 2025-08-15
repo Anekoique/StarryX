@@ -1,4 +1,5 @@
 mod dummy;
+mod epoll;
 mod event;
 mod file;
 mod pid;
@@ -6,6 +7,7 @@ mod pipe;
 mod timer;
 
 pub use self::dummy::*;
+pub use self::epoll::*;
 pub use self::event::*;
 pub use self::file::*;
 pub use self::pid::*;

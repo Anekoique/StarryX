@@ -31,14 +31,14 @@ impl PidFd {
         }
     }
 
-    /// Get the process ID this pidfd refers to.
-    pub fn pid(&self) -> Pid {
-        self.pid
-    }
-
     /// Check if the process is still alive.
     pub fn is_alive(&self) -> bool {
         self.thread.upgrade().is_some()
+    }
+
+    /// Get the process ID this pidfd refers to.
+    pub fn pid(&self) -> Pid {
+        self.pid
     }
 
     pub fn get_thread(&self) -> LinuxResult<Arc<Thread>> {
