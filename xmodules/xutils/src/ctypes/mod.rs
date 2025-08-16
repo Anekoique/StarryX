@@ -154,6 +154,7 @@ pub const FAN_REPORT_FID: c_uint = 0x0000_0200;
 pub const FAN_REPORT_DIR_FID: c_uint = 0x0000_0400;
 pub const FAN_REPORT_NAME: c_uint = 0x0000_0800;
 pub const FAN_REPORT_TARGET_FID: c_uint = 0x0000_1000;
+pub const FAN_REPORT_FD_ERROR: c_uint = 0x0000_2000;
 
 pub const FAN_REPORT_DFID_NAME: c_uint = FAN_REPORT_DIR_FID | FAN_REPORT_NAME;
 pub const FAN_REPORT_DFID_NAME_TARGET: c_uint =

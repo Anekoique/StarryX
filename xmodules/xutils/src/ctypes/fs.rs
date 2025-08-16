@@ -194,11 +194,130 @@ pub struct FanotifyEventMetadata {
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy)]
-    #[repr(C)]
+    #[repr(transparent)]
     pub struct AccessMode: u32 {
         const F_OK = F_OK;
         const R_OK = R_OK;
         const W_OK = W_OK;
         const X_OK = X_OK;
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct FanInitFlags: u32 {
+        const CLASS_PRE_CONTENT = super::FAN_CLASS_PRE_CONTENT;
+        const CLASS_CONTENT = super::FAN_CLASS_CONTENT;
+        const CLASS_NOTIF = super::FAN_CLASS_NOTIF;
+
+        const CLOEXEC = super::FAN_CLOEXEC;
+        const NONBLOCK = super::FAN_NONBLOCK;
+
+        const UNLIMITED_QUEUE = super::FAN_UNLIMITED_QUEUE;
+        const UNLIMITED_MARKS = super::FAN_UNLIMITED_MARKS;
+
+        const REPORT_TID = super::FAN_REPORT_TID;
+        const ENABLE_AUDIT = super::FAN_ENABLE_AUDIT;
+        const REPORT_FID = super::FAN_REPORT_FID;
+        const REPORT_DIR_FID = super::FAN_REPORT_DIR_FID;
+        const REPORT_NAME = super::FAN_REPORT_NAME;
+        const REPORT_DFID_NAME = super::FAN_REPORT_DFID_NAME;
+        const REPORT_TARGET_FID = super::FAN_REPORT_TARGET_FID;
+        const REPORT_DFID_NAME_TARGET = super::FAN_REPORT_DFID_NAME_TARGET;
+        const REPORT_PIDFD = super::FAN_REPORT_PIDFD;
+        const REPORT_FD_ERROR = super::FAN_REPORT_FD_ERROR;
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct FanInitEventFlags: u32 {
+        const RDONLY = super::O_RDONLY;
+        const WRONLY = super::O_WRONLY;
+        const RDWR = super::O_RDWR;
+        const LARGEFILE = super::O_LARGEFILE;
+        const CLOEXEC = super::O_CLOEXEC;
+        const APPEND = super::O_APPEND;
+        const DSYNC = super::O_DSYNC;
+        const NOATIME = super::O_NOATIME;
+        const NONBLOCK = super::O_NONBLOCK;
+        const SYNC = super::O_SYNC;
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct FanMarkFlags: u32 {
+        const ADD = super::FAN_MARK_ADD;
+        const REMOVE = super::FAN_MARK_REMOVE;
+        const FLUSH = super::FAN_MARK_FLUSH;
+        const DONT_FOLLOW = super::FAN_MARK_DONT_FOLLOW;
+        const ONLYDIR = super::FAN_MARK_ONLYDIR;
+        const MOUNT = super::FAN_MARK_MOUNT;
+        const FILESYSTEM = super::FAN_MARK_FILESYSTEM;
+        const IGNORED_MASK = super::FAN_MARK_IGNORED_MASK;
+        const IGNORE = super::FAN_MARK_IGNORE;
+        const IGNORED_SURV_MODIFY = super::FAN_MARK_IGNORED_SURV_MODIFY;
+        const EVICTABLE = super::FAN_MARK_EVICTABLE;
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct FanEventMask: u64 {
+        const ACCESS = super::FAN_ACCESS;
+        const MODIFY = super::FAN_MODIFY;
+        const CLOSE_WRITE = super::FAN_CLOSE_WRITE;
+        const CLOSE_NOWRITE = super::FAN_CLOSE_NOWRITE;
+        const OPEN = super::FAN_OPEN;
+        const OPEN_EXEC = super::FAN_OPEN_EXEC;
+        const ATTRIB = super::FAN_ATTRIB;
+        const CREATE = super::FAN_CREATE;
+        const DELETE = super::FAN_DELETE;
+        const DELETE_SELF = super::FAN_DELETE_SELF;
+        const FS_ERROR = super::FAN_FS_ERROR;
+        const MOVED_FROM = super::FAN_MOVED_FROM;
+        const MOVED_TO = super::FAN_MOVED_TO;
+        const RENAME = super::FAN_RENAME;
+        const MOVE_SELF = super::FAN_MOVE_SELF;
+        const ACCESS_PERM = super::FAN_ACCESS_PERM;
+        const OPEN_PERM = super::FAN_OPEN_PERM;
+        const OPEN_EXEC_PERM = super::FAN_OPEN_EXEC_PERM;
+        const CLOSE = super::FAN_CLOSE;
+        const MOVE = super::FAN_MOVE;
+        const ONDIR = super::FAN_ONDIR;
+        const EVENT_ON_CHILD = super::FAN_EVENT_ON_CHILD;
+        const Q_OVERFLOW = super::FAN_Q_OVERFLOW;
+
+        const FILE_EVENT_MASK =
+            Self::ACCESS.bits()
+          | Self::MODIFY.bits()
+          | Self::CLOSE_WRITE.bits()
+          | Self::CLOSE_NOWRITE.bits()
+          | Self::OPEN.bits()
+          | Self::OPEN_EXEC.bits()
+          | Self::ATTRIB.bits()
+          | Self::DELETE_SELF.bits()
+          | Self::FS_ERROR.bits()
+          | Self::MOVE_SELF.bits()
+          | Self::ACCESS_PERM.bits()
+          | Self::OPEN_PERM.bits()
+          | Self::OPEN_EXEC_PERM.bits();
+
+        const DIR_EVENT_MASK =
+            Self::CREATE.bits()
+          | Self::DELETE.bits()
+          | Self::MOVED_FROM.bits()
+          | Self::MOVED_TO.bits()
+          | Self::RENAME.bits();
+
+        const FID_EVENT_MASK =
+            Self::ATTRIB.bits()
+          | Self::CREATE.bits()
+          | Self::DELETE.bits()
+          | Self::DELETE_SELF.bits()
+          | Self::FS_ERROR.bits()
+          | Self::MOVED_FROM.bits()
+          | Self::MOVED_TO.bits()
+          | Self::RENAME.bits()
+          | Self::MOVE_SELF.bits();
     }
 }

@@ -14,7 +14,7 @@ use lock_api::{Mutex, RawMutex};
 
 use crate::{
     DirEntry, DirEntrySink, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate,
-    NodePermission, NodeType, ReferenceKey, VfsError, VfsResult,
+    NodeOps, NodePermission, NodeType, ReferenceKey, VfsError, VfsResult,
     path::{DOT, DOTDOT, PathBuf},
 };
 
@@ -142,6 +142,9 @@ impl<M: RawMutex> Location<M> {
     /// Get the file node
     pub fn get_file_node(&self) -> Arc<dyn FileNodeOps<M>> {
         self.entry.get_file_node()
+    }
+    pub fn node(&self) -> Weak<dyn NodeOps<M>> {
+        self.entry.node()
     }
 }
 

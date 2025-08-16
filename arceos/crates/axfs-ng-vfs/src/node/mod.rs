@@ -55,7 +55,7 @@ pub trait NodeOps<M>: Send + Sync {
 }
 
 /// Internal node representation that can be either a file or directory
-enum Node<M> {
+pub enum Node<M> {
     File(FileNode<M>),
     Dir(DirNode<M>),
 }
@@ -316,6 +316,10 @@ impl<M: RawMutex> DirEntry<M> {
         let mut buf = vec![0; file.len()? as usize];
         file.read_at(&mut buf, 0)?;
         String::from_utf8(buf).map_err(|_| VfsError::EINVAL)
+    }
+
+    pub fn node(&self) -> Weak<dyn NodeOps<M>> {
+        Arc::downgrade(&self.0.node.clone_inner())
     }
 
     /// Get the file node

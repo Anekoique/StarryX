@@ -8,7 +8,20 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  splice01
+  fanotify08
+  fanotify09
+  fanotify10
+  fanotify11
+  fanotify12
+  fanotify13
+  fanotify14
+  fanotify15
+  fanotify16
+  fanotify17
+  fanotify18
+  fanotify19
+  fanotify22
+  fanotify23
   "
 
   riscv_ltp="

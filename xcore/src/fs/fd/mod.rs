@@ -1,6 +1,7 @@
 mod dummy;
 mod epoll;
 mod event;
+mod fanotify;
 mod file;
 mod pid;
 mod pipe;
@@ -9,6 +10,7 @@ mod timer;
 pub use self::dummy::*;
 pub use self::epoll::*;
 pub use self::event::*;
+pub use self::fanotify::*;
 pub use self::file::*;
 pub use self::pid::*;
 pub use self::pipe::*;
@@ -130,6 +132,7 @@ impl FdTable {
     pub fn add_with_flags(&self, file: Arc<XFile>, cloexec: bool) -> Result<usize, LinuxError> {
         let fd = self.add(file)?;
         self.flags.write().set(fd, cloexec);
+        debug!("files: {:?}", self.ids());
         Ok(fd)
     }
 
@@ -219,6 +222,7 @@ pub fn add_file_like(f: Arc<dyn FileLike>, flags: FileFlags, cloexec: bool) -> L
 
 /// Close a file by `fd`.
 pub fn close_file_like(fd: c_int) -> LinuxResult {
+    debug!("files: {:?}", FD_TABLE.ids());
     let f = FD_TABLE.remove(fd as usize).ok_or(LinuxError::EBADF)?;
 
     // Clear the file descriptor flags

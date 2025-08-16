@@ -492,8 +492,14 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::personality => Ok(0),
         Sysno::chroot => Err(LinuxError::EPERM),
         Sysno::reboot => Ok(0),
-        // Sysno::fanotify_init => Ok(0),
-        Sysno::fanotify_mark => Ok(0),
+        Sysno::fanotify_init => sys_fanotify_init(tf.arg0() as _, tf.arg1() as _),
+        Sysno::fanotify_mark => sys_fanotify_mark(
+            tf.arg0() as _,
+            tf.arg1() as _,
+            tf.arg2() as _,
+            tf.arg3() as _,
+            tf.arg4().into(),
+        ),
         Sysno::pkey_alloc => Ok(0),
         Sysno::pkey_free => Ok(0),
         Sysno::pkey_mprotect => Ok(0),
@@ -607,7 +613,6 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::shutdown => sys_shutdown(tf.arg0() as _, tf.arg1() as _),
 
         Sysno::signalfd4
-        | Sysno::fanotify_init
         | Sysno::inotify_init1
         | Sysno::userfaultfd
         | Sysno::perf_event_open
