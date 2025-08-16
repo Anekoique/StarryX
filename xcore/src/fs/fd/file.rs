@@ -174,6 +174,10 @@ impl Directory {
     pub fn inner(&self) -> &Location<RawMutex> {
         &self.inner
     }
+
+    pub fn inode(&self) -> u64 {
+        self.inner.inode()
+    }
 }
 
 impl FileLike for Directory {

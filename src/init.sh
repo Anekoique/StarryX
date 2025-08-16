@@ -8,20 +8,7 @@ run_ltp() {
   export LTP_SINGLE_FS_TYPE=tmpfs
 
   test_ltp="
-  fanotify08
-  fanotify09
-  fanotify10
-  fanotify11
-  fanotify12
-  fanotify13
-  fanotify14
-  fanotify15
-  fanotify16
-  fanotify17
-  fanotify18
-  fanotify19
-  fanotify22
-  fanotify23
+  mem
   "
 
   riscv_ltp="
@@ -125,6 +112,11 @@ run_ltp() {
     faccessat202
     fallocate03
     fallocate04
+    fanotify01
+    fanotify03
+    fanotify08
+    fanotify09
+    fanotify14
     fchdir01
     fchdir02
     fchmod01
@@ -389,7 +381,6 @@ run_ltp() {
     setgroups01
     setgroups02
     setitimer02
-    setpgid02
     setpgrp02
     setregid01
     setregid03
@@ -578,6 +569,11 @@ run_ltp() {
     faccessat202
     fallocate03
     fallocate04
+    fanotify01
+    fanotify03
+    fanotify08
+    fanotify09
+    fanotify14
     fchdir01
     fchdir02
     fchmod01
@@ -944,7 +940,7 @@ run_ltp() {
       echo "FAIL LTP CASE $f : 0"
     done
   else
-    for f in $test_ltp; do
+    for f in $riscv_ltp; do
       echo "RUN LTP CASE $f"
       ./$f
       echo "FAIL LTP CASE $f : 0"
@@ -985,16 +981,16 @@ export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
 
 echo -e "\n=============== Preliminary Round ===============\n"
 # 
-# cd /musl
-# timeout 420 ./lmbench_testcode.sh
-# cd /glibc
-# timeout 420 ./lmbench_testcode.sh
+cd /musl
+timeout 420 ./lmbench_testcode.sh
+cd /glibc
+timeout 420 ./lmbench_testcode.sh
 # 
 cd /musl
 run_ltp musl
 
-# cd /glibc
-# run_ltp glibc
+cd /glibc
+run_ltp glibc
 # 
 # cd /musl
 # ./libctest_testcode.sh

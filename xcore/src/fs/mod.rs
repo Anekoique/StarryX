@@ -11,5 +11,7 @@ pub mod api;
 pub mod fd;
 pub mod file;
 pub mod vfs;
+pub mod fanotify;
 
 pub use api::*;
+pub use fanotify::*;

@@ -1,12 +1,12 @@
 use alloc::{
     collections::BTreeMap,
-    string::String,
     sync::{Arc, Weak},
     vec::Vec,
 };
-use core::any::Any;
+use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
+use axfs_ng::FileFlags;
 use axfs_ng_vfs::{Mountpoint, NodeOps};
 use axio::PollState;
 use axsync::{Mutex, RawMutex};
@@ -18,7 +18,7 @@ use xutils::ctypes::{
     },
 };
 
-use crate::fs::file::FileLike;
+use crate::fs::{fd::add_file_like, file::FileLike, register_group};
 
 #[derive(Debug, Clone)]
 pub enum FanTarget {
@@ -81,7 +81,6 @@ impl FanWatch {
 #[derive(Debug, Clone)]
 pub struct FanEvent {
     pub metadata: FanotifyEventMetadata,
-    pub path: Option<String>,
 }
 
 /// Fanotify file descriptor implementation
@@ -140,11 +139,103 @@ impl FanotifyGroup {
         let mut watches = self.watches.lock();
         watches.retain(|_, watch| !matches!(watch.lock().target, FanTarget::Mountpoint(_)));
     }
+
+    pub fn generate_event(&self, mask: FanEventMask, fd: i32, inode: u64) -> LinuxResult<()> {
+        let key = FanKey::Inode(inode);
+        if let Some(watch) = self.get_watch(key) {
+            let watch = watch.lock();
+            if watch.mask.intersects(mask) && !watch.ignore.intersects(mask) {
+                let fd = if self.flags.contains(FanInitFlags::REPORT_FID) {
+                    -1
+                } else {
+                    fd
+                };
+                let pid = -1;
+
+                let metadata = FanotifyEventMetadata {
+                    event_len: core::mem::size_of::<FanotifyEventMetadata>() as u32,
+                    vers: 3,
+                    reserved: 0,
+                    metadata_len: core::mem::size_of::<FanotifyEventMetadata>() as u16,
+                    mask: mask.bits(),
+                    fd,
+                    pid,
+                };
+
+                let event = FanEvent { metadata };
+
+                self.event_queue.lock().push(event);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn generate_mount_event(
+        &self,
+        mask: FanEventMask,
+        fd: i32,
+        device: u64,
+    ) -> LinuxResult<()> {
+        let key = FanKey::Mountpoint(device);
+        if let Some(watch) = self.get_watch(key) {
+            let watch = watch.lock();
+            if watch.mask.intersects(mask) && !watch.ignore.intersects(mask) {
+                let pid = -1;
+
+                let metadata = FanotifyEventMetadata {
+                    event_len: core::mem::size_of::<FanotifyEventMetadata>() as u32,
+                    vers: 3,
+                    reserved: 0,
+                    metadata_len: core::mem::size_of::<FanotifyEventMetadata>() as u16,
+                    mask: mask.bits(),
+                    fd,
+                    pid,
+                };
+
+                let event = FanEvent { metadata };
+
+                self.event_queue.lock().push(event);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn pop_event(&self) -> Option<FanEvent> {
+        let mut queue = self.event_queue.lock();
+        if !queue.is_empty() {
+            Some(queue.remove(0))
+        } else {
+            None
+        }
+    }
 }
 
 impl FileLike for FanotifyGroup {
-    fn read(&self, _buf: &mut [u8]) -> LinuxResult<usize> {
-        Ok(0)
+    fn read(&self, buf: &mut [u8]) -> LinuxResult<usize> {
+        if buf.len() < core::mem::size_of::<FanotifyEventMetadata>() {
+            return Err(LinuxError::EINVAL);
+        }
+
+        if let Some(event) = self.pop_event() {
+            let metadata_size = core::mem::size_of::<FanotifyEventMetadata>();
+            if buf.len() < metadata_size {
+                return Err(LinuxError::EINVAL);
+            }
+
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    &event.metadata as *const FanotifyEventMetadata as *const u8,
+                    buf.as_mut_ptr(),
+                    metadata_size,
+                );
+            }
+
+            Ok(metadata_size)
+        } else if self.nonblocking {
+            Err(LinuxError::EAGAIN)
+        } else {
+            Ok(0)
+        }
     }
 
     fn write(&self, _buf: &[u8]) -> LinuxResult<usize> {
@@ -173,5 +264,11 @@ impl FileLike for FanotifyGroup {
 
     fn is_nonblocking(&self) -> bool {
         self.nonblocking
+    }
+
+    fn add_to_fd_table(self, flags: FileFlags, cloexec: bool) -> LinuxResult<c_int> {
+        let group = Arc::new(self);
+        register_group(group.clone());
+        add_file_like(group, flags, cloexec)
     }
 }
