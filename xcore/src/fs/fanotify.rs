@@ -19,7 +19,9 @@ pub struct FanManager {
 
 impl FanManager {
     pub fn new() -> Self {
-        Self { groups: Mutex::new(Vec::new()) }
+        Self {
+            groups: Mutex::new(Vec::new()),
+        }
     }
 
     pub fn register_group(&self, group: Arc<FanotifyGroup>) {

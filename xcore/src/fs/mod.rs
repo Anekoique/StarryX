@@ -8,10 +8,10 @@
 #![allow(clippy::len_without_is_empty)]
 
 pub mod api;
+pub mod fanotify;
 pub mod fd;
 pub mod file;
 pub mod vfs;
-pub mod fanotify;
 
 pub use api::*;
 pub use fanotify::*;

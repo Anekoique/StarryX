@@ -1,57 +1,72 @@
-# StarryX 启动流程
+# 启动与初始化
 
-StarryX 的启动流程是一个精心设计的过程，旨在高效、安全地初始化系统硬件和软件资源，为应用程序的运行提供稳定可靠的环境。作为基于 ArceOS 构建的组件化宏内核操作系统，StarryX 的启动过程充分利用了 ArceOS 的模块化特性，同时集成了宏内核所需的核心功能。
+StarryX的启动流程涉及从ArceOS Layer到StarryX Layer再到用户程序，本部分将详细解释StarryX的启动与初始化过程，层次清晰地展现StarryX如何利用ArceOS的内核基础功能、扩展宏内核功能、服务用户程序。
 
 ![](./images/boot.png)
 
-整个启动流程可以分为以下几个关键阶段：
+## 硬件初始化
 
-### 1. Bootloader 加载
+axhal模块抽象了底层硬件与平台，StarryX从链接脚本的特定位置启动，跳转到特定arch的_start函数完成CPU与mmu初始化后跳转到硬件平台的rust_entry，完成对硬件中断、时钟、串口等的硬件初始化后跳转到axruntime模块进行组件初始化：
 
-系统上电后，固件（如 UEFI 或 BIOS）首先执行，它会初始化最基本的硬件，并从存储设备（如硬盘、SSD）中加载引导加载程序（Bootloader）。StarryX 采用 **RustSBI** (RISC-V Supervisor Binary Interface) 作为引导加载程序。
+```rust
+// riscv qemu
+extern "C" fn _start() -> ! {
+    1. save hartid
+    2. save DTB pointer
+    3. setup boot stack
+    4. setup boot page table and enabel MMU
+    5. call rust_entry(hartid, dtb)
+}
 
-RustSBI 的主要职责包括：
-- **初始化硬件**：设置 CPU 的工作模式（切换到 Supervisor 模式）、初始化时钟和中断控制器等。
-- **加载内核**：将 StarryX 内核镜像从存储介质加载到内存中的预定位置。
-- **传递启动信息**：向内核传递硬件信息，例如内存布局、设备树（Device Tree）等。
-- **跳转到内核入口**：完成上述任务后，RustSBI 将控制权交给 StarryX 内核的入口点，内核正式开始执行。
+extern "C" fn rust_entry(cpu_id: usize, dtb: usize) {
+    1. clear .bss
+    2. init CPU set stdev
+    3. init timer / console
+	4. call rust_main(hartid, dtb)
+}
+```
 
-### 2. 内核初始化
+## 组件初始化
 
-内核从 Bootloader手中接管控制权后，便开始一系列复杂的初始化工作，为操作系统的运行准备好所需的环境。
+axruntime模块确保内核运行环境就绪并为宏内核扩展提供支撑，完成了kernel backbone的初始化过程。其启动流程包括以下步骤：
 
-#### a. 早期初始化 (Early Initialization)
+```rust
+pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) {
+    axlog::init();     		    // 日志系统初始化
+    init_allocator();  		    // 内存分配器初始化
+    axmm::init();      		    // 虚拟内存管理初始化
+    axtask::init_scheduler();   // 多任务调度器初始化
+    axdriver::init();           // 驱动初始化
+    asfs::new_root();           // 文件系统初始化
+    asnet::init();              // 网络初始化
+    mp::start();                // 多核初始化
+    main()
+}
+```
 
-在内核的早期阶段，主要任务是建立一个最小化的运行环境：
-- **设置栈**：为内核的初始化代码设置一个临时的栈。
-- **初始化核心组件**：初始化最基本的数据结构和模块，例如日志系统，以便在启动过程中输出调试信息。
-- **解析启动信息**：解析由 Bootloader 传递过来的设备树（Device Tree），获取硬件配置信息。
+完成kernel backbone的初始化流程后将进入内核扩展的初始化阶段，对于单内核来说，用户APP将接管main函数的运行，对于宏内核来说，StarryX的main函数将接管main函数的运行，并完成宏内核的初始化。
 
-#### b. 硬件抽象层 (HAL) 初始化
+## 宏内核初始化
 
-StarryX 利用 ArceOS 的硬件抽象层（HAL）来屏蔽底层硬件的差异。在这一阶段，内核会：
-- **初始化 CPU 特性**：为每个核心（Core）设置特定的寄存器，启用浮点运算单元（FPU）等。
-- **配置中断**：初始化中断控制器（如 PLIC for RISC-V），并注册默认的中断处理程序。
+StarryX的main函数接管内核运行后将对各个子模块完成初始化，之后开始运行用户程序
 
-#### c. 内存管理初始化
+```rust
+fn main() {
+    xprocess::new_init();       	// 创建初始化进程
+    xcore::fs::vfs::init_root();	// 初始化伪文件系统
+    xcore::fs::fd::init_stdio();    // 初始化FD表
+    run_user_app()					// 运行用户程序                    
+}
+```
 
-内存管理是操作系统内核的核心功能之一。StarryX 在此阶段会：
-- **建立页表**：创建内核页表，将物理内存映射到虚拟地址空间，实现内核空间的隔离。
-- **初始化物理内存管理器**：根据从 Bootloader 获取的内存布局信息，初始化物理内存分配器（例如，Buddy System Allocator），管理所有可用的物理内存。
-- **启用虚拟内存**：开启 MMU（内存管理单元），系统此后将工作在虚拟地址模式下。
+对于运行的单个程序，StarryX通过run_user_task构造可运行的task，并调度运行，其主要经历以下几个过程：
 
-#### d. 核心组件初始化
+1. 构建用户空间 , 映射内核区域
+2. 加载并映射用户程序的 `ELF` 文件，返回入口地址。
+3. 构造上下文并模拟返回
+4. 初始化命名空间资源
+5. 创建新进程
+6. 为新进程创建线程
+7. 等待进程运行结束并返回退出码
 
-在内存管理系统就绪后，内核会继续初始化其他核心组件：
-- **任务调度器**：初始化进程和线程管理系统，创建第一个内核线程（通常是空闲线程）。
-- **驱动程序**：根据设备树信息，初始化系统中各种设备的驱动程序，例如串口、块设备、网络设备等。
-- **文件系统**：挂载根文件系统，为用户空间的程序提供文件访问能力。
-
-### 3. 启动第一个用户进程 (Init Process)
-
-内核完成所有初始化工作后，会创建并启动第一个用户态进程，即 `init` 进程。`init` 进程是所有用户态进程的祖先，负责：
-- **执行系统配置脚本**：读取系统配置文件，完成网络配置、服务启动等任务。
-- **启动登录终端**：在控制台上启动 `shell`，允许用户登录并与系统交互。
-- **管理系统服务**：作为守护进程，`init` 进程会持续运行，负责启动和管理系统中的其他服务。
-
-至此，StarryX 操作系统完全启动，并准备好接收用户指令和运行应用程序。整个启动流程体现了组件化和模块化的设计思想，确保了系统的灵活性和可扩展性。
+经过一系列初始化过程后，用户程序就成功在StarryX上运行起来。
