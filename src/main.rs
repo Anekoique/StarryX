@@ -64,7 +64,7 @@ fn main() {
     let init = include_str!("init.sh");
 
     info!("Running init script");
-    let args = ["/musl/busybox", "sh", "-c", init]
+    let args = ["/bin/busybox", "sh", "-c", init]
         .map(|s| s.to_string())
         .to_vec();
     let exit_code = entry::run_user_app(&args, &envs);

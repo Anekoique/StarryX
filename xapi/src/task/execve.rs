@@ -1,10 +1,10 @@
-use alloc::{format, string::ToString};
+use alloc::string::ToString;
 use core::ffi::c_char;
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axhal::arch::TrapFrame;
-use axtask::{TaskExtRef, current};
+use axtask::{current, TaskExtRef};
 
 use xcore::{
     fs::fd::FD_TABLE,
@@ -29,21 +29,14 @@ pub fn sys_execve(
     let process = current().task_ext().process();
     let xprocess = process.data::<XProcess>().unwrap();
     let uspace = xprocess.uspace();
-    let mut path = uspace.read_str(path)?.to_string();
-
-    // Add "./" prefix if path doesn't start with "/" or "./"
-    if !path.starts_with('/') && !path.starts_with("./") {
-        path = format!("./{}", path);
-    }
+    let path = uspace.read_str(path)?.to_string();
 
     let mut args = uspace.read_str_array(argv)?;
     let envs = uspace.read_str_array(envp)?;
 
     // Add "./" prefix to the first arg if it doesn't start with "/" or "./"
     if let Some(first_arg) = args.get_mut(0) {
-        if !first_arg.starts_with('/') && !first_arg.starts_with("./") {
-            *first_arg = format!("./{}", first_arg);
-        }
+        *first_arg = path.clone();
     }
 
     info!(

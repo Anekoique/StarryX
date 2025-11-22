@@ -951,46 +951,46 @@ run_ltp() {
   echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
-echo -e "\n=============== Build RootFS ===============\n"
-
-/musl/busybox mkdir -v /bin
-/musl/busybox --install -s /bin
-export PATH=/bin
-
-mkdir -v /lib
-mkdir -v /usr
-mkdir -v -p /var/tmp
-
-cp /glibc/lib/libc.so.6 /lib/libc.so.6
-ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
-ln -v -s /lib/libc.so.6 /lib/libc.so
-ln -v -s /lib/libm.so.6 /lib/libm.so
-if [[ $ARCH == loongarch64 ]]; then
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-  ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
-else
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
-  ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
-  ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
-fi
-ln -v -s /lib /lib64
-ln -v -s /lib /usr/lib
-ln -v -s /lib /usr/lib64
-
-export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
-
-echo -e "\n=============== Preliminary Round ===============\n"
+# echo -e "\n=============== Build RootFS ===============\n"
 # 
-cd /musl
-timeout 420 ./lmbench_testcode.sh
-cd /glibc
-timeout 420 ./lmbench_testcode.sh
+# /musl/busybox mkdir -v /bin
+# /musl/busybox --install -s /bin
+# export PATH=/bin
 # 
-cd /musl
-run_ltp musl
-
-cd /glibc
-run_ltp glibc
+# mkdir -v /lib
+# mkdir -v /usr
+# mkdir -v -p /var/tmp
+# 
+# cp /glibc/lib/libc.so.6 /lib/libc.so.6
+# ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
+# ln -v -s /lib/libc.so.6 /lib/libc.so
+# ln -v -s /lib/libm.so.6 /lib/libm.so
+# if [[ $ARCH == loongarch64 ]]; then
+#   ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+#   ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+# else
+#   ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+#   ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+#   ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+# fi
+# ln -v -s /lib /lib64
+# ln -v -s /lib /usr/lib
+# ln -v -s /lib /usr/lib64
+# 
+# export LD_LIBRARY_PATH=".:./lib:/musl/lib:/lib"
+# 
+# echo -e "\n=============== Preliminary Round ===============\n"
+# # 
+# cd /musl
+# timeout 420 ./lmbench_testcode.sh
+# cd /glibc
+# timeout 420 ./lmbench_testcode.sh
+# # 
+# cd /musl
+# run_ltp musl
+# 
+# cd /glibc
+# run_ltp glibc
 # 
 # cd /musl
 # ./libctest_testcode.sh
@@ -1069,6 +1069,8 @@ run_ltp glibc
 # ln -v -s /lib /lib64
 # ln -v -s /lib /usr/lib
 # ln -v -s /lib /usr/lib64
+# export HOME=/root
+# sh
 # 
 # echo -e "\n================ Linux APPs ================\n"
 
@@ -1084,3 +1086,10 @@ run_ltp glibc
 # echo -e "\n================ gcc ================\n"
 # cd /home
 # gcc main.c
+#
+echo -e "\n================ alpine ================\n"
+export PATH="/bin:/sbin:/usr/bin:/usr/sbin"
+export LD_LIBRARY_PATH="/lib:/usr/lib"
+export HOME=/root
+cd ~
+sh

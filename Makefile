@@ -6,16 +6,9 @@ export FEATURES := fp_simd,lwext4_rs
 export NO_AXSTD := y
 export AX_LIB := axfeat
 
-IMG_URL = https://github.com/oscomp/testsuits-for-oskernel/releases/download/pre-20250615/
+IMG_URL = https://github.com/Starry-OS/rootfs/releases/download/20250917
+IMG = rootfs-$(ARCH).img
 DOCKER = docker.educg.net/cg/os-contest:20250714
-
-ifeq ($(ARCH), riscv64)
-	IMG := sdcard-rv.img
-else ifeq ($(ARCH), loongarch64)
-	IMG := sdcard-la.img
-else
-	$(error Unsupported architecture: $(ARCH))
-endif
 
 all: oscomp
 
@@ -30,7 +23,7 @@ oscomp:
 
 qemu_run:
 	@if [ ! -f $(IMG) ]; then \
-		wget $(IMG_URL)/$(IMG).xz; \
+		curl -f -L $(IMG_URL)/$(IMG).xz -O; \
 		xz -d $(IMG).xz; \
 	fi
 	cp $(IMG) arceos/disk.img
