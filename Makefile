@@ -1,33 +1,27 @@
-export ARCH := riscv64
-export LOG := off
-export N := 1
-export A := $(PWD)
-export FEATURES := fp_simd,lwext4_rs
-export NO_AXSTD := y
-export AX_LIB := axfeat
+TOOLCHAIN := nightly-2025-01-18
+PROJECT := $(notdir $(CURDIR))
 
-IMG_URL = https://github.com/Starry-OS/rootfs/releases/download/20250917
-IMG = rootfs-$(ARCH).img
-DOCKER = docker.educg.net/cg/os-contest:20250714
+export ARCH ?= riscv64
+export LOG ?= off
+export FEATURES ?= fp_simd,lwext4_rs
 
-all: oscomp
+N ?= 1
 
-oscomp:
-	@mkdir -p .cargo
-	@cp xcore/src/config/config.toml.temp .cargo/config.toml
-	@if [ -d bin ]; then cp -r bin/* ~/.cargo/bin; fi
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=riscv64 BUS=mmio LOG=trace build
-	cp $$(basename $(PWD))_riscv64-qemu-virt.bin kernel-rv
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) ARCH=loongarch64 LOG=trace build
-	cp $$(basename $(PWD))_loongarch64-qemu-virt.elf kernel-la
+ROOTFS_URL := https://github.com/Starry-OS/rootfs/releases/download/20260214
+ROOTFS_IMG := rootfs-$(ARCH).img
+DOCKER_IMAGE := docker.educg.net/cg/os-contest:20250714
+
+ARCEOS_MAKE := RUSTUP_TOOLCHAIN=$(TOOLCHAIN) $(MAKE) -C arceos
+
+all: rv
 
 qemu_run:
-	@if [ ! -f $(IMG) ]; then \
-		curl -f -L $(IMG_URL)/$(IMG).xz -O; \
-		xz -d $(IMG).xz; \
+	@if [ ! -f $(ROOTFS_IMG) ]; then \
+		curl -f -L $(ROOTFS_URL)/$(ROOTFS_IMG).xz -O; \
+		xz -d $(ROOTFS_IMG).xz; \
 	fi
-	cp $(IMG) arceos/disk.img
-	$(MAKE) run
+	cp $(ROOTFS_IMG) arceos/disk.img
+	@$(ARCEOS_MAKE) run
 
 rv:
 	@$(MAKE) ARCH=riscv64 BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk qemu_run
@@ -36,32 +30,17 @@ la:
 	@$(MAKE) ARCH=loongarch64 BLK=y NET=y FEATURES=$(FEATURES),driver-virtio-blk qemu_run
 
 vf2:
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 \
-		BUS=mmio FEATURES=$(FEATURES),driver-ramdisk LOG=$(LOG) SMP=2 build
-	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
-
-vf2-sd:
-	@RUSTUP_TOOLCHAIN=nightly-2025-01-18 $(MAKE) PLAT_NAME=riscv64-visionfive2 ARCH=riscv64 \
+	@$(ARCEOS_MAKE) PLATFORM=riscv64-visionfive2 ARCH=riscv64 \
 		BUS=mmio FEATURES=$(FEATURES),driver-visionfive2-sd LOG=$(LOG) SMP=2 build
 	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
 
-sdcard:
-	@cp xtest/sdcard-rv.img .
-
 clippy:
-	@AX_CONFIG_PATH=$(PWD)/.axconfig.toml cargo clippy --all-features -- -D warnings -A clippy::new_without_default
+	@RUSTUP_TOOLCHAIN=$(TOOLCHAIN) AX_CONFIG_PATH=$(CURDIR)/.axconfig.toml cargo clippy --all-features -- -D warnings -A clippy::new_without_default
 
-switch:
-	cp sdcard-rv$(N).img.bak sdcard-rv.img
-	cp sdcard-la$(N).img.bak sdcard-la.img
-
-build run debug disasm: defconfig
-	@$(MAKE) -C arceos $@
-
-defconfig:
-	@$(MAKE) -C arceos $@
+build run debug disasm defconfig:
+	@$(ARCEOS_MAKE) $@
 
 docker:
-	docker run --rm -it -v .:/code --entrypoint bash -w /code --privileged $(DOCKER)
+	docker run --rm -it -v .:/code --entrypoint bash -w /code --privileged $(DOCKER_IMAGE)
 
-.PHONY:
+.PHONY: all qemu_run rv la vf2 sdcard clippy build run debug disasm defconfig docker

@@ -15,12 +15,7 @@ ifeq ($(ARCH), x86_64)
 else ifeq ($(ARCH), riscv64)
   machine := virt
 else ifeq ($(ARCH), aarch64)
-  ifeq ($(PLAT_NAME), aarch64-raspi4)
-    machine := raspi4b
-    override MEM := 2G
-  else
-    machine := virt
-  endif
+  machine := virt
 else ifeq ($(ARCH), loongarch64)
   machine := virt
   override MEM := 1G
@@ -116,4 +111,3 @@ define run_qemu_debug
   @printf "    $(CYAN_C)Debugging$(END_C) on qemu...\n"
   $(call run_cmd,$(QEMU),$(qemu_args-debug))
 endef
-

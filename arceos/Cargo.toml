@@ -17,18 +17,7 @@ members = [
     "modules/axsync",
     "modules/axtask",
 
-    "api/axfeat",
-    "api/arceos_api",
-    "api/arceos_posix_api",
-
-    "ulib/axstd",
-    "ulib/axlibc",
-
-    "examples/helloworld",
-    "examples/httpclient",
-    "examples/httpserver",
-    "examples/httpserver",
-    "examples/shell",
+    "modules/axfeat",
 ]
 
 [workspace.package]
@@ -43,12 +32,7 @@ keywords = ["arceos", "kernel"]
 categories = ["os", "no-std"]
 
 [workspace.dependencies]
-axstd = { path = "ulib/axstd" }
-axlibc = { path = "ulib/axlibc" }
-
-arceos_api = { path = "api/arceos_api" }
-arceos_posix_api = { path = "api/arceos_posix_api" }
-axfeat = { path = "api/axfeat" }
+axfeat = { path = "modules/axfeat" }
 
 axalloc = { path = "modules/axalloc" }
 axconfig = { path = "modules/axconfig" }
