@@ -11,5 +11,5 @@ lazyinit = "0.2.1"
 weak-map = { git = "https://github.com/Starry-OS/weak-map" }
 
 [dev-dependencies]
-ctor = "0.4.1"
+ctor = "0.6.3"
 kspin = { version = "0.1", features = ["smp"] }

@@ -17,7 +17,7 @@ unsafe fn init_boot_page_table() {
     unsafe {
         let l1_va = va!(&raw const BOOT_PT_L1 as usize);
         // 0x0000_0000_0000 ~ 0x0080_0000_0000, table
-        BOOT_PT_L0[0] = LA64PTE::new_table(crate::mem::virt_to_phys(l1_va));
+        BOOT_PT_L0[0x100] = LA64PTE::new_table(crate::mem::virt_to_phys(l1_va));
         // 0x0000_0000..0x4000_0000, VPWXGD, 1G block
         BOOT_PT_L1[0] = LA64PTE::new_page(
             pa!(0),

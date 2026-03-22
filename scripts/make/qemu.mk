@@ -10,29 +10,16 @@ else
   $(error "BUS" must be one of "mmio" or "pci")
 endif
 
-ifeq ($(ARCH), x86_64)
-  machine := q35
-else ifeq ($(ARCH), riscv64)
-  machine := virt
-else ifeq ($(ARCH), aarch64)
+ifeq ($(ARCH), riscv64)
   machine := virt
 else ifeq ($(ARCH), loongarch64)
   machine := virt
   override MEM := 1G
 endif
 
-qemu_args-x86_64 := \
-  -machine $(machine) \
-  -kernel $(OUT_ELF)
-
 qemu_args-riscv64 := \
   -machine $(machine) \
   -bios default \
-  -kernel $(FINAL_IMG)
-
-qemu_args-aarch64 := \
-  -cpu cortex-a72 \
-  -machine $(machine) \
   -kernel $(FINAL_IMG)
 
 qemu_args-loongarch64 := \
@@ -86,10 +73,6 @@ qemu_args-debug := $(qemu_args-y) -s -S
 ifeq ($(ACCEL),)
   ifneq ($(findstring -microsoft, $(shell uname -r | tr '[:upper:]' '[:lower:]')),)
     ACCEL := n  # Don't enable kvm for WSL/WSL2
-  else ifeq ($(ARCH), x86_64)
-    ACCEL := $(if $(findstring x86_64, $(shell uname -m)),y,n)
-  else ifeq ($(ARCH), aarch64)
-    ACCEL := $(if $(findstring arm64, $(shell uname -m)),y,n)
   else
     ACCEL := n
   endif

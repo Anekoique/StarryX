@@ -1,12 +1,12 @@
 [package]
 name = "axdma"
-edition.workspace = true
-version.workspace = true
+edition = "2024"
+version = "0.1.0"
 authors = ["Zhour Rui <zrufo747@outlook.com>"]
-license.workspace = true
-homepage.workspace = true
-keywords.workspace = true
-categories.workspace = true
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
+homepage = "https://github.com/arceos-org/arceos"
+keywords = ["arceos", "kernel"]
+categories = ["os", "no-std"]
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axdma"
 documentation = "https://arceos-org.github.io/arceos/axdma/index.html"
 
@@ -16,7 +16,7 @@ kspin = "0.1"
 memory_addr = "0.4"
 axerrno = "0.1"
 allocator = { git = "https://github.com/arceos-org/allocator.git", tag = "v0.1.1" }
-axalloc = { workspace = true }
-axmm = { workspace = true }
-axconfig = { workspace = true }
-axhal = { workspace = true, features = ["paging"]  }
+axalloc = { path = "../axalloc" }
+axmm = { path = "../axmm" }
+axconfig = { path = "../axconfig" }
+axhal = { path = "../axhal", features = ["paging"]  }

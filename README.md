@@ -13,10 +13,13 @@ First prize in CSCC OS Competition 2025.
 ```shell
 .
 ├── rust-toolchain.toml      // Toolchain configuration
+├── configs                  // Build configs and platform presets
 ├── docs                     // Documentations
 ├── Makefile                 // Build scripts
 ├── Cargo.toml               // Rust workspace configuration and dependencies
-├── arceos					 // Base OS
+├── scripts                  // Build and QEMU helper scripts
+├── tools                    // Board packaging helper assets
+├── arceos					 // Vendored ArceOS component crates/workspace
 ├── src                      // Entry OS
 ├── xapi					 // Posix API
 ├── xcore					 // OS Core
@@ -49,7 +52,7 @@ make vf2
 
 ## ✨ 项目说明
 
-StarryX操作系统是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，内存管理，文件系统，信号系统等模块，通过硬件抽象层axhal能够运行在四个架构上（riscv64 / loongarch64 / x86_64 / aarch64），并成功移植到riscv visionfive硬件平台。[学习/开发日志](./docs/record.md);[决赛文档](./docs/StarryX.pdf);[决赛PPT](./docs/StarryX.pptx)
+StarryX操作系统是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，内存管理，文件系统，信号系统等模块。当前仓库根层构建系统只保留 `riscv64`、`loongarch64` 的 QEMU 目标，以及 `riscv64-visionfive2` 板级打包路径。[学习/开发日志](./docs/record.md);[决赛文档](./docs/StarryX.pdf);[决赛PPT](./docs/StarryX.pptx)
 
 截至目前，StarryX共实现约200项系统调用，包括进程管理、文件系统、内存管理、网络等各个模块的系统调用，能够运行官方测试中的大量LTP测例以及LTP外的所有测例，并能够运行Redis、Git、Gcc等Linux应用。
 
