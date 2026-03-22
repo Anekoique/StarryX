@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 
 use axerrno::{LinuxError, LinuxResult};
 use axtask::current;
+#[cfg(target_arch = "x86_64")]
 use num_enum::TryFromPrimitive;
 
 use xprocess::{Pid, Process};
@@ -83,6 +84,7 @@ pub fn sys_setpgid(pid: Pid, pgid: Pid) -> LinuxResult<isize> {
 /// to generate automatically via c_to_rust binding.
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive)]
 #[repr(i32)]
+#[cfg(target_arch = "x86_64")]
 enum ArchPrctlCode {
     /// Set the GS segment base
     SetGs = 0x1001,

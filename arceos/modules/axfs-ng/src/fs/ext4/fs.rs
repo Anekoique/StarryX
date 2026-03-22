@@ -18,7 +18,7 @@ pub struct Ext4Filesystem<M> {
     root_dir: OnceCell<DirEntry<M>>,
 }
 impl<M: RawMutex> Ext4Filesystem<M> {
-    pub fn new(dev: AxBlockDevice) -> VfsResult<Filesystem<M>>
+    pub fn mount(dev: AxBlockDevice) -> VfsResult<Filesystem<M>>
     where
         M: Send + Sync + 'static,
     {
@@ -35,7 +35,7 @@ impl<M: RawMutex> Ext4Filesystem<M> {
         Ok(Filesystem::new(fs))
     }
 
-    pub(crate) fn lock(&self) -> MutexGuard<M, LwExt4Filesystem> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, M, LwExt4Filesystem> {
         self.inner.lock()
     }
 }

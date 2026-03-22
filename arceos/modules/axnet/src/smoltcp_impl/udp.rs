@@ -123,9 +123,9 @@ impl UdpSocket {
         }
 
         SOCKET_SET.with_socket_mut::<udp::Socket, _, _>(self.handle, |socket| {
-            socket.bind(endpoint).or_else(|e| match e {
-                BindError::InvalidState => Err(NetError::EEXIST),
-                BindError::Unaddressable => Err(NetError::EINVAL),
+            socket.bind(endpoint).map_err(|e| match e {
+                BindError::InvalidState => NetError::EEXIST,
+                BindError::Unaddressable => NetError::EINVAL,
             })
         })?;
 
@@ -348,7 +348,7 @@ impl Write for UdpSocket {
     }
 
     fn flush(&mut self) -> axerrno::AxResult {
-        Err(NetError::ENOSYS).map_err(net_error_to_axio)
+        Err(net_error_to_axio(NetError::ENOSYS))
     }
 }
 

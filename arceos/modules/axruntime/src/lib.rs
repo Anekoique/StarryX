@@ -17,8 +17,6 @@
 //! All the features are optional and disabled by default.
 
 #![cfg_attr(not(test), no_std)]
-#![feature(doc_auto_cfg)]
-#![feature(naked_functions)]
 #[macro_use]
 extern crate axlog;
 
@@ -163,7 +161,8 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
 
         #[cfg(feature = "fs")]
         {
-            use axdriver::prelude::*;
+            #[allow(unused_imports)]
+            use axdriver::prelude::BaseDriverOps as _;
 
             let dev = all_devices
                 .block
@@ -235,7 +234,8 @@ fn init_allocator() {
     }
     for r in memory_regions() {
         if r.flags.contains(MemRegionFlags::FREE) && r.paddr == max_region_paddr {
-            axalloc::global_init(phys_to_virt(r.paddr).as_usize(), r.size);
+            let start_vaddr = phys_to_virt(r.paddr).as_usize();
+            axalloc::global_init(start_vaddr, r.size);
             break;
         }
     }

@@ -174,7 +174,7 @@ pub fn init_tlb() {
     unsafe extern "C" {
         fn handle_tlb_refill();
     }
-    let paddr = crate::mem::virt_to_phys(va!(handle_tlb_refill as usize));
+    let paddr = crate::mem::virt_to_phys(va!(handle_tlb_refill as *const () as usize));
     tlbrentry::set_tlbrentry(paddr.as_usize());
 }
 
@@ -208,5 +208,5 @@ pub fn cpu_init() {
     unsafe extern "C" {
         fn exception_entry_base();
     }
-    set_exception_entry_base(exception_entry_base as usize);
+    set_exception_entry_base(exception_entry_base as *const () as usize);
 }

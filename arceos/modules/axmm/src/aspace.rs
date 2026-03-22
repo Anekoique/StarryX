@@ -497,19 +497,19 @@ impl AddrSpace {
                 // - shared pages (If there is a shared page in the vma)
                 // - cow
                 #[cfg(feature = "cow")]
-                if access_flags.contains(MappingFlags::WRITE) {
-                    if let Ok((paddr, _, page_size)) = self.pt.query(vaddr) {
-                        // 1. page fault caused by write
-                        // 2. pte exists
-                        // 3. Not shared memory
-                        return Self::handle_cow_fault(
-                            vaddr,
-                            paddr,
-                            orig_flags,
-                            page_size,
-                            &mut self.pt,
-                        );
-                    }
+                if access_flags.contains(MappingFlags::WRITE)
+                    && let Ok((paddr, _, page_size)) = self.pt.query(vaddr)
+                {
+                    // 1. page fault caused by write
+                    // 2. pte exists
+                    // 3. Not shared memory
+                    return Self::handle_cow_fault(
+                        vaddr,
+                        paddr,
+                        orig_flags,
+                        page_size,
+                        &mut self.pt,
+                    );
                 }
 
                 return area

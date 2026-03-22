@@ -20,11 +20,11 @@ pub struct FatFileNode<M: RawMutex + 'static> {
     inode: u64,
 }
 impl<M: RawMutex + Send + Sync + 'static> FatFileNode<M> {
-    pub fn new(fs: Arc<FatFilesystem<M>>, file: ff::File, inode: u64) -> FileNode<M> {
+    pub fn from_file(fs: Arc<FatFilesystem<M>>, file: ff::File, inode: u64) -> FileNode<M> {
         FileNode::new(Arc::new(Self {
             fs,
             // SAFETY: FsRef guarantees correct lifetime
-            inner: FsRef::new(unsafe { mem::transmute(file) }),
+            inner: FsRef::new(unsafe { mem::transmute::<ff::File<'_>, ff::File<'static>>(file) }),
             inode,
         }))
     }
@@ -47,8 +47,8 @@ impl<M: RawMutex + Send + Sync + 'static> NodeOps<M> for FatFileNode<M> {
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()> {
         // FatFS has no ownership & permission
 
-        let fs = self.fs.lock();
-        let file = self.inner.borrow_mut(&fs);
+        let mut fs = self.fs.lock();
+        let file = self.inner.borrow_mut(&mut fs);
         update_file_metadata(file, update);
         Ok(())
     }
@@ -64,8 +64,8 @@ impl<M: RawMutex + Send + Sync + 'static> NodeOps<M> for FatFileNode<M> {
     }
 
     fn sync(&self, _data_only: bool) -> VfsResult<()> {
-        let fs = self.fs.lock();
-        let file = self.inner.borrow_mut(&fs);
+        let mut fs = self.fs.lock();
+        let file = self.inner.borrow_mut(&mut fs);
         file.flush().map_err(into_vfs_err)
     }
 
@@ -75,8 +75,8 @@ impl<M: RawMutex + Send + Sync + 'static> NodeOps<M> for FatFileNode<M> {
 }
 impl<M: RawMutex + Send + Sync + 'static> FileNodeOps<M> for FatFileNode<M> {
     fn read_at(&self, mut buf: &mut [u8], offset: u64) -> VfsResult<usize> {
-        let fs = self.fs.lock();
-        let file = self.inner.borrow_mut(&fs);
+        let mut fs = self.fs.lock();
+        let file = self.inner.borrow_mut(&mut fs);
         file.seek(SeekFrom::Start(offset)).map_err(into_vfs_err)?;
 
         let mut read = 0;
@@ -91,8 +91,8 @@ impl<M: RawMutex + Send + Sync + 'static> FileNodeOps<M> for FatFileNode<M> {
     }
 
     fn write_at(&self, mut buf: &[u8], offset: u64) -> VfsResult<usize> {
-        let fs = self.fs.lock();
-        let file = self.inner.borrow_mut(&fs);
+        let mut fs = self.fs.lock();
+        let file = self.inner.borrow_mut(&mut fs);
         file.seek(SeekFrom::Start(offset)).map_err(into_vfs_err)?;
 
         let mut written = 0;
@@ -107,16 +107,17 @@ impl<M: RawMutex + Send + Sync + 'static> FileNodeOps<M> for FatFileNode<M> {
     }
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
-        let fs = self.fs.lock();
-        let file = self.inner.borrow_mut(&fs);
+        let mut fs = self.fs.lock();
+        let file = self.inner.borrow_mut(&mut fs);
         file.seek(SeekFrom::End(0)).map_err(into_vfs_err)?;
         let written = file.write(buf).map_err(into_vfs_err)?;
         Ok((written, file.size().unwrap_or(0) as u64))
     }
 
     fn set_len(&self, len: u64) -> VfsResult<()> {
-        let fs = self.fs.lock();
-        let file = self.inner.borrow_mut(&fs);
+        let mut fs = self.fs.lock();
+        let block_size = fs.inner.bytes_per_sector() as usize;
+        let file = self.inner.borrow_mut(&mut fs);
         if len <= file.size().unwrap_or(0) as u64 {
             file.seek(SeekFrom::Start(len)).map_err(into_vfs_err)?;
             file.truncate().map_err(into_vfs_err)
@@ -124,7 +125,6 @@ impl<M: RawMutex + Send + Sync + 'static> FileNodeOps<M> for FatFileNode<M> {
             // rust-fatfs does not support growing files directly. We need to
             // pad with zeros manually.
             let mut pos = file.seek(SeekFrom::End(0)).map_err(into_vfs_err)?;
-            let block_size = fs.inner.bytes_per_sector() as usize;
             let block = vec![0; block_size];
 
             while pos < len {

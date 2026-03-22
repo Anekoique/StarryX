@@ -16,6 +16,8 @@ struct ListenTableEntry {
     syn_queue: VecDeque<SocketHandle>,
 }
 
+type TcpListenSlot = Arc<Mutex<Option<Box<ListenTableEntry>>>>;
+
 impl ListenTableEntry {
     pub fn new(listen_endpoint: IpListenEndpoint) -> Self {
         Self {
@@ -42,7 +44,7 @@ impl Drop for ListenTableEntry {
 }
 
 pub struct ListenTable {
-    tcp: Box<[Arc<Mutex<Option<Box<ListenTableEntry>>>>]>,
+    tcp: Box<[TcpListenSlot]>,
 }
 
 impl ListenTable {
@@ -78,7 +80,7 @@ impl ListenTable {
         *self.tcp[port as usize].lock() = None;
     }
 
-    fn listen_entry(&self, port: u16) -> Arc<Mutex<Option<Box<ListenTableEntry>>>> {
+    fn listen_entry(&self, port: u16) -> TcpListenSlot {
         self.tcp[port as usize].clone()
     }
 

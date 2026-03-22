@@ -80,14 +80,14 @@ pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> LinuxResult<isize> {
         shm_manager.validate_segment_params(size, shmflg as u32)?;
 
         // Check if segment with this key already exists
-        if key != IPC_PRIVATE {
-            if let Some(shmid) = shm_manager.get_shmid_by_key(key) {
-                let segment = shm_manager
-                    .get_segment_by_shmid(shmid)
-                    .ok_or(LinuxError::EINVAL)?;
-                let mut segment = segment.lock();
-                return segment.try_update(size, mapping_flags, cur_pid);
-            }
+        if key != IPC_PRIVATE
+            && let Some(shmid) = shm_manager.get_shmid_by_key(key)
+        {
+            let segment = shm_manager
+                .get_segment_by_shmid(shmid)
+                .ok_or(LinuxError::EINVAL)?;
+            let mut segment = segment.lock();
+            return segment.try_update(size, mapping_flags, cur_pid);
         }
 
         // Create new shared memory segment

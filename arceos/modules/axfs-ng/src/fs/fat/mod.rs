@@ -62,7 +62,7 @@ impl<T> FsRef<T> {
         unsafe { &*self.inner.get() }
     }
 
-    pub fn borrow_mut<'a>(&self, _fs: &'a FatFilesystemInner) -> &'a mut T {
+    pub fn borrow_mut<'a>(&self, _fs: &'a mut FatFilesystemInner) -> &'a mut T {
         // SAFETY: The filesystem outlives the reference
         unsafe { &mut *self.inner.get() }
     }

@@ -47,27 +47,26 @@ pub fn sys_msgget(key: i32, msgflg: i32) -> LinuxResult<isize> {
 
     IPC_MANAGER.with_msg(|msg_manager| {
         // Check if key already exists
-        if key != IPC_PRIVATE {
-            if let Some(existing_msgid) = msg_manager.get_msgid_by_key(key) {
-                // Key exists, check flags
-                if msgflg & (IPC_CREAT as i32 | IPC_EXCL as i32)
-                    == (IPC_CREAT as i32 | IPC_EXCL as i32)
-                {
-                    return Err(LinuxError::EEXIST);
+        if key != IPC_PRIVATE
+            && let Some(existing_msgid) = msg_manager.get_msgid_by_key(key)
+        {
+            // Key exists, check flags
+            if msgflg & (IPC_CREAT as i32 | IPC_EXCL as i32) == (IPC_CREAT as i32 | IPC_EXCL as i32)
+            {
+                return Err(LinuxError::EEXIST);
+            }
+
+            // Check permissions
+            if let Some(queue_arc) = msg_manager.get_queue_by_msgid(existing_msgid) {
+                let queue = queue_arc.lock();
+                let mode = queue.msqid_ds.msg_perm.mode;
+
+                // Basic permission check (simplified)
+                if (msgflg & 0o777) & !(mode as i32 & 0o777) != 0 {
+                    return Err(LinuxError::EACCES);
                 }
 
-                // Check permissions
-                if let Some(queue_arc) = msg_manager.get_queue_by_msgid(existing_msgid) {
-                    let queue = queue_arc.lock();
-                    let mode = queue.msqid_ds.msg_perm.mode;
-
-                    // Basic permission check (simplified)
-                    if (msgflg & 0o777) & !(mode as i32 & 0o777) != 0 {
-                        return Err(LinuxError::EACCES);
-                    }
-
-                    return Ok(existing_msgid as isize);
-                }
+                return Ok(existing_msgid as isize);
             }
         }
 

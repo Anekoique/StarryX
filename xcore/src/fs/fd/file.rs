@@ -32,7 +32,7 @@ impl File {
     }
 
     /// Get the inner node of the file.
-    pub fn inner(&self) -> MutexGuard<FsFile<RawMutex>> {
+    pub fn inner(&self) -> MutexGuard<'_, FsFile<RawMutex>> {
         self.inner.lock()
     }
 

@@ -33,7 +33,7 @@ impl DnsSocket {
     /// Query a address with given DNS query type.
     pub fn query(&self, name: &str, query_type: DnsQueryType) -> NetResult<Vec<IpAddr>> {
         // let local_addr = self.local_addr.unwrap_or_else(f);
-        let handle = self.handle.ok_or_else(|| NetError::EINVAL)?;
+        let handle = self.handle.ok_or(NetError::EINVAL)?;
 
         let iface = &super::ETH0.iface;
         let query_handle = SOCKET_SET

@@ -267,11 +267,11 @@ pub fn sys_recvfrom(
         let buf = uspace.raw_slice(buf, len)?;
         let (recv, remote_addr) = socket.recvfrom(buf)?;
 
-        if let Some(remote_addr) = remote_addr {
-            if !addr.is_null() {
-                let len = remote_addr.write_to_user(addr)?;
-                nullable!(uspace.write(addrlen, len))?;
-            }
+        if let Some(remote_addr) = remote_addr
+            && !addr.is_null()
+        {
+            let len = remote_addr.write_to_user(addr)?;
+            nullable!(uspace.write(addrlen, len))?;
         }
 
         debug!("sys_recvfrom => fd: {}, recv: {}", fd, recv);

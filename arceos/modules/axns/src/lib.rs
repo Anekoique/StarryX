@@ -63,13 +63,13 @@ impl AxNamespace {
 
     /// Returns the size of the `axns_resource` section.
     fn section_size() -> usize {
-        __stop_axns_resource as usize - __start_axns_resource as usize
+        __stop_axns_resource as *const () as usize - __start_axns_resource as *const () as usize
     }
 
     /// Returns the global namespace.
     pub fn global() -> Self {
         Self {
-            base: __start_axns_resource as usize,
+            base: __start_axns_resource as *const () as usize,
             alloc: false,
         }
     }

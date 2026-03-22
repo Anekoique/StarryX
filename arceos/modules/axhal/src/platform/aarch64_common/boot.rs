@@ -112,7 +112,7 @@ unsafe fn init_boot_page_table() {
 /// kernel image.
 ///
 /// Documentation: <https://docs.kernel.org/arch/arm64/booting.html>
-#[naked]
+#[unsafe(naked)]
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.boot")]
 unsafe extern "C" fn _start() -> ! {
@@ -138,7 +138,7 @@ unsafe extern "C" fn _start() -> ! {
 }
 
 /// The earliest entry point for the primary CPU.
-#[naked]
+#[unsafe(naked)]
 #[unsafe(link_section = ".text.boot")]
 unsafe extern "C" fn _start_primary() -> ! {
     unsafe {
@@ -179,7 +179,7 @@ unsafe extern "C" fn _start_primary() -> ! {
 
 /// The earliest entry point for the secondary CPUs.
 #[cfg(feature = "smp")]
-#[naked]
+#[unsafe(naked)]
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.boot")]
 unsafe extern "C" fn _start_secondary() -> ! {

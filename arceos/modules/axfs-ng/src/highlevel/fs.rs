@@ -99,7 +99,7 @@ impl<M: RawMutex> FsContext<M> {
             .resolve_components(PathBuf::from(target).components(), follow_count)
     }
 
-    fn resolve_components<'a>(
+    fn resolve_components(
         &self,
         components: Components,
         follow_count: &mut usize,

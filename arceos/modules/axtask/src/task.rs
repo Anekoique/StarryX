@@ -144,7 +144,8 @@ impl TaskInner {
         let tls = VirtAddr::from(0);
 
         t.entry = Some(Box::into_raw(Box::new(entry)));
-        t.ctx_mut().init(task_entry as usize, kstack.top(), tls);
+        t.ctx_mut()
+            .init(task_entry as *const () as usize, kstack.top(), tls);
         t.kstack = Some(kstack);
         if t.name() == "idle" {
             t.is_idle = true;
@@ -553,9 +554,7 @@ impl CurrentTask {
     pub(crate) unsafe fn init_current(init_task: AxTaskRef) {
         assert!(init_task.is_init());
         #[cfg(feature = "tls")]
-        unsafe {
-            axhal::arch::write_thread_pointer(init_task.tls.tls_ptr() as usize);
-        }
+        axhal::arch::write_thread_pointer(init_task.tls.tls_ptr() as usize);
         let ptr = Arc::into_raw(init_task);
         unsafe {
             axhal::cpu::set_current_task_ptr(ptr);

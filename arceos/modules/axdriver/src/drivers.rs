@@ -84,8 +84,8 @@ cfg_if::cfg_if! {
 
                 let initrd = unsafe {
                     axdriver_block::ramdisk::RamDisk::new(
-                        initrd_start as usize,
-                        initrd_end as usize - initrd_start as usize,
+                        initrd_start as *const () as usize,
+                        initrd_end as *const () as usize - initrd_start as *const () as usize,
                     )
                 };
                 Some(AxDeviceEnum::from_block(initrd))

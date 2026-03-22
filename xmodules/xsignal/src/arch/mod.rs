@@ -46,5 +46,5 @@ unsafe extern "C" {
 /// The trampoline handles the transition back to kernel mode and any necessary
 /// cleanup.
 pub fn signal_trampoline_address() -> usize {
-    signal_trampoline as usize
+    signal_trampoline as *const () as usize
 }

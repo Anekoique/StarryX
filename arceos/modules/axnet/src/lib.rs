@@ -57,8 +57,6 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
     }
 }
 
-pub(crate) fn net_error_to_axio(err: NetError) -> axio::Error {
-    match err {
-        _ => axio::Error::Io,
-    }
+pub(crate) fn net_error_to_axio(_err: NetError) -> axio::Error {
+    axio::Error::Io
 }

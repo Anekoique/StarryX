@@ -31,15 +31,14 @@ fn init_mmu() {
 }
 
 /// The earliest entry point for the primary CPU.
-#[naked]
+#[unsafe(naked)]
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.boot")]
 extern "C" fn _start() -> ! {
     // PC = 0x8020_0000
     // a0 = hartid
     // a1 = dtb
-    unsafe {
-        core::arch::naked_asm!("
+    core::arch::naked_asm!("
             mv      s0, a0                  // save hartid
             mv      s1, a1                  // save DTB pointer
             la      sp, {boot_stack}
@@ -58,26 +57,24 @@ extern "C" fn _start() -> ! {
             add     a2, a2, s2
             jalr    a2                      // call rust_entry(hartid, dtb)
             j       .",
-            phys_virt_offset = const PHYS_VIRT_OFFSET,
-            boot_stack_size = const TASK_STACK_SIZE,
-            boot_stack = sym BOOT_STACK,
-            init_boot_page_table = sym init_boot_page_table,
-            init_mmu = sym init_mmu,
-            entry = sym super::rust_entry,
-        )
-    }
+        phys_virt_offset = const PHYS_VIRT_OFFSET,
+        boot_stack_size = const TASK_STACK_SIZE,
+        boot_stack = sym BOOT_STACK,
+        init_boot_page_table = sym init_boot_page_table,
+        init_mmu = sym init_mmu,
+        entry = sym super::rust_entry,
+    )
 }
 
 /// The earliest entry point for secondary CPUs.
 #[cfg(feature = "smp")]
-#[naked]
+#[unsafe(naked)]
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.boot")]
 extern "C" fn _start_secondary() -> ! {
     // a0 = hartid
     // a1 = SP
-    unsafe {
-        core::arch::naked_asm!("
+    core::arch::naked_asm!("
             mv      s0, a0                  // save hartid
             mv      sp, a1                  // set SP
 
@@ -92,9 +89,8 @@ extern "C" fn _start_secondary() -> ! {
             add     a1, a1, s1
             jalr    a1                      // call rust_entry_secondary(hartid)
             j       .",
-            phys_virt_offset = const PHYS_VIRT_OFFSET,
-            init_mmu = sym init_mmu,
-            entry = sym super::rust_entry_secondary,
-        )
-    }
+        phys_virt_offset = const PHYS_VIRT_OFFSET,
+        init_mmu = sym init_mmu,
+        entry = sym super::rust_entry_secondary,
+    )
 }

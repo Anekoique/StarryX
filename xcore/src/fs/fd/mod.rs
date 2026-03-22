@@ -169,9 +169,11 @@ impl FdTable {
 
     /// Check if file descriptor has CLOEXEC flag
     pub fn has_cloexec(&self, fd: usize) -> bool {
-        self.is_assigned(fd)
-            .then(|| self.flags.read().get(fd))
-            .unwrap_or(false)
+        if self.is_assigned(fd) {
+            self.flags.read().get(fd)
+        } else {
+            false
+        }
     }
 
     /// Set CLOEXEC flag for a file descriptor

@@ -1,4 +1,4 @@
-TOOLCHAIN := nightly-2025-01-18
+TOOLCHAIN := nightly-2026-03-15
 PROJECT := $(notdir $(CURDIR))
 
 export ARCH ?= riscv64
@@ -33,9 +33,6 @@ vf2:
 	@$(ARCEOS_MAKE) PLATFORM=riscv64-visionfive2 ARCH=riscv64 \
 		BUS=mmio FEATURES=$(FEATURES),driver-visionfive2-sd LOG=$(LOG) SMP=2 build
 	sudo cp StarryX_riscv64-visionfive2.bin /srv/tftp/
-
-clippy:
-	@RUSTUP_TOOLCHAIN=$(TOOLCHAIN) AX_CONFIG_PATH=$(CURDIR)/.axconfig.toml cargo clippy --all-features -- -D warnings -A clippy::new_without_default
 
 build run debug disasm defconfig:
 	@$(ARCEOS_MAKE) $@

@@ -59,3 +59,8 @@ lto = true
 
 [patch."https://github.com/arceos-org/axdriver_crates.git"]
 axdriver_block = { path = "crates/axdriver_crates/axdriver_block", optional = true}
+
+[patch.crates-io]
+axio = { path = "crates/axio" }
+page_table_multiarch = { path = "crates/page_table_multiarch/page_table_multiarch" }
+page_table_entry = { path = "crates/page_table_multiarch/page_table_entry" }

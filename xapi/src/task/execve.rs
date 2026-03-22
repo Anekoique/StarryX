@@ -4,7 +4,7 @@ use core::ffi::c_char;
 use axerrno::{LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
 use axhal::arch::TrapFrame;
-use axtask::{current, TaskExtRef};
+use axtask::{TaskExtRef, current};
 
 use xcore::{
     fs::fd::FD_TABLE,

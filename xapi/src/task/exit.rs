@@ -37,10 +37,10 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
         axtask::yield_now();
     }
     let head: UserPtr<robust_list_head> = xthread.robust_list_head.load(Ordering::SeqCst).into();
-    if let Ok(Some(head)) = nullable!(uspace.raw_ptr(head)) {
-        if let Err(err) = exit_robust_list(head) {
-            warn!("exit robust list failed: {:?}", err);
-        }
+    if let Ok(Some(head)) = nullable!(uspace.raw_ptr(head))
+        && let Err(err) = exit_robust_list(head)
+    {
+        warn!("exit robust list failed: {:?}", err);
     }
 
     if thread.exit(exit_code) {

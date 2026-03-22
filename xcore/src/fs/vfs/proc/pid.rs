@@ -25,7 +25,7 @@ use crate::{
 pub(crate) struct ProcPidOps(pub(crate) Arc<VirtFs>);
 
 impl VirtDirOps for ProcPidOps {
-    fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
+    fn read_dir(&self) -> impl Iterator<Item = Cow<'_, str>> {
         processes()
             .into_iter()
             .map(|proc| Cow::Owned(proc.pid().to_string()))

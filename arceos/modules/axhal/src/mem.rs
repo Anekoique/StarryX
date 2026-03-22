@@ -77,32 +77,32 @@ pub fn memory_regions() -> impl Iterator<Item = MemRegion> {
 fn kernel_image_regions() -> impl Iterator<Item = MemRegion> {
     [
         MemRegion {
-            paddr: virt_to_phys((_stext as usize).into()),
-            size: _etext as usize - _stext as usize,
+            paddr: virt_to_phys((_stext as *const () as usize).into()),
+            size: _etext as *const () as usize - _stext as *const () as usize,
             flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::EXECUTE,
             name: ".text",
         },
         MemRegion {
-            paddr: virt_to_phys((_srodata as usize).into()),
-            size: _erodata as usize - _srodata as usize,
+            paddr: virt_to_phys((_srodata as *const () as usize).into()),
+            size: _erodata as *const () as usize - _srodata as *const () as usize,
             flags: MemRegionFlags::RESERVED | MemRegionFlags::READ,
             name: ".rodata",
         },
         MemRegion {
-            paddr: virt_to_phys((_sdata as usize).into()),
-            size: _edata as usize - _sdata as usize,
+            paddr: virt_to_phys((_sdata as *const () as usize).into()),
+            size: _edata as *const () as usize - _sdata as *const () as usize,
             flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::WRITE,
             name: ".data .tdata .tbss .percpu",
         },
         MemRegion {
-            paddr: virt_to_phys((boot_stack as usize).into()),
-            size: boot_stack_top as usize - boot_stack as usize,
+            paddr: virt_to_phys((boot_stack as *const () as usize).into()),
+            size: boot_stack_top as *const () as usize - boot_stack as *const () as usize,
             flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::WRITE,
             name: "boot stack",
         },
         MemRegion {
-            paddr: virt_to_phys((_sbss as usize).into()),
-            size: _ebss as usize - _sbss as usize,
+            paddr: virt_to_phys((_sbss as *const () as usize).into()),
+            size: _ebss as *const () as usize - _sbss as *const () as usize,
             flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::WRITE,
             name: ".bss",
         },
@@ -127,7 +127,7 @@ pub(crate) fn default_mmio_regions() -> impl Iterator<Item = MemRegion> {
 /// Returns the default free memory regions (kernel image end to physical memory end).
 #[allow(dead_code)]
 pub(crate) fn default_free_regions() -> impl Iterator<Item = MemRegion> {
-    let start = virt_to_phys((_ekernel as usize).into()).align_up_4k();
+    let start = virt_to_phys((_ekernel as *const () as usize).into()).align_up_4k();
     let end = pa!(PHYS_MEMORY_BASE + PHYS_MEMORY_SIZE).align_down_4k();
     core::iter::once(MemRegion {
         paddr: start,
@@ -141,8 +141,11 @@ pub(crate) fn default_free_regions() -> impl Iterator<Item = MemRegion> {
 #[allow(dead_code)]
 pub(crate) fn clear_bss() {
     unsafe {
-        core::slice::from_raw_parts_mut(_sbss as usize as *mut u8, _ebss as usize - _sbss as usize)
-            .fill(0);
+        core::slice::from_raw_parts_mut(
+            _sbss as *const () as usize as *mut u8,
+            _ebss as *const () as usize - _sbss as *const () as usize,
+        )
+        .fill(0);
     }
 }
 

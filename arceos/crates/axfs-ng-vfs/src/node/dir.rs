@@ -133,10 +133,10 @@ impl<M: RawMutex> DirNode<M> {
 
     /// Removes an entry from the cache and recursively forgets subdirectories
     fn forget_entry(children: &mut DirChildren<M>, name: &str) {
-        if let Some(entry) = children.remove(name) {
-            if let Ok(dir) = entry.as_dir() {
-                dir.forget();
-            }
+        if let Some(entry) = children.remove(name)
+            && let Ok(dir) = entry.as_dir()
+        {
+            dir.forget();
         }
     }
 
@@ -274,10 +274,10 @@ impl<M: RawMutex> DirNode<M> {
                 .map_or_else(|| src_children.deref_mut(), MutexGuard::deref_mut),
         ) {
             if src.node_type() == NodeType::Directory {
-                if let Ok(dir) = dst.as_dir() {
-                    if dir.has_children()? {
-                        return Err(VfsError::ENOTEMPTY);
-                    }
+                if let Ok(dir) = dst.as_dir()
+                    && dir.has_children()?
+                {
+                    return Err(VfsError::ENOTEMPTY);
                 }
             } else if dst.node_type() == NodeType::Directory {
                 return Err(VfsError::EISDIR);

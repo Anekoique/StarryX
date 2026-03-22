@@ -260,10 +260,10 @@ impl<N: InodeOps, P: PageOps> PageCache<N, P> {
 
         let mut pages = self.pages.lock();
         for index in start_index..=end_index {
-            if let Some(page) = pages.get_mut(&index) {
-                if page.is_dirty() {
-                    page.mark_to_write();
-                }
+            if let Some(page) = pages.get_mut(&index)
+                && page.is_dirty()
+            {
+                page.mark_to_write();
             }
         }
         drop(pages);

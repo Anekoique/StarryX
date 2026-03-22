@@ -67,8 +67,8 @@ impl MessageBuffer {
 
     fn read(&mut self, buf: &mut [u8]) -> usize {
         let to_read = buf.len().min(self.data.len());
-        for i in 0..to_read {
-            buf[i] = self.data.pop_front().unwrap();
+        for slot in buf.iter_mut().take(to_read) {
+            *slot = self.data.pop_front().unwrap();
         }
         to_read
     }
@@ -259,7 +259,7 @@ impl UnixSocket {
 
             Ok(())
         })
-        .unwrap_or_else(|_| Err(NetError::EEXIST))?;
+        .unwrap_or(Err(NetError::EEXIST))?;
 
         self.set_state(STATE_CONNECTED);
         Ok(())
@@ -285,7 +285,7 @@ impl UnixSocket {
             }
             Ok(())
         })
-        .unwrap_or_else(|_| Err(NetError::EINVAL))
+        .unwrap_or(Err(NetError::EINVAL))
     }
 
     /// Start listening

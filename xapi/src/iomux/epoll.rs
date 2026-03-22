@@ -55,13 +55,13 @@ fn check_epoll_loop(epfd: i32, target_fd: i32, depth: usize) -> LinuxResult<()> 
     }
 
     // Check if target_fd is an epoll instance
-    if let Ok(target_file) = get_file_like(target_fd) {
-        if let Ok(target_epoll) = target_file.into_any().downcast::<EpollInstance>() {
-            let target_events = target_epoll.events.lock();
-            // Check if any of the target's monitored fds would create a loop
-            for &monitored_fd in target_events.keys() {
-                check_epoll_loop(epfd, monitored_fd, depth + 1)?;
-            }
+    if let Ok(target_file) = get_file_like(target_fd)
+        && let Ok(target_epoll) = target_file.into_any().downcast::<EpollInstance>()
+    {
+        let target_events = target_epoll.events.lock();
+        // Check if any of the target's monitored fds would create a loop
+        for &monitored_fd in target_events.keys() {
+            check_epoll_loop(epfd, monitored_fd, depth + 1)?;
         }
     }
 

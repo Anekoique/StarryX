@@ -21,7 +21,7 @@ pub struct FatDirNode<M: RawMutex + 'static> {
     this: WeakDirEntry<M>,
 }
 impl<M: RawMutex + Send + Sync + 'static> FatDirNode<M> {
-    pub fn new(
+    pub fn from_dir(
         fs: Arc<FatFilesystem<M>>,
         dir: ff::Dir,
         inode: u64,
@@ -30,7 +30,7 @@ impl<M: RawMutex + Send + Sync + 'static> FatDirNode<M> {
         DirNode::new(Arc::new(Self {
             fs,
             // SAFETY: FsRef guarantees correct lifetime
-            inner: FsRef::new(unsafe { mem::transmute(dir) }),
+            inner: FsRef::new(unsafe { mem::transmute::<ff::Dir<'_>, ff::Dir<'static>>(dir) }),
             inode,
             this,
         }))
@@ -45,13 +45,13 @@ impl<M: RawMutex + Send + Sync + 'static> FatDirNode<M> {
         let reference = Reference::new(self.this.upgrade(), name.into());
         if entry.is_file() {
             DirEntry::new_file(
-                FatFileNode::new(self.fs.clone(), entry.to_file(), inode),
+                FatFileNode::from_file(self.fs.clone(), entry.to_file(), inode),
                 NodeType::RegularFile,
                 reference,
             )
         } else {
             DirEntry::new_dir(
-                |this| FatDirNode::new(self.fs.clone(), entry.to_dir(), inode, this),
+                |this| FatDirNode::from_dir(self.fs.clone(), entry.to_dir(), inode, this),
                 reference,
             )
         }
@@ -165,7 +165,7 @@ impl<M: RawMutex + Send + Sync + 'static> DirNodeOps<M> for FatDirNode<M> {
                 .create_file(name)
                 .map(|file| {
                     DirEntry::new_file(
-                        FatFileNode::new(self.fs.clone(), file, fs.alloc_inode()),
+                        FatFileNode::from_file(self.fs.clone(), file, fs.alloc_inode()),
                         NodeType::RegularFile,
                         reference,
                     )
@@ -175,7 +175,7 @@ impl<M: RawMutex + Send + Sync + 'static> DirNodeOps<M> for FatDirNode<M> {
                 .create_dir(name)
                 .map(|dir| {
                     DirEntry::new_dir(
-                        |this| FatDirNode::new(self.fs.clone(), dir, fs.alloc_inode(), this),
+                        |this| FatDirNode::from_dir(self.fs.clone(), dir, fs.alloc_inode(), this),
                         reference,
                     )
                 })

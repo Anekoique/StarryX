@@ -54,12 +54,12 @@ where
 }
 
 pub trait VirtDirOps: Send + Sync {
-    fn read_dir(&self) -> impl Iterator<Item = Cow<str>>;
+    fn read_dir(&self) -> impl Iterator<Item = Cow<'_, str>>;
     fn lookup(&self, name: &str) -> Option<VirtNodeOps>;
 }
 
 impl VirtDirOps for () {
-    fn read_dir(&self) -> impl Iterator<Item = Cow<str>> {
+    fn read_dir(&self) -> impl Iterator<Item = Cow<'_, str>> {
         iter::empty()
     }
 

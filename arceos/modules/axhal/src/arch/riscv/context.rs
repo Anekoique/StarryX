@@ -374,7 +374,7 @@ impl TaskContext {
         #[cfg(feature = "tls")]
         {
             self.tp = super::read_thread_pointer();
-            unsafe { super::write_thread_pointer(next_ctx.tp) };
+            super::write_thread_pointer(next_ctx.tp);
         }
         #[cfg(feature = "uspace")]
         if self.satp != next_ctx.satp {
@@ -420,57 +420,50 @@ impl TaskContext {
 }
 
 #[cfg(feature = "fp_simd")]
-#[naked]
+#[unsafe(naked)]
 extern "C" fn save_fp_registers(_fp_registers: &mut [u64; 32]) {
-    unsafe {
-        naked_asm!(
-            include_fp_asm_macros!(),
-            "
-            PUSH_FLOAT_REGS a0
-            frcsr t0
-            STR t0, a0, 32
-            ret
-            "
-        )
-    }
+    naked_asm!(
+        include_fp_asm_macros!(),
+        "
+        PUSH_FLOAT_REGS a0
+        frcsr t0
+        STR t0, a0, 32
+        ret
+        "
+    )
 }
 
 #[cfg(feature = "fp_simd")]
-#[naked]
+#[unsafe(naked)]
 extern "C" fn restore_fp_registers(_fp_registers: &[u64; 32]) {
-    unsafe {
-        naked_asm!(
-            include_fp_asm_macros!(),
-            "
-            POP_FLOAT_REGS a0
-            LDR t0, a0, 32
-            fscsr x0, t0
-            ret
-            "
-        )
-    }
+    naked_asm!(
+        include_fp_asm_macros!(),
+        "
+        POP_FLOAT_REGS a0
+        LDR t0, a0, 32
+        fscsr x0, t0
+        ret
+        "
+    )
 }
 
 #[cfg(feature = "fp_simd")]
-#[naked]
+#[unsafe(naked)]
 extern "C" fn clear_fp_registers() {
-    unsafe {
-        naked_asm!(
-            include_fp_asm_macros!(),
-            "
-            CLEAR_FLOAT_REGS
-            ret
-            "
-        )
-    }
+    naked_asm!(
+        include_fp_asm_macros!(),
+        "
+        CLEAR_FLOAT_REGS
+        ret
+        "
+    )
 }
 
-#[naked]
+#[unsafe(naked)]
 extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task: &TaskContext) {
-    unsafe {
-        naked_asm!(
-            include_asm_macros!(),
-            "
+    naked_asm!(
+        include_asm_macros!(),
+        "
             // save old context (callee-saved registers)
             STR     ra, a0, 0
             STR     sp, a0, 1
@@ -504,6 +497,5 @@ extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task: &TaskC
             LDR     ra, a1, 0
 
             ret",
-        )
-    }
+    )
 }

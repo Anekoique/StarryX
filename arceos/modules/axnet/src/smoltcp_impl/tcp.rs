@@ -180,9 +180,9 @@ impl TcpSocket {
                 .with_socket_mut::<tcp::Socket, _, _>(handle, |socket| {
                     socket
                         .connect(iface.lock().context(), remote_endpoint, bound_endpoint)
-                        .or_else(|e| match e {
-                            ConnectError::InvalidState => Err(NetError::EFAULT),
-                            ConnectError::Unaddressable => Err(NetError::ECONNREFUSED),
+                        .map_err(|e| match e {
+                            ConnectError::InvalidState => NetError::EFAULT,
+                            ConnectError::Unaddressable => NetError::ECONNREFUSED,
                         })?;
                     Ok::<(IpEndpoint, IpEndpoint), NetError>((
                         socket.local_endpoint().unwrap(),
@@ -198,7 +198,7 @@ impl TcpSocket {
             }
             Ok(())
         })
-        .unwrap_or_else(|_| Err(NetError::EISCONN))?;
+        .unwrap_or(Err(NetError::EISCONN))?;
 
         // HACK: yield() to let server to listen
         yield_now();
@@ -256,7 +256,7 @@ impl TcpSocket {
             });
             Ok(())
         })
-        .unwrap_or_else(|_| Err(NetError::EINVAL))
+        .unwrap_or(Err(NetError::EINVAL))
     }
 
     /// Starts listening on the bound address and port.
@@ -690,7 +690,7 @@ impl Write for TcpSocket {
     }
 
     fn flush(&mut self) -> axerrno::AxResult {
-        Err(NetError::ENOSYS).map_err(net_error_to_axio)
+        Err(net_error_to_axio(NetError::ENOSYS))
     }
 }
 

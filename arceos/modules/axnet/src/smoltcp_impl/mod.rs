@@ -338,11 +338,7 @@ pub(crate) fn init(net_dev: AxNetDevice) {
     let mut device = LoopbackDev::new(Medium::Ip);
     let config = Config::new(smoltcp::wire::HardwareAddress::Ip);
 
-    let mut iface = Interface::new(
-        config,
-        &mut device,
-        Instant::from_micros_const((0 / NANOS_PER_MICROS) as i64),
-    );
+    let mut iface = Interface::new(config, &mut device, Instant::from_micros_const(0));
     iface.update_ip_addrs(|ip_addrs| {
         ip_addrs
             .push(IpCidr::new(IpAddress::v4(127, 0, 0, 1), 8))

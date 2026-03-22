@@ -44,17 +44,17 @@ pub fn sys_semget(key: i32, nsems: i32, semflg: i32) -> LinuxResult<isize> {
 
     IPC_MANAGER.with_sem(|sem_manager| {
         // If not IPC_PRIVATE, check if semaphore set already exists
-        if key != IPC_PRIVATE {
-            if let Some(semid) = sem_manager.get_semid_by_key(key) {
-                // Existing semaphore set found
-                if let Some(semset_arc) = sem_manager.get_semset_by_id(semid) {
-                    let semset = semset_arc.lock();
-                    // Check if nsems matches (if nsems > 0)
-                    if nsems > 0 && nsems as usize != semset.semaphores.len() {
-                        return Err(LinuxError::EINVAL);
-                    }
-                    return Ok(semid as isize);
+        if key != IPC_PRIVATE
+            && let Some(semid) = sem_manager.get_semid_by_key(key)
+        {
+            // Existing semaphore set found
+            if let Some(semset_arc) = sem_manager.get_semset_by_id(semid) {
+                let semset = semset_arc.lock();
+                // Check if nsems matches (if nsems > 0)
+                if nsems > 0 && nsems as usize != semset.semaphores.len() {
+                    return Err(LinuxError::EINVAL);
                 }
+                return Ok(semid as isize);
             }
         }
 

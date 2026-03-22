@@ -416,10 +416,10 @@ impl DirNodeOps<RawMutex> for MemoryNode {
         let mut entries = self.inode.as_dir()?.lock();
         let entry = entries.get(name).ok_or(VfsError::ENOENT)?;
 
-        if let NodeContent::Dir(dir_entries) = &entry.get().content {
-            if dir_entries.lock().len() > 2 {
-                return Err(VfsError::ENOTEMPTY);
-            }
+        if let NodeContent::Dir(dir_entries) = &entry.get().content
+            && dir_entries.lock().len() > 2
+        {
+            return Err(VfsError::ENOTEMPTY);
         }
 
         entries.remove(name);

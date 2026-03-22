@@ -75,15 +75,9 @@ impl TimerState {
         if current_ns >= expire_time_ns {
             let interval_ns = self.spec.it_interval.to_nanos();
 
-            if interval_ns == 0 {
-                // One-shot timer
-                self.active = false;
-                self.expirations += 1;
-                return self.expirations;
-            } else {
+            if let Some(periods_elapsed) = (current_ns - expire_time_ns).checked_div(interval_ns) {
                 // Periodic timer
-                let elapsed = current_ns - expire_time_ns;
-                let periods = elapsed / interval_ns + 1;
+                let periods = periods_elapsed + 1;
                 self.expirations += periods;
 
                 // Update next expiration time
@@ -94,6 +88,11 @@ impl TimerState {
                     self.set_time = expire_time_ns + periods * interval_ns;
                 }
 
+                return self.expirations;
+            } else {
+                // One-shot timer
+                self.active = false;
+                self.expirations += 1;
                 return self.expirations;
             }
         }

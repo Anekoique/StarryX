@@ -223,7 +223,7 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> LinuxResult<isize
         "[sys_madvise]: addr: {:#x}, len: {:#x}, advice: {:?}",
         addr, length, madvise
     );
-    if addr % 4096 != 0 {
+    if !addr.is_multiple_of(4096) {
         return Err(LinuxError::EINVAL);
     }
     Ok(0)

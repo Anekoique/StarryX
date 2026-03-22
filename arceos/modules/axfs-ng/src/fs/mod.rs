@@ -14,9 +14,9 @@ pub fn new_default<M: RawMutex + Send + Sync + 'static>(
 ) -> VfsResult<Filesystem<M>> {
     cfg_if! {
         if #[cfg(feature = "ext4")] {
-            ext4::Ext4Filesystem::new(dev)
+            ext4::Ext4Filesystem::mount(dev)
         } else if #[cfg(feature = "fat")] {
-            Ok(fat::FatFilesystem::new(dev))
+            Ok(fat::FatFilesystem::mount(dev))
         } else {
             panic!("No filesystem feature enabled");
         }

@@ -32,7 +32,7 @@ pub struct FatFilesystem<M> {
 }
 
 impl<M: RawMutex + Send + Sync + 'static> FatFilesystem<M> {
-    pub fn new(dev: AxBlockDevice) -> Filesystem<M> {
+    pub fn mount(dev: AxBlockDevice) -> Filesystem<M> {
         let mut inner = FatFilesystemInner {
             inner: ff::FileSystem::new(SeekableDisk::new(dev), fatfs::FsOptions::new())
                 .expect("failed to initialize FAT filesystem"),
@@ -47,7 +47,7 @@ impl<M: RawMutex + Send + Sync + 'static> FatFilesystem<M> {
 
         let root_dir = DirEntry::new_dir(
             |this| {
-                FatDirNode::new(
+                FatDirNode::from_dir(
                     result.clone(),
                     result.lock().inner.root_dir(),
                     root_inode,
@@ -61,7 +61,7 @@ impl<M: RawMutex + Send + Sync + 'static> FatFilesystem<M> {
     }
 }
 impl<M: RawMutex> FatFilesystem<M> {
-    pub(crate) fn lock(&self) -> MutexGuard<M, FatFilesystemInner> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_, M, FatFilesystemInner> {
         self.inner.lock()
     }
 }

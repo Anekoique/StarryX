@@ -349,6 +349,11 @@ impl<M: RawMutex> FsFile<M> {
         self.access(FileFlags::READ)?.len()
     }
 
+    /// Returns whether the file is empty.
+    pub fn is_empty(&self) -> VfsResult<bool> {
+        Ok(self.len()? == 0)
+    }
+
     /// Get the file inode number.
     pub fn inode(&self) -> VfsResult<u64> {
         Ok(self.access(FileFlags::empty())?.inode())

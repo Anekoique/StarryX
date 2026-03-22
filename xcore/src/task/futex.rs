@@ -75,7 +75,7 @@ impl FutexTable {
         Self(Mutex::new(BTreeMap::new()))
     }
 
-    pub fn get(&self, key: &FutexKey) -> Option<FutexGuard> {
+    pub fn get(&self, key: &FutexKey) -> Option<FutexGuard<'_>> {
         let key = key.as_usize();
         let entry = self.0.lock().get(&key).cloned()?;
         Some(FutexGuard {
@@ -85,7 +85,7 @@ impl FutexTable {
         })
     }
 
-    pub fn get_or_insert(&self, key: &FutexKey) -> FutexGuard {
+    pub fn get_or_insert(&self, key: &FutexKey) -> FutexGuard<'_> {
         let key = key.as_usize();
         let mut table = self.0.lock();
         let entry = table

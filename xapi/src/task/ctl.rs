@@ -25,11 +25,14 @@ pub fn sys_capget(
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
         validate_cap_header(uspace.raw_ptr(header)?)?;
-        uspace.write(data, __user_cap_data_struct {
-            effective: u32::MIN,
-            permitted: u32::MIN,
-            inheritable: u32::MIN,
-        })?;
+        uspace.write(
+            data,
+            __user_cap_data_struct {
+                effective: u32::MIN,
+                permitted: u32::MIN,
+                inheritable: u32::MIN,
+            },
+        )?;
         Ok(0)
     })
 }

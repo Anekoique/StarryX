@@ -89,7 +89,7 @@ impl SeekableDisk {
 
         let data = &self.read_buffer[self.offset..];
         let length = buf.len().min(data.len());
-        take_mut(&mut buf, length).copy_from_slice(&data[..length]);
+        take_mut(buf, length).copy_from_slice(&data[..length]);
 
         self.offset += length;
         if self.offset == self.block_size() {

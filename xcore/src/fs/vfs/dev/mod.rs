@@ -129,17 +129,20 @@ impl VirtDeviceOps for Rtc {
     fn ioctl(&self, _op: usize, argp: UserPtr<c_void>) -> VfsResult<isize> {
         with_uspace(|uspace| {
             let wall = chrono::DateTime::from_timestamp_nanos(wall_time_nanos() as _);
-            uspace.write(argp.cast::<rtc_time>(), rtc_time {
-                tm_sec: wall.second() as _,
-                tm_min: wall.minute() as _,
-                tm_hour: wall.hour() as _,
-                tm_mday: wall.day() as _,
-                tm_mon: wall.month0() as _,
-                tm_year: (wall.year() - 1900) as _,
-                tm_wday: 0,
-                tm_yday: 0,
-                tm_isdst: 0,
-            })?;
+            uspace.write(
+                argp.cast::<rtc_time>(),
+                rtc_time {
+                    tm_sec: wall.second() as _,
+                    tm_min: wall.minute() as _,
+                    tm_hour: wall.hour() as _,
+                    tm_mday: wall.day() as _,
+                    tm_mon: wall.month0() as _,
+                    tm_year: (wall.year() - 1900) as _,
+                    tm_wday: 0,
+                    tm_yday: 0,
+                    tm_isdst: 0,
+                },
+            )?;
             Ok(0)
         })
     }

@@ -87,12 +87,15 @@ pub fn sys_gettimeofday(ts: UserPtr<timeval>) -> LinuxResult<isize> {
 pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
     let (_, _, utime_us, _, _, stime_us) = time_stat_output();
     with_uspace(|uspace| {
-        uspace.write(tms, Tms {
-            tms_utime: utime_us,
-            tms_stime: stime_us,
-            tms_cutime: utime_us,
-            tms_cstime: stime_us,
-        })?;
+        uspace.write(
+            tms,
+            Tms {
+                tms_utime: utime_us,
+                tms_stime: stime_us,
+                tms_cutime: utime_us,
+                tms_cstime: stime_us,
+            },
+        )?;
         Ok(nanos_to_ticks(monotonic_time_nanos()) as _)
     })
 }

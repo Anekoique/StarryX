@@ -1,7 +1,6 @@
 #![no_std]
 #![allow(missing_docs)]
 #![allow(clippy::unit_arg)]
-#![feature(let_chains)]
 
 #[macro_use]
 extern crate axlog;
