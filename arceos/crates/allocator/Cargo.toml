@@ -35,7 +35,7 @@ bitmap-allocator = { version = "0.4", optional = true }
 
 [dev-dependencies]
 allocator = { path = ".", features = ["full"] }
-rand = { version = "0.8", features = ["small_rng"] }
+rand = { version = "0.9.3", features = ["small_rng"] }
 criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]

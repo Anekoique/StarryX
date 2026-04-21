@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use allocator::{AllocatorRc, BuddyByteAllocator, SlabByteAllocator, TlsfByteAllocator};
-use rand::{prelude::SliceRandom, Rng};
+use rand::{Rng, seq::SliceRandom};
 
 const POOL_SIZE: usize = 1024 * 1024 * 128;
 
@@ -32,7 +32,7 @@ fn test_vec2(n: usize, blk_size: usize, alloc: &(impl Allocator + Clone)) {
     for i in 0..n {
         index.push(i);
     }
-    index.shuffle(&mut rand::thread_rng());
+    index.shuffle(&mut rand::rng());
 
     for i in index {
         v[i] = Vec::new_in(alloc.clone())
@@ -61,20 +61,20 @@ fn test_btree_map(n: usize, alloc: &(impl Allocator + Clone)) {
 }
 
 pub fn test_alignment(n: usize, alloc: &(impl Allocator + Clone)) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut blocks = vec![];
     for _ in 0..n {
-        if rng.gen_ratio(2, 3) || blocks.len() == 0 {
+        if rng.random_ratio(2, 3) || blocks.len() == 0 {
             // insert a block
-            let size =
-                ((1 << rng.gen_range(0..16)) as f32 * rng.gen_range(1.0..2.0)).round() as usize;
-            let align = 1 << rng.gen_range(0..8);
+            let size = ((1 << rng.random_range(0..16)) as f32 * rng.random_range(1.0..2.0)).round()
+                as usize;
+            let align = 1 << rng.random_range(0..8);
             let layout = Layout::from_size_align(size, align).unwrap();
             let ptr = alloc.allocate(layout).unwrap();
             blocks.push((ptr, layout));
         } else {
             // delete a block
-            let idx = rng.gen_range(0..blocks.len());
+            let idx = rng.random_range(0..blocks.len());
             let blk = blocks.swap_remove(idx);
             unsafe { alloc.deallocate(blk.0.cast(), blk.1) };
         }
