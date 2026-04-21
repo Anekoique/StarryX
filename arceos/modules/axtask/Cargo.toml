@@ -38,21 +38,21 @@ sched_cfs = ["multitask", "preempt"]
 test = ["percpu?/sp-naive"]
 
 [dependencies]
-cfg-if = "1.0"
-log = "=0.4.21"
-axhal = { workspace = true }
-axconfig = { workspace = true, optional = true }
-percpu = { version = "0.2", optional = true }
-kspin = { version = "0.1", optional = true }
-lazyinit = { version = "0.2", optional = true }
-memory_addr = { version = "0.4", optional = true }
-timer_list = { version = "0.1", optional = true }
-kernel_guard = { version = "0.1", optional = true }
-crate_interface = { version = "0.1", optional = true }
-cpumask = { version = "0.1", optional = true }
-weak-map = { git = "https://github.com/Starry-OS/weak-map.git", optional = true }
-axsched = { git = "https://github.com/Starry-Mix-THU/scheduler.git", rev = "2076c9b", optional = true }
+cfg-if          = { workspace = true }
+log             = { workspace = true }
+axhal           = { workspace = true }
+axconfig        = { workspace = true, optional = true }
+percpu          = { workspace = true, optional = true }
+kspin           = { workspace = true, optional = true }
+lazyinit        = { workspace = true, optional = true }
+memory_addr     = { workspace = true, optional = true }
+timer_list      = { version = "0.1", optional = true }
+kernel_guard    = { workspace = true, optional = true }
+crate_interface = { workspace = true, optional = true }
+cpumask         = { version = "0.1", optional = true }
+weak-map        = { workspace = true, optional = true }
+axsched         = { workspace = true, optional = true }
 [dev-dependencies]
-rand = "0.8"
+rand = { workspace = true, features = ["std", "std_rng", "thread_rng"] }
 axhal = { workspace = true, features = ["fp_simd"] }
 axtask = { workspace = true, features = ["test", "multitask"] }

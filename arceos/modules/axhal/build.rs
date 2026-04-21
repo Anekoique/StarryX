@@ -2,25 +2,15 @@ use std::io::Result;
 use std::path::Path;
 
 const BUILTIN_PLATFORMS: &[&str] = &[
-    "aarch64-bsta1000b",
-    "aarch64-qemu-virt",
-    "aarch64-raspi4",
     "loongarch64-qemu-virt",
     "riscv64-qemu-virt",
     "riscv64-visionfive2",
-    "x86_64-pc-oslab",
-    "x86_64-qemu-q35",
 ];
 
 const BUILTIN_PLATFORM_FAMILIES: &[&str] = &[
-    "aarch64-bsta1000b",
-    "aarch64-phytium-pi",
-    "aarch64-qemu-virt",
-    "aarch64-raspi",
     "loongarch64-qemu-virt",
     "riscv64-qemu-virt",
     "riscv64-visionfive2",
-    "x86-pc",
 ];
 
 fn make_cfg_values(str_list: &[&str]) -> String {
@@ -55,18 +45,17 @@ fn main() {
 
 fn gen_linker_script(arch: &str, platform: &str) -> Result<()> {
     let fname = format!("linker_{}.lds", platform);
-    let output_arch = if arch == "x86_64" {
-        "i386:x86-64"
-    } else if arch.contains("riscv") {
-        "riscv" // OUTPUT_ARCH of both riscv32/riscv64 is "riscv"
-    } else {
-        arch
-    };
+    // BFD names: riscv64 -> "riscv", loongarch64 -> "loongarch64".
+    let output_arch = if arch.contains("riscv") { "riscv" } else { arch };
     let ld_content = std::fs::read_to_string("linker.lds.S")?;
     let ld_content = ld_content.replace("%ARCH%", output_arch);
     let ld_content = ld_content.replace(
         "%KERNEL_BASE%",
         &format!("{:#x}", axconfig::plat::KERNEL_BASE_VADDR),
+    );
+    let ld_content = ld_content.replace(
+        "%KERNEL_BASE_PADDR%",
+        &format!("{:#x}", axconfig::plat::KERNEL_BASE_PADDR),
     );
     let ld_content = ld_content.replace("%SMP%", &format!("{}", axconfig::SMP));
 

@@ -80,4 +80,4 @@ axnet = { workspace = true, optional = true }
 axdisplay = { workspace = true, optional = true }
 axsync = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
-kspin = { version = "0.1", optional = true }
+kspin = { workspace = true, optional = true }

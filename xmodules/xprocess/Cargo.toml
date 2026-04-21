@@ -6,10 +6,10 @@ authors = ["Asakura Mizu <asakuramizu111@gmail.com>"]
 description = "Process management for ArceOS"
 
 [dependencies]
-kspin = "0.1"
-lazyinit = "0.2.1"
-weak-map = { git = "https://github.com/Starry-OS/weak-map" }
+kspin    = { workspace = true }
+lazyinit = { workspace = true }
+weak-map = { workspace = true }
 
 [dev-dependencies]
-ctor = "0.6.3"
-kspin = { version = "0.1", features = ["smp"] }
+ctor  = "0.10"
+kspin = { workspace = true, features = ["smp"] }

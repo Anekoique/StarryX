@@ -7,8 +7,8 @@ authors = ["Mivik <mivikq@gmail.com>"]
 [lib]
 
 [dependencies]
-axerrno = "0.1.0"
-bitflags = "2.9.0"
-inherit-methods-macro = "0.1.0"
-lock_api = "0.4.12"
-log = "=0.4.21"
+axerrno               = { workspace = true }
+bitflags              = { workspace = true }
+inherit-methods-macro = { workspace = true }
+lock_api              = "0.4.12"
+log                   = { workspace = true }

@@ -81,7 +81,7 @@ pub struct DirLookupResult<Hal: SystemHal> {
     inner: ext4_dir_search_result,
 }
 impl<Hal: SystemHal> DirLookupResult<Hal> {
-    pub fn entry(&mut self) -> DirEntry {
+    pub fn entry(&mut self) -> DirEntry<'_> {
         DirEntry {
             inner: unsafe { &mut *(self.inner.dentry as *mut _) },
             sb: self.parent.superblock(),
@@ -174,7 +174,7 @@ pub struct DirReader<Hal: SystemHal> {
     inner: ext4_dir_iter,
 }
 impl<Hal: SystemHal> DirReader<Hal> {
-    pub fn current(&self) -> Option<DirEntry> {
+    pub fn current(&self) -> Option<DirEntry<'_>> {
         if self.inner.curr.is_null() {
             return None;
         }

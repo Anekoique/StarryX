@@ -17,22 +17,20 @@ smoltcp = []
 default = ["smoltcp"]
 
 [dependencies]
-log = "=0.4.21"
-cfg-if = "1.0"
-spin = "0.9"
-lazyinit = "0.2"
-axerrno = "0.1"
-axio = "0.1"
+log      = { workspace = true }
+cfg-if   = { workspace = true }
+spin     = { workspace = true }
+lazyinit = { workspace = true }
+axerrno  = { workspace = true }
+axio = { workspace = true }
 axhal = { workspace = true }
 axsync = { workspace = true }
 axtask = { workspace = true }
 axdriver = { workspace = true, features = ["net"] }
-axdriver_net = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2" }
+axdriver_net = { workspace = true }
 
 [dependencies.smoltcp]
-git = "https://github.com/Anekoique/smoltcp.git"
-rev = "bd8d3dd"
-default-features = false
+workspace = true
 features = [
   "alloc",
   "log",             # no std
@@ -46,7 +44,4 @@ features = [
   "socket-tcp",
   "socket-dns",
   "multicast",
-  # "fragmentation-buffer-size-65536", "proto-ipv4-fragmentation",
-  # "reassembly-buffer-size-65536", "reassembly-buffer-count-32",
-  # "assembler-max-segment-count-32",
 ]

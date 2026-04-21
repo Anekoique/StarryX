@@ -66,14 +66,17 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             let irq_num: usize = estat.is().trailing_zeros() as usize;
             handle_trap!(IRQ, irq_num);
         }
-        _ => {
-            panic!(
-                "Unhandled trap {:?} @ {:#x}:\n{:#x?}",
-                estat.cause(),
-                tf.era,
-                tf
-            );
-        }
+        cause => panic!(
+            "Unhandled trap {:?} @ {:#x} \
+             (estat={:#x}, ecode={:#x}, esubcode={:#x}, badv={:#x}):\n{:#x?}",
+            cause,
+            tf.era,
+            estat.raw(),
+            estat.ecode(),
+            estat.esubcode(),
+            badv::read().raw(),
+            tf,
+        ),
     }
 
     crate::trap::post_trap_callback(tf, from_user);

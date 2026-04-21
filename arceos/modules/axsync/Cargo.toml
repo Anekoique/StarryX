@@ -14,11 +14,11 @@ multitask = ["axtask/multitask"]
 default = []
 
 [dependencies]
-kspin = "0.1"
+kspin    = { workspace = true }
 lock_api = { version = "0.4", default-features = false }
-axtask = { workspace = true }
+axtask   = { workspace = true }
 
 [dev-dependencies]
-rand = "0.8"
+rand = { workspace = true, features = ["std", "std_rng", "thread_rng"] }
 axsync = { workspace = true, features = ["multitask"] }
 axtask = { workspace = true, features = ["test"] }

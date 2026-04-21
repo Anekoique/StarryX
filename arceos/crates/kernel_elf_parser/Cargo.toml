@@ -1,0 +1,20 @@
+[package]
+name = "kernel-elf-parser"
+version = "0.3.3"
+edition = "2024"
+authors = ["Youjie Zheng <zyj578335934@gmail.com>"]
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
+documentation = "https://docs.rs/kernel-elf-parser"
+repository = "https://github.com/Starry-OS/kernel-elf-parser"
+description = "An lightweight ELF parser that parses ELF files and converts them into information needed for kernel building"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["Starry", "ELF", "kernel"]
+categories = ["no-std"]
+
+[dependencies]
+axerrno          = { workspace = true }
+page_table_entry = { workspace = true }
+memory_addr      = { workspace = true }
+xmas-elf = "0.10"
+log      = { workspace = true }
+cfg-if   = { workspace = true }

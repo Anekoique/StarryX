@@ -5,8 +5,8 @@ edition = "2024"
 authors = ["Anekoique <ctolu01@gmail.com>"]
 
 [dependencies]
-axerrno = "0.1"
-memory_addr = "0.4"
-percpu = "0.2"
-page_table_multiarch = "0.5.5"
-log = "0.4"
+axerrno              = { workspace = true }
+memory_addr          = { workspace = true }
+percpu               = { workspace = true }
+page_table_multiarch = { workspace = true }
+log                  = { workspace = true }

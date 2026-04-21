@@ -151,14 +151,16 @@ impl<Hal: SystemHal> InodeRef<Hal> {
 
     pub fn write_at(&mut self, mut buf: &[u8], pos: u64) -> Ext4Result<usize> {
         unsafe {
-            let file_size = self.size();
+            let mut file_size = self.size();
+            if pos > file_size {
+                self.set_len(pos)?;
+                // If we extend the file, we need to update the file size.
+                file_size = self.size();
+            }
             let block_size = get_block_size(self.superblock());
             let block_count = file_size.div_ceil(block_size as u64) as u32;
             let bdev = (*self.inner.fs).bdev;
 
-            if pos > file_size {
-                self.set_len(pos)?;
-            }
             if buf.is_empty() {
                 return Ok(0);
             }
@@ -254,13 +256,7 @@ impl<Hal: SystemHal> InodeRef<Hal> {
                     .context("ext4_fs_append_inode_dblk")?;
 
                 let off = fblock * block_size as u64;
-                ext4_block_writebytes(
-                    (*self.inner.fs).bdev,
-                    off,
-                    target.as_ptr() as _,
-                    target.len() as _,
-                )
-                .context("ext4_block_writebytes")?;
+                self.write_bytes(off, target)?;
             }
             ext4_inode_set_size(self.inner.inode, target.len() as u64);
         }
@@ -269,11 +265,37 @@ impl<Hal: SystemHal> InodeRef<Hal> {
     }
 
     pub fn set_len(&mut self, len: u64) -> Ext4Result<()> {
+        static EMPTY: [u8; 4096] = [0; 4096];
+
         let cur_len = self.size();
         if len < cur_len {
             self.truncate(len)?;
         } else if len > cur_len {
-            todo!()
+            // TODO: correct implementation
+            let block_size = get_block_size(self.superblock());
+            let old_blocks = cur_len.div_ceil(block_size as u64) as u32;
+            let new_blocks = len.div_ceil(block_size as u64) as u32;
+            for block in old_blocks..new_blocks {
+                let (fblock, new_block) = self.append_inode_fblock()?;
+                assert_eq!(block, new_block);
+                self.write_bytes(fblock * block_size as u64, &EMPTY[..block_size as usize])?;
+            }
+
+            // Clear the last block extended part
+            let old_last_block = (cur_len / block_size as u64) as u32;
+            let old_block_start = (cur_len - (old_last_block as u64 * block_size as u64)) as usize;
+            let fblock = self.init_inode_fblock(old_last_block)?;
+            assert!(fblock != 0, "fblock should not be zero");
+            let length = block_size as usize - old_block_start;
+            self.write_bytes(
+                fblock * block_size as u64 + old_block_start as u64,
+                &EMPTY[..length],
+            )?;
+
+            unsafe {
+                ext4_inode_set_size(self.inner.inode, len);
+            }
+            self.mark_dirty();
         }
         Ok(())
     }

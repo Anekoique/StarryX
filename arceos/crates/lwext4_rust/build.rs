@@ -55,6 +55,7 @@ fn generates_bindings_to_rust(mpath: &str) {
         .header("c/wrapper.h")
         //.clang_arg("--sysroot=/path/to/sysroot")
         .clang_arg(mpath)
+        //.clang_arg("-I../../ulib/axlibc/include")
         .clang_arg("-I./c/lwext4/include")
         .clang_arg("-I./c/lwext4/build_musl-generic/include/")
         .layout_tests(false)

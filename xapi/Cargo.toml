@@ -39,11 +39,8 @@ xutils.workspace = true
 
 axio.workspace = true
 num_enum = { version = "0.7", default-features = false }
-rand = { version = "0.9.1", default-features = false, features = [
-    "alloc",
-    "small_rng",
-] }
-page_table_entry = "0.5.5"
+rand = { workspace = true, features = ["alloc"] }
+page_table_entry = { workspace = true }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86 = "0.52"

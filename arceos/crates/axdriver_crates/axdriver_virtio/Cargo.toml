@@ -21,4 +21,4 @@ axdriver_base = { workspace = true }
 axdriver_block = { workspace = true, optional = true }
 axdriver_net = { workspace = true, optional = true }
 axdriver_display = { workspace = true, optional = true}
-virtio-drivers = "0.7.4"
+virtio-drivers = "0.7"

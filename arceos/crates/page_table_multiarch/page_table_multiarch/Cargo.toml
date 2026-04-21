@@ -2,7 +2,7 @@
 name = "page_table_multiarch"
 description = "Generic page table structures for various hardware architectures"
 documentation = "https://docs.rs/page_table_multiarch"
-version = "0.5.5"
+version = "0.5.7"
 edition = "2024"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
@@ -19,7 +19,7 @@ copy-from = ["dep:bitmaps"]
 [dependencies]
 log = "0.4"
 memory_addr = "0.4"
-page_table_entry = "0.5.5"
+page_table_entry = { workspace = true }
 bitmaps = { version = "3.2", default-features = false, optional = true }
 
 [target.'cfg(any(target_arch = "x86_64", doc))'.dependencies]

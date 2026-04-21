@@ -1,0 +1,62 @@
+# Architecture identifier.
+arch = "riscv64"                                # str
+# Platform identifier.
+platform = "riscv64-visionfive2"                # str
+
+#
+# Platform configs
+#
+[plat]
+# Platform family.
+family = "riscv64-visionfive2"        # str
+
+# Base address of the whole physical memory.
+phys-memory-base = 0x4000_0000                  # uint
+# Size of the whole physical memory. (1G)
+phys-memory-size = 0x4000_0000                  # uint
+# Base physical address of the kernel image.
+kernel-base-paddr = 0x4020_0000                 # uint
+# Base virtual address of the kernel image.
+kernel-base-vaddr = "0xffff_ffc0_4020_0000"     # uint
+# Linear mapping offset used during early boot (only meaningful on
+# loongarch64; mirror `phys-virt-offset` elsewhere).
+phys-boot-offset = "0xffff_ffc0_0000_0000"      # uint
+# Linear mapping offset, for quick conversions between physical and virtual
+# addresses.
+phys-virt-offset = "0xffff_ffc0_0000_0000"      # uint
+# Offset of bus address and phys address. some boards, the bus address is
+# different from the physical address.
+phys-bus-offset = 0                             # uint
+# Kernel address space base.
+kernel-aspace-base = "0xffff_ffc0_0000_0000"    # uint
+# Kernel address space size.
+kernel-aspace-size = "0x0000_003f_ffff_f000"    # uint
+
+#
+# Device specifications
+#
+[devices]
+# mmio ranges with format (`base_paddr`, `size`).
+mmio-regions = [
+    [0x1704_0000, 0x1_0000], # rtc
+    [0xc00_0000, 0x400_0000], # plic
+    [0x1000_0000, 0x1_0000], # uart
+    [0x1602_0000, 0x1_0000], # sdio1
+]                                               # [(uint, uint)]
+# VirtIO MMIO regions with format (`base_paddr`, `size`).
+virtio-mmio-regions = []                        # [(uint, uint)]
+# Base physical address of the PCIe ECAM space.
+pci-ecam-base = 0x3000_0000                     # uint
+# End PCI bus number.
+pci-bus-end = 0xff                              # uint
+# PCI device memory ranges.
+pci-ranges = [
+    [0, 0],
+    [0x3000_0000, 0x0800_0000]
+]                                               # [(uint, uint)]
+
+# Timer interrupt frequency in Hz.
+timer-frequency = 4_000_000                     # uint
+
+# VisionFive 2 RTC
+rtc-paddr = 0x17040000                          # uint

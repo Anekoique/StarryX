@@ -16,68 +16,79 @@ exclude = [
     "arceos/crates/page_table_multiarch",
     "arceos/crates/page_table_multiarch/*",
     "arceos/crates/lwext4_rust",
+    "arceos/crates/smoltcp",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 authors = [
-    "Anekoique <ctolu01@gmail.com>",
     "Azure-stars <Azure_stars@126.com>",
     "Yuekai Jia <equation618@gmail.com>",
+    "Anekoique <anekoique@gmail.com>",
 ]
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
-homepage = "https://github.com/arceos-org/arceos"
-repository = "https://github.com/arceos-org/starry-next"
+homepage = "https://github.com/Anekoique/StarryX"
+repository = "https://github.com/Anekoique/StarryX"
 keywords = ["arceos", "kernel"]
 categories = ["os", "no-std"]
 
 [workspace.dependencies]
-axfeat = { path = "arceos/modules/axfeat", features = [
-    "fs",
-    "irq",
-    "multitask",
-    "net",
-    "smp",
-    "sched_rr",
-] }
+# ----- ArceOS modules ----------------------------------------------------------
+axfeat     = { path = "arceos/modules/axfeat", features = ["fs", "irq", "multitask", "net", "smp", "sched_rr"] }
+axconfig   = { path = "arceos/modules/axconfig" }
+axdisplay  = { path = "arceos/modules/axdisplay" }
+axdriver   = { path = "arceos/modules/axdriver" }
+axdma      = { path = "arceos/modules/axdma" }
+axhal      = { path = "arceos/modules/axhal", features = ["uspace", "rtc", "irq"] }
+axlog      = { path = "arceos/modules/axlog" }
+axmm       = { path = "arceos/modules/axmm", features = ["cow", "copy-from"] }
+axnet      = { path = "arceos/modules/axnet" }
+axns       = { path = "arceos/modules/axns", features = ["thread-local"] }
+axruntime  = { path = "arceos/modules/axruntime" }
+axsync     = { path = "arceos/modules/axsync", features = ["multitask"] }
+axtask     = { path = "arceos/modules/axtask", features = ["smp"] }
+axalloc    = { path = "arceos/modules/axalloc" }
+axfs-ng    = { path = "arceos/modules/axfs-ng", default-features = false, features = ["fat", "thread-local"] }
 
-axconfig = { path = "./arceos/modules/axconfig" }
-axdisplay = { path = "./arceos/modules/axdisplay" }
-axdriver = { path = "./arceos/modules/axdriver" }
-axdma = { path = "./arceos/modules/axdma" }
-axhal = { path = "./arceos/modules/axhal", features = [ "uspace", "rtc", "irq" ] }
-axlog = { path = "./arceos/modules/axlog" }
-axmm = { path = "./arceos/modules/axmm", features = [ "cow", "copy-from" ] }
-axnet = { path = "./arceos/modules/axnet" }
-axns = { path = "./arceos/modules/axns", features = [ "thread-local" ] }
-axruntime = { path = "./arceos/modules/axruntime" }
-axsync = { path = "./arceos/modules/axsync", features = [ "multitask" ] }
-axtask = { path = "./arceos/modules/axtask", features = [ "smp" ] }
-axalloc = { path = "./arceos/modules/axalloc" }
+# ----- Vendored crates (under arceos/crates/) ---------------------------------
+allocator            = { path = "arceos/crates/allocator" }
+axerrno              = { path = "arceos/crates/axerrno" }
+axdriver_base        = { path = "arceos/crates/axdriver_crates/axdriver_base" }
+axdriver_block       = { path = "arceos/crates/axdriver_crates/axdriver_block" }
+axdriver_display     = { path = "arceos/crates/axdriver_crates/axdriver_display" }
+axdriver_net         = { path = "arceos/crates/axdriver_crates/axdriver_net" }
+axdriver_pci         = { path = "arceos/crates/axdriver_crates/axdriver_pci" }
+axdriver_virtio      = { path = "arceos/crates/axdriver_crates/axdriver_virtio" }
+axfs-ng-vfs          = { path = "arceos/crates/axfs-ng-vfs" }
+axio                 = { path = "arceos/crates/axio" }
+axsched              = { path = "arceos/crates/axsched" }
+kernel-elf-parser    = { path = "arceos/crates/kernel_elf_parser" }
+lwext4_rust          = { path = "arceos/crates/lwext4_rust", default-features = false }
+page_table_entry     = { path = "arceos/crates/page_table_multiarch/page_table_entry" }
+page_table_multiarch = { path = "arceos/crates/page_table_multiarch/page_table_multiarch" }
+smoltcp              = { path = "arceos/crates/smoltcp", default-features = false }
+weak-map             = { path = "arceos/crates/weak-map" }
 
-xcache = { path = "./xmodules/xcache" }
-xprocess = { path = "./xmodules/xprocess" }
-xsignal = { path = "./xmodules/xsignal" }
-xuspace = { path = "./xmodules/xuspace" }
-xvma = { path = "./xmodules/xvma" }
-xutils = { path = "./xmodules/xutils" }
+# ----- StarryX modules ---------------------------------------------------------
+xapi     = { path = "xapi" }
+xcore    = { path = "xcore" }
+xcache   = { path = "xmodules/xcache" }
+xprocess = { path = "xmodules/xprocess" }
+xsignal  = { path = "xmodules/xsignal" }
+xuspace  = { path = "xmodules/xuspace" }
+xutils   = { path = "xmodules/xutils" }
+xvma     = { path = "xmodules/xvma" }
 
-axfs-ng = { path = "./arceos/modules/axfs-ng", default-features = false, features = [
-    "fat",
-    "thread-local",
-] }
-axfs-ng-vfs = { path = "./arceos/crates/axfs-ng-vfs" }
-
-xcore = { path = "./xcore" }
-xapi = { path = "./xapi" }
-
-axio = { path = "./arceos/crates/axio" }
-axerrno = "0.1"
-bitflags = "2.6"
-cfg-if = "1.0"
+# ----- crates.io --------------------------------------------------------------
+bitflags              = "2.6"
+cfg-if                = "1.0"
+crate_interface       = "0.3"
 inherit-methods-macro = "0.1.0"
-linkme = "0.3"
+kernel_guard          = "0.2"
+kspin                 = "0.2"
+lazyinit              = "0.2"
+linkme                = "0.3"
 linux-raw-sys = { version = "0.12.1", default-features = false, features = [
     "no_std",
     "general",
@@ -86,9 +97,11 @@ linux-raw-sys = { version = "0.12.1", default-features = false, features = [
     "system",
     "loop_device",
 ] }
-page_table_multiarch = "0.5.5"
+log         = "0.4"
 memory_addr = "0.4"
-spin = "0.10"
+percpu      = "0.4"
+rand        = { version = "0.10", default-features = false }
+spin        = "0.10"
 
 [package]
 name = "starry"
@@ -104,40 +117,32 @@ lwext4_rs = ["axfeat/lwext4_rs"]
 [dependencies]
 axfeat.workspace = true
 
-axconfig.workspace = true
-axdriver.workspace = true
-axfs-ng.workspace = true
-axhal.workspace = true
-axlog.workspace = true
+axconfig.workspace  = true
+axdriver.workspace  = true
+axfs-ng.workspace   = true
+axhal.workspace     = true
+axlog.workspace     = true
 axruntime.workspace = true
-axsync.workspace = true
-axtask.workspace = true
-axmm.workspace = true
-axio.workspace = true
+axsync.workspace    = true
+axtask.workspace    = true
+axmm.workspace      = true
+axio.workspace      = true
 
 xprocess.workspace = true
-xsignal.workspace = true
-xuspace.workspace = true
-xvma.workspace = true
-xcache.workspace = true
+xsignal.workspace  = true
+xuspace.workspace  = true
+xvma.workspace     = true
+xcache.workspace   = true
 
-axerrno.workspace = true
+axerrno.workspace               = true
 inherit-methods-macro.workspace = true
-linkme.workspace = true
-linux-raw-sys.workspace = true
+linkme.workspace                = true
+linux-raw-sys.workspace         = true
 
-xcore.workspace = true
-xapi.workspace = true
+xcore.workspace  = true
+xapi.workspace   = true
 xutils.workspace = true
 
 spin.workspace = true
-shlex = { version = "1.3.0", default-features = false }
+shlex    = { version = "1.3.0", default-features = false }
 syscalls = { git = "https://github.com/jasonwhite/syscalls.git", rev = "92624de", default-features = false }
-
-[patch.crates-io]
-axio = { path = "arceos/crates/axio" }
-page_table_multiarch = { path = "arceos/crates/page_table_multiarch/page_table_multiarch" }
-page_table_entry = { path = "arceos/crates/page_table_multiarch/page_table_entry" }
-
-[patch."https://github.com/arceos-org/axdriver_crates.git"]
-axdriver_block = { path = "arceos/crates/axdriver_crates/axdriver_block", optional = true}

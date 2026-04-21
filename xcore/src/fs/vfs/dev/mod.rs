@@ -12,7 +12,7 @@ use axfs_ng::FsContext;
 use axfs_ng_vfs::{DeviceId, Filesystem, NodeType, VfsResult};
 use axsync::{Mutex, RawMutex};
 use chrono::{Datelike, Timelike};
-use rand::{RngCore, SeedableRng, rngs::SmallRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use xuspace::{UserPtr, UserSpaceAccess};
 use xutils::{ctypes::sys::rtc_time, time::wall_time_nanos};

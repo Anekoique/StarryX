@@ -41,5 +41,5 @@ default = []
 name = "axio"
 path = "src/lib.rs"
 
-[dependencies.axerrno]
-version = "0.1"
+[dependencies]
+axerrno = { workspace = true }

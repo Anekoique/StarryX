@@ -5,9 +5,8 @@ mod context;
 mod trap;
 
 use core::arch::asm;
-use loongArch64::register::{crmd, ecfg, eentry, pgdh, pgdl, stlbps, tlbidx, tlbrehi, tlbrentry};
+use loongArch64::register::{crmd, ecfg, eentry, pgdh, pgdl};
 use memory_addr::{PhysAddr, VirtAddr};
-use page_table_multiarch::loongarch64::LA64MetaData;
 
 pub use self::context::{GeneralRegisters, TaskContext, TrapFrame};
 
@@ -159,25 +158,6 @@ pub fn set_pwc(pwcl: u32, pwch: u32) {
     }
 }
 
-/// Init the TLB configuration and set tlb refill handler.
-///
-/// TLBRENTY: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#tlb-refill-exception-entry-base-address>
-pub fn init_tlb() {
-    // Page Size 4KB
-    const PS_4K: usize = 0x0c;
-    tlbidx::set_ps(PS_4K);
-    stlbps::set_ps(PS_4K);
-    tlbrehi::set_ps(PS_4K);
-
-    set_pwc(LA64MetaData::PWCL_VALUE, LA64MetaData::PWCH_VALUE);
-
-    unsafe extern "C" {
-        fn handle_tlb_refill();
-    }
-    let paddr = crate::mem::virt_to_phys(va!(handle_tlb_refill as *const () as usize));
-    tlbrentry::set_tlbrentry(paddr.as_usize());
-}
-
 /// Reads the thread pointer of the current CPU.
 ///
 /// It is used to implement TLS (Thread Local Storage).
@@ -203,7 +183,15 @@ pub unsafe fn write_thread_pointer(tp: usize) {
 /// Initializes CPU states on the current CPU.
 pub fn cpu_init() {
     #[cfg(feature = "fp_simd")]
-    loongArch64::register::euen::set_fpe(true);
+    {
+        // FP, LSX (128-bit SIMD) and LASX (256-bit SIMD). musl-built user
+        // binaries reach for LSX in libc string routines, so leaving these
+        // disabled trips an "extension disabled" trap on the first memcpy.
+        use loongArch64::register::euen;
+        euen::set_fpe(true);
+        euen::set_sxe(true);
+        euen::set_asxe(true);
+    }
 
     unsafe extern "C" {
         fn exception_entry_base();

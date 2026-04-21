@@ -1,29 +1,36 @@
 OUTPUT_ARCH(%ARCH%)
 
 BASE_ADDRESS = %KERNEL_BASE%;
+BASE_PADDR = %KERNEL_BASE_PADDR%;
+VMA_TO_LMA = BASE_ADDRESS - BASE_PADDR;
 
-ENTRY(_start)
+/* QEMU loads the LoongArch ELF kernel directly without firmware, so the entry
+ * must be a physical address. On other archs the firmware (OpenSBI on RISC-V,
+ * EDK2 on aarch64) handles the V→P translation, but giving them the PA here is
+ * still correct. */
+ENTRY(BASE_PADDR)
+
 SECTIONS
 {
     . = BASE_ADDRESS;
     _skernel = .;
 
-    .text : ALIGN(4K) {
+    .text : AT(ADDR(.text) - VMA_TO_LMA) ALIGN(4K) {
         _stext = .;
-        *(.text.boot)
+        KEEP(*(.text.boot))
         *(.text .text.*)
         . = ALIGN(4K);
         _etext = .;
     }
 
     _srodata = .;
-    .rodata : ALIGN(4K) {
+    .rodata : AT(ADDR(.rodata) - VMA_TO_LMA) ALIGN(4K) {
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
         *(.sdata2 .sdata2.*)
     }
 
-    .init_array : ALIGN(0x10) {
+    .init_array : AT(ADDR(.init_array) - VMA_TO_LMA) ALIGN(0x10) {
         __init_array_start = .;
         *(.init_array .init_array.*)
         __init_array_end = .;
@@ -32,7 +39,7 @@ SECTIONS
     . = ALIGN(4K);
     _erodata = .;
 
-    .data : ALIGN(4K) {
+    .data : AT(ADDR(.data) - VMA_TO_LMA) ALIGN(4K) {
         _sdata = .;
         *(.data.boot_page_table)
         . = ALIGN(4K);
@@ -41,13 +48,13 @@ SECTIONS
         *(.got .got.*)
     }
 
-    .tdata : ALIGN(0x10) {
+    .tdata : AT(ADDR(.tdata) - VMA_TO_LMA) ALIGN(0x10) {
         _stdata = .;
         *(.tdata .tdata.*)
         _etdata = .;
     }
 
-    .tbss : ALIGN(0x10) {
+    .tbss : AT(ADDR(.tbss) - VMA_TO_LMA) ALIGN(0x10) {
         _stbss = .;
         *(.tbss .tbss.*)
         *(.tcommon)
@@ -57,7 +64,7 @@ SECTIONS
     . = ALIGN(4K);
     _percpu_start = .;
     _percpu_end = _percpu_start + SIZEOF(.percpu);
-    .percpu 0x0 : AT(_percpu_start) {
+    .percpu 0x0 : AT(_percpu_start - VMA_TO_LMA) {
         _percpu_load_start = .;
         *(.percpu .percpu.*)
         _percpu_load_end = .;
@@ -68,7 +75,7 @@ SECTIONS
     . = ALIGN(4K);
     _edata = .;
 
-    .bss : AT(.) ALIGN(4K) {
+    .bss : AT(. - VMA_TO_LMA) ALIGN(4K) {
         boot_stack = .;
         *(.bss.stack)
         . = ALIGN(4K);

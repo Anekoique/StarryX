@@ -17,8 +17,8 @@ default = []
 thread-local = []
 
 [dependencies]
-lazyinit = "0.2"
-crate_interface = "0.1"
+lazyinit        = { workspace = true }
+crate_interface = { workspace = true }
 
 [dev-dependencies]
 axns = { workspace = true, features = ["thread-local"] }

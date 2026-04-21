@@ -1,0 +1,11 @@
+[package]
+name = "weak-map"
+version = "0.1.2"
+edition = "2024"
+authors = ["Asakura Mizu <asakuramizu111@gmail.com>"]
+description = "BTreeMap with weak references"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Starry-OS/weak-map"
+documentation = "https://docs.rs/weak-map"
+keywords = ["Arc", "Rc", "weak", "map", "btree"]
+categories = ["no-std", "data-structures"]

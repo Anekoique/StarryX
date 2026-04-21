@@ -1,7 +1,7 @@
 use core::ffi::c_char;
 
 use axerrno::{LinuxError, LinuxResult};
-use rand::{RngCore, SeedableRng, rngs::SmallRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use xuspace::{UserPtr, UserSpaceAccess};
 use xutils::{

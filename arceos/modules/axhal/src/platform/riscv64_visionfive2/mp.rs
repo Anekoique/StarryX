@@ -13,7 +13,7 @@ pub fn start_secondary_cpu(hartid: usize, stack_top: PhysAddr) {
         return;
     }
     debug!("run virt_to_phys");
-    let entry = virt_to_phys(va!(_start_secondary as usize));
+    let entry = virt_to_phys(va!(_start_secondary as *const () as usize));
     debug!("run hart_start");
     sbi_rt::hart_start(hartid, entry.as_usize(), stack_top.as_usize());
     debug!("exit start_secondary_cpu");
