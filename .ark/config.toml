@@ -1,0 +1,27 @@
+# Ark configuration. Created by `ark init`; preserved by `ark upgrade`.
+# Edit freely — your changes survive across upgrades. Sectioned by feature;
+# missing sections fall through to the documented defaults.
+
+[worktree]
+# Where worktrees are stored, project-relative.
+worktree_dir = ".ark/worktrees"
+
+# Branch type prefix used when neither --branch-type nor --branch is passed.
+# One of: feat, fix, refactor, chore, ci, docs.
+branch_prefix = "feat"
+
+# Files copied from the project root into each new worktree (e.g. `.env`).
+# Source-not-found is a hard error.
+copy = []
+
+# Shell commands run in the worktree directory after creation, in order,
+# aborting on first non-zero exit.
+post_create = []
+
+[workspace]
+# Lines per journal file before rotation (`journal-N.md` -> `journal-{N+1}.md`).
+# Must be greater than 0. Default 2000.
+journal_max_lines = 2000
+
+# Identity lives exclusively in `.ark/.developer` (gitignored). Bootstrap
+# via `ark init --developer <name>` or write the file manually.

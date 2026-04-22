@@ -27,15 +27,13 @@ use axhal::{
 
 use xsignal::{SignalOSAction, SignalSet, Signo};
 
-use xcore::task::{XProcess, XThread, with_current, with_thread, with_xthread};
+use xcore::task::{XThread, with_current, with_thread, with_xthread};
 
 pub fn check_signals(tf: &mut TrapFrame, restore_blocked: Option<SignalSet>) -> bool {
     let Some((sig, os_action)) = with_thread(|thread| {
-        XThread::from_thread(thread).signal.check_signals(
-            &XProcess::from_thread(thread).uspace(),
-            tf,
-            restore_blocked,
-        )
+        XThread::from_thread(thread)
+            .signal
+            .check_signals(tf, restore_blocked)
     }) else {
         return false;
     };

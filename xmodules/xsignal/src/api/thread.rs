@@ -3,8 +3,7 @@ use core::{alloc::Layout, time::Duration};
 use alloc::sync::Arc;
 use axhal::arch::TrapFrame;
 use lock_api::{Mutex, RawMutex};
-use page_table_multiarch::MappingFlags;
-use xuspace::{UserSpaceAccess, check_region};
+use xuspace::access_user_memory;
 
 use crate::{
     DefaultSignalAction, PendingSignals, SignalAction, SignalActionFlags, SignalDisposition,
@@ -53,9 +52,8 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
             .or_else(|| self.proc.dequeue_signal(mask))
     }
 
-    fn handle_signal<A: UserSpaceAccess>(
+    fn handle_signal(
         &self,
-        uspace: &A,
         tf: &mut TrapFrame,
         restore_blocked: SignalSet,
         sig: &SignalInfo,
@@ -90,16 +88,13 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
                 // SAFETY: pointer is valid
                 let frame = unsafe { &mut *frame_ptr };
 
-                check_region(uspace, aligned_sp.into(), layout, MappingFlags::WRITE)
-                    .map_err(|_| panic!("Failed to check signal frame"))
-                    .ok();
-
-                *frame = SignalFrame {
-                    ucontext: UContext::new(tf, restore_blocked),
-                    siginfo: sig.clone(),
-                    tf: *tf,
-                };
-
+                access_user_memory(|| {
+                    *frame = SignalFrame {
+                        ucontext: UContext::new(tf, restore_blocked),
+                        siginfo: sig.clone(),
+                        tf: *tf,
+                    }
+                });
                 tf.set_ip(handler as usize);
                 tf.set_sp(aligned_sp);
                 tf.set_arg0(signo as _);
@@ -131,9 +126,8 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
     /// Checks pending signals and handle them.
     ///
     /// Returns the signal number and the action the OS should take, if any.
-    pub fn check_signals<A: UserSpaceAccess>(
+    pub fn check_signals(
         &self,
-        uspace: &A,
         tf: &mut TrapFrame,
         restore_blocked: Option<SignalSet>,
     ) -> Option<(SignalInfo, SignalOSAction)> {
@@ -147,7 +141,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         loop {
             let sig = self.dequeue_signal(&mask)?;
             let action = &actions[sig.signo()];
-            if let Some(os_action) = self.handle_signal(uspace, tf, restore_blocked, &sig, action) {
+            if let Some(os_action) = self.handle_signal(tf, restore_blocked, &sig, action) {
                 break Some((sig, os_action));
             }
         }
@@ -188,20 +182,11 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
     }
 
     /// Restores the signal frame. Called by `sigreutrn`.
-    pub fn restore<A: UserSpaceAccess>(&self, uspace: &A, tf: &mut TrapFrame) {
-        check_region(
-            uspace,
-            tf.sp().into(),
-            Layout::new::<SignalFrame>(),
-            MappingFlags::WRITE,
-        )
-        .map_err(|_| panic!("Failed to check signal frame"))
-        .ok();
-
+    pub fn restore(&self, tf: &mut TrapFrame) {
         let frame_ptr = tf.sp() as *const SignalFrame;
 
         // SAFETY: pointer is valid
-        let frame = unsafe { &*frame_ptr };
+        let frame = access_user_memory(|| unsafe { &*frame_ptr });
 
         *tf = frame.tf;
         frame.ucontext.mcontext.restore(tf);

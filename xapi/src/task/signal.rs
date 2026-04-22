@@ -268,9 +268,7 @@ pub fn sys_rt_tgsigqueueinfo(
 /// * `tf` - Trap frame to restore
 pub fn sys_rt_sigreturn(tf: &mut TrapFrame) -> LinuxResult<isize> {
     with_thread(|thread| {
-        XThread::from_thread(thread)
-            .signal
-            .restore(&XProcess::from_thread(thread).uspace(), tf);
+        XThread::from_thread(thread).signal.restore(tf);
         Ok(tf.retval() as isize)
     })
 }
