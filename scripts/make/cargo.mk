@@ -21,7 +21,7 @@ RUSTFLAGS := -A unsafe_op_in_unsafe_fn
 RUSTFLAGS_LINK_ARGS := -C link-arg=-T$(LD_SCRIPT) -C link-arg=-no-pie -C link-arg=-znostart-stop-gc
 
 define cargo_build
-  $(call run_cmd,cargo build,$(build_args) --manifest-path "$(1)/Cargo.toml" --features "$(strip $(2))")
+  $(call run_cmd,cargo build,$(build_args) --manifest-path "$(1)/Cargo.toml" --features "$(strip $(2))" $(if $(strip $(ROOT_FEATURES)),--features "$(strip $(ROOT_FEATURES))",))
 endef
 
 clippy_args := -A clippy::new_without_default -A unsafe_op_in_unsafe_fn

@@ -108,8 +108,16 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   under each crate's `tests/` dir.
 - For kernel-only paths, prefer component-level tests in `xmodules/*/tests/`
   against trait fakes rather than booting the whole kernel.
-- End-to-end validation uses the LTP / competition rootfs: `make qemu_rootfs`
+- End-to-end validation uses the upstream Alpine rootfs: `make qemu_rootfs`
   fetches `rootfs-$(ARCH).img`; `make rv` / `make la` runs it.
+- **xtest pipeline** — `make tests ARCH=...` builds a separate
+  `tests-rootfs-$ARCH.img` (under `xtest/build/`) by baking first-party C
+  tests and vendored OS-COMP suites into a copy of the upstream rootfs.
+  `make run-tests ARCH=...` builds the kernel with `ROOT_FEATURES=init-test`
+  (which embeds `src/test.sh` instead of `src/init.sh` via the `init-test`
+  cargo feature on the root crate) and boots it against that image. Both
+  targets require Docker — the cross-build runs inside
+  `docker.educg.net/cg/os-contest@sha256:742479b…`. See `xtest/README.md`.
 - Use the **tdd-guide** agent when starting a new feature or bug fix.
 
 ## Git & PR Workflow

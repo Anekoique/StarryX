@@ -61,6 +61,9 @@ fn main() {
 
     let envs = [format!("ARCH={}", option_env!("ARCH").unwrap_or("unknown"))];
 
+    #[cfg(feature = "init-test")]
+    let init = include_str!("test.sh");
+    #[cfg(not(feature = "init-test"))]
     let init = include_str!("init.sh");
 
     info!("Running init script");

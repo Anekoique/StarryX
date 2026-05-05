@@ -1,0 +1,13 @@
+id = "redesign-xtest"
+title = "Redesign xtest as test-rootfs pipeline"
+tier = "deep"
+phase = "committed"
+iteration = 3
+max_iterations = 3
+created_at = "2026-05-03T04:09:11.079568Z"
+updated_at = "2026-05-05T11:43:26.320125Z"
+committed_at = "2026-05-05T11:43:26.320125Z"
+branch = "feat/redesign-xtest"
+worktree_path = ".ark/worktrees/feat/redesign-xtest"
+base_branch = "main"
+start_head = "ff9bfb83344c11111c9a679d36fb0af747dab5a1"

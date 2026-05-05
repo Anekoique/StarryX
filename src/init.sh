@@ -1,3 +1,4 @@
+# id: starry-init
 # ================== LTP Run Scripts ==================
 
 run_ltp() {

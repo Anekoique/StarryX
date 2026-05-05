@@ -113,6 +113,9 @@ repository.workspace = true
 
 [features]
 lwext4_rs = ["axfeat/lwext4_rs"]
+# When set, src/main.rs embeds src/test.sh instead of src/init.sh.
+# Driven by the top-level ROOT_FEATURES Make variable (see scripts/make/cargo.mk).
+init-test = []
 
 [dependencies]
 axfeat.workspace = true

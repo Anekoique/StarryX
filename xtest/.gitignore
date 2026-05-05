@@ -1,9 +1,1 @@
-/git
-/zlib
-/busybox
-/bash
-/sdcard
-/gcc
-/gcc-build
-/redis
-/binutils
+/build/

@@ -15,6 +15,9 @@ TARGET_DIR ?= $(ROOT_DIR)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?=
 FEATURES   ?= fp_simd,lwext4_rs
+# Root-crate cargo features (NOT axfeat/-prefixed; threaded straight to cargo).
+# Set to `init-test` by `make tests` / `make run-tests`; empty otherwise.
+ROOT_FEATURES ?=
 
 # ----- QEMU / runtime --------------------------------------------------------
 BLK        ?= n
@@ -34,6 +37,7 @@ GW         ?= 10.0.2.2
 
 ROOTFS_URL   := https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG   := rootfs-$(ARCH).img
+TESTS_ROOTFS_IMG := $(ROOT_DIR)/xtest/build/$(ARCH)/tests-rootfs-$(ARCH).img
 DOCKER_IMAGE := docker.educg.net/cg/os-contest:20250714
 
 export RUSTUP_TOOLCHAIN := $(TOOLCHAIN)
@@ -97,7 +101,8 @@ include scripts/make/qemu.mk
 .DEFAULT_GOAL := rv
 
 .PHONY: all defconfig oldconfig build disasm run justrun debug clippy fmt \
-        qemu_rootfs qemu_run rv la vf2 disk_img clean docker
+        qemu_rootfs qemu_run rv la vf2 disk_img clean docker \
+        tests run-tests
 
 all: rv
 
@@ -141,6 +146,20 @@ qemu_rootfs:
 	cp $(ROOTFS_IMG) $(DISK_IMG)
 
 qemu_run: qemu_rootfs run
+
+# `make tests` (re)builds the test rootfs image; `make run-tests` boots a
+# kernel embedding src/test.sh (via the `init-test` cargo feature) against
+# it. Mirrors the qemu_rootfs/run/qemu_run trio: split into a fetch/build
+# phase and a recursive phase that re-evaluates qemu.mk under BLK=y.
+tests: qemu_rootfs
+	@$(MAKE) -C xtest all ARCH=$(ARCH)
+
+run-tests: $(TESTS_ROOTFS_IMG)
+	@$(MAKE) ARCH=$(ARCH) BLK=y NET=y FEATURES=$(QEMU_FEATURES) \
+		ROOT_FEATURES=init-test DISK_IMG=$(TESTS_ROOTFS_IMG) run
+
+$(TESTS_ROOTFS_IMG):
+	@$(MAKE) ARCH=$(ARCH) tests
 
 rv:
 	@$(MAKE) ARCH=riscv64    BLK=y NET=y FEATURES=$(QEMU_FEATURES) qemu_run

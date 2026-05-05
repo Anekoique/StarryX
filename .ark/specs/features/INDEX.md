@@ -9,6 +9,8 @@ The table below is managed by `ark agent spec register` — new rows appear when
 <!-- ARK:FEATURES:START -->
 | Feature | Scope | Promoted |
 | ------- | ----- | -------- |
+| `redesign-xtest` | Redesign xtest as test-rootfs pipeline | 2026-05-05 from task `redesign-xtest` |
+
 <!-- ARK:FEATURES:END -->
 
 ---
