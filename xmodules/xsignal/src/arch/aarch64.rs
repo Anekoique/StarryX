@@ -2,18 +2,8 @@ use axhal::arch::TrapFrame;
 
 use crate::{SignalSet, SignalStack};
 
-core::arch::global_asm!(
-    "
-.section .text
-.balign 4096
-.global signal_trampoline
-signal_trampoline:
-    mov x8, #139
-    svc #0
-
-.fill 4096 - (. - signal_trampoline), 1, 0
-"
-);
+// signal_trampoline removed; now lives in the vDSO (`__vdso_rt_sigreturn`).
+// (aarch64 is not in the root build, but the file is kept arch-symmetric.)
 
 #[repr(C, align(16))]
 #[derive(Clone)]

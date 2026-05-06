@@ -8,12 +8,9 @@ use alloc::{
 };
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs_ng::FS_CONTEXT;
-use axhal::{
-    mem::virt_to_phys,
-    paging::{MappingFlags, PageSize},
-};
+use axhal::paging::{MappingFlags, PageSize};
 use axmm::{AddrSpace, kernel_aspace};
-use kernel_elf_parser::{AuxvEntry, ELFParser, app_stack_region};
+use kernel_elf_parser::{AUXV_LEN, AuxvEntry, AuxvType, ELFParser, app_stack_region};
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use xmas_elf::{ElfFile, program::SegmentData};
 
@@ -31,17 +28,10 @@ pub fn copy_from_kernel(aspace: &mut AddrSpace) -> AxResult {
     Ok(())
 }
 
-pub fn map_trampoline(aspace: &mut AddrSpace) -> AxResult {
-    aspace.map_linear(
-        crate::config::SIGNAL_TRAMPOLINE.into(),
-        virt_to_phys(xsignal::arch::signal_trampoline_address().into()),
-        PAGE_SIZE_4K,
-        MappingFlags::READ | MappingFlags::EXECUTE | MappingFlags::USER,
-        PageSize::Size4K,
-    )
-}
-
-pub fn map_elf(uspace: &mut AddrSpace, elf: &ElfFile) -> AxResult<(VirtAddr, [AuxvEntry; 17])> {
+pub fn map_elf(
+    uspace: &mut AddrSpace,
+    elf: &ElfFile,
+) -> AxResult<(VirtAddr, [AuxvEntry; AUXV_LEN])> {
     let uspace_base = uspace.base().as_usize();
     let elf_parser = ELFParser::new(
         elf,
@@ -112,13 +102,24 @@ pub fn load_file(path: Option<&str>, args: &[String]) -> LinuxResult<(Vec<u8>, V
     Ok((file_data, args.to_vec()))
 }
 
+/// Result of loading a user application into an address space.
+pub struct LoadedApp {
+    /// User-space program counter to jump to.
+    pub entry: VirtAddr,
+    /// Initial user stack pointer.
+    pub user_sp: VirtAddr,
+    /// Per-process vDSO `rt_sigreturn` address; the caller must publish it
+    /// to `XProcess.signal` via `set_default_restorer`.
+    pub vdso_rt_sigreturn: VirtAddr,
+}
+
 pub fn load_app(
     uspace: &mut AddrSpace,
     file_data: Vec<u8>,
     args: &[String],
     envs: &[String],
     init: bool,
-) -> LinuxResult<(VirtAddr, VirtAddr)> {
+) -> LinuxResult<LoadedApp> {
     let elf = ElfFile::new(&file_data).map_err(|_| LinuxError::ENOEXEC)?;
 
     if let Some(interp) = elf
@@ -152,11 +153,18 @@ pub fn load_app(
 
     if !init {
         uspace.unmap_user_areas()?;
-        map_trampoline(uspace)?;
         axhal::arch::flush_tlb(None);
     }
 
+    let vdso = crate::vdso::install(uspace)?;
+
     let (entry, mut auxv) = map_elf(uspace, &elf)?;
+    if let Some(slot) = auxv
+        .iter_mut()
+        .find(|slot| slot.get_type() == AuxvType::SYSINFO_EHDR)
+    {
+        *slot.value_mut_ref() = vdso.base.as_usize();
+    }
     let ustack_end = VirtAddr::from_usize(crate::config::USER_STACK_TOP);
     let ustack_size = crate::config::USER_STACK_SIZE;
     let ustack_start = ustack_end - ustack_size;
@@ -187,5 +195,9 @@ pub fn load_app(
         PageSize::Size4K,
     )?;
 
-    Ok((entry, user_sp))
+    Ok(LoadedApp {
+        entry,
+        user_sp,
+        vdso_rt_sigreturn: vdso.rt_sigreturn,
+    })
 }

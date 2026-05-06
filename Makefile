@@ -96,6 +96,7 @@ include scripts/make/utils.mk
 include scripts/make/config.mk
 include scripts/make/build.mk
 include scripts/make/qemu.mk
+include scripts/make/vdso.mk
 
 # ----- Targets ---------------------------------------------------------------
 .DEFAULT_GOAL := rv

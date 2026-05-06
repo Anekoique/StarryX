@@ -31,3 +31,37 @@ Replaced the dead `xtest/` sdcard pipeline with a Docker-driven test-rootfs prod
 | Hash | Message |
 |------|---------|
 | _(none)_ |   |
+
+## Session 2: Add vDSO support
+
+**Date**: 2026-05-06
+**Slug**: vdso-support
+**Branch**: `feat/vdso-support`
+**Base Branch**: `main`
+**Start Head**: `dda046d`
+**Closing Commit**: <PENDING:vdso-support>
+
+### Summary
+
+Added a Linux-compatible vDSO (`linux-vdso.so.1`) mapped into every user address space, serving `clock_gettime` / `gettimeofday` / `clock_getres` / `time` from a kernel-published seqlock data page (no syscall trap on the supported clocks) and replacing the legacy `SIGNAL_TRAMPOLINE` mapping with `__vdso_rt_sigreturn` inside the same image.
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| User-side vDSO crate | New workspace-excluded `xmodules/xvdso/` (`cdylib`, per-arch JSON target spec with `dynamic-linking = true` + `relocation-model: pic`, custom linker scripts producing a single PT_LOAD segment, `LINUX_2.6` Verdef). Built once via `make regenerate-vdso-blobs`; resulting `.so` blobs committed under `xcore/src/vdso/blobs/` and embedded in the kernel via `.incbin` inside `global_asm!`. |
+| Kernel-side `xcore::vdso` | Four files: `image.rs` (blob + symbol-offset cache), `data.rs` (shared `VDSO_DATA` page + seqlock writer + boot-CPU timer-tick hook), `install.rs` (per-`execve` mapping), `mod.rs` (wiring). Public surface: `install` + `VdsoBinding`. |
+| Mapping on execve | `install` maps the data page (R\|U) by phys-addr via `map_linear` — single shared page across all processes — and the code page (R-X\|U) alloc-backed-and-copied per-process; patches a `VDSO_DATA_ADDR` slot in the code page so vDSO code can find the data page position-independently. Auxv gains `AT_SYSINFO_EHDR`. |
+| Time fast path | `mult/shift` derived once at boot from `axhal::time::timer_frequency()`; `__vdso_clock_gettime` and friends seqlock-read the snapshot and compute `(rdtime() * mult) >> shift` without trapping. Unsupported clock IDs fall through to `ecall`/`syscall 0` inside the vDSO image. |
+| Signal trampoline migration | Atomic single-commit removal of `SIGNAL_TRAMPOLINE`, `map_trampoline`, the call site, the per-arch `signal_trampoline` asm in all four arches, and `signal_trampoline_address()`. `ProcessSignalManager.default_restorer` becomes `AtomicUsize` with `set_default_restorer`; `xcore::vdso::install` publishes the per-process `__vdso_rt_sigreturn` address. |
+| auxv widening | `kernel_elf_parser` exposes `pub const AUXV_LEN: usize = 18`; `auxv_vector` and `xcore::mm::init::map_elf` reference the const so future entries are a one-line bump. |
+| Timer-tick hook | `axruntime` defines `VdsoTickIf` (via `crate_interface`); `xcore::vdso::data::VdsoTickImpl` provides the impl. Boot-CPU only by `axhal::cpu::this_cpu_is_bsp()` so the seqlock stays single-writer. |
+| Tests | `xtest/c/time/{vdso_clock_monotonic,vdso_gettimeofday,vdso_clock_getres,vdso_rt_sigreturn}.c`. Picked up automatically by the `xtest` pipeline's `find` discovery; no SPEC change. RV64 boot under `make run-tests` confirmed clean. |
+| Simplification pass | After initial implementation, adopted the starry-vdso pattern: prebuilt blobs committed in tree (`.incbin`), single shared `VdsoData` mirror on each side (no third crate), one merged module with four files. Removed `xmodules/xvdso-data`, `xcore/build.rs`, `scripts/check-vdso-verdef.sh`, the `vdso-blob` build prerequisite. Net: ~200 lines removed, no critical-path build pipeline. |
+| Documentation | New `docs/StarryX/vdso.md`; AGENTS.md Testing section updated to reference the vDSO subsystem. |
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| <PENDING:vdso-support> |   |

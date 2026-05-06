@@ -18,6 +18,7 @@
 | Developer | Last Active | Sessions | Active Journal |
 |-----------|-------------|----------|----------------|
 | `Anekoique` | 2026-05-06 | 1 | `journal-1.md` |
+| `anekoique` | 2026-05-06 | 1 | `journal-1.md` |
 
 <!-- ARK:DEVELOPERS:END -->
 

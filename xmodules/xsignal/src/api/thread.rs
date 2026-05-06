@@ -103,7 +103,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
 
                 let restorer = action
                     .restorer
-                    .map_or(self.proc.default_restorer, |f| f as _);
+                    .map_or(self.proc.default_restorer(), |f| f as _);
                 #[cfg(target_arch = "x86_64")]
                 tf.push_ra(restorer);
                 #[cfg(not(target_arch = "x86_64"))]

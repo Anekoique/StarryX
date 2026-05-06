@@ -1,6 +1,7 @@
 use core::{
     array,
     ops::{Index, IndexMut},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use alloc::sync::Arc;
@@ -43,18 +44,32 @@ pub struct ProcessSignalManager<M, WQ> {
     /// may occur.
     pub(crate) wq: WQ,
 
-    /// The default restorer function.
-    pub(crate) default_restorer: usize,
+    /// The default restorer (signal-return trampoline) address. Patched
+    /// per-process by `xcore::vdso::install` after the vDSO is mapped.
+    pub(crate) default_restorer: AtomicUsize,
 }
 impl<M: RawMutex, WQ: WaitQueue> ProcessSignalManager<M, WQ> {
-    /// Creates a new process signal manager.
+    /// Creates a new process signal manager. `default_restorer` is the
+    /// initial trampoline address; pass `0` if the vDSO will fill it in
+    /// later.
     pub fn new(actions: Arc<Mutex<M, SignalActions>>, default_restorer: usize) -> Self {
         Self {
             pending: Mutex::new(PendingSignals::new()),
             actions,
             wq: WQ::default(),
-            default_restorer,
+            default_restorer: AtomicUsize::new(default_restorer),
         }
+    }
+
+    /// Update the default restorer (called by `xcore::vdso::install` once
+    /// the per-process vDSO mapping is in place).
+    pub fn set_default_restorer(&self, addr: usize) {
+        self.default_restorer.store(addr, Ordering::Release);
+    }
+
+    /// Read the current default restorer address.
+    pub(crate) fn default_restorer(&self) -> usize {
+        self.default_restorer.load(Ordering::Acquire)
     }
 
     pub(crate) fn dequeue_signal(&self, mask: &SignalSet) -> Option<SignalInfo> {

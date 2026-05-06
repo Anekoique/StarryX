@@ -34,5 +34,13 @@ pub const USER_HEAP_SIZE: usize = 0x1_0000;
 /// Per-thread kernel stack size.
 pub const KERNEL_STACK_SIZE: usize = 0x40000;
 
-/// Virtual address of the kernel-installed signal trampoline page.
-pub const SIGNAL_TRAMPOLINE: usize = 0x4001_0000;
+/// vDSO code-page base virtual address (R-X to user, alloc-backed,
+/// per-process copy of the embedded ELF blob).
+///
+/// Reuses the slot freed by removing the legacy `SIGNAL_TRAMPOLINE` page;
+/// `__vdso_rt_sigreturn` lives inside the same image now.
+pub const USER_VDSO_BASE: usize = 0x4001_0000;
+
+/// vDSO data-page virtual address (R-only to user, single shared phys
+/// page across all processes; see `xcore::vdso::data::VDSO_DATA`).
+pub const USER_VDSO_DATA: usize = 0x4001_2000;

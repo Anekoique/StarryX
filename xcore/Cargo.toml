@@ -12,6 +12,7 @@ axfs-ng.workspace = true
 axfs-ng-vfs.workspace = true
 axhal.workspace = true
 axlog.workspace = true
+axruntime.workspace = true
 axmm.workspace = true
 axnet.workspace = true
 axns.workspace = true

@@ -8,6 +8,7 @@
 | # | Date | Title | Slug | Branch | Closing Commit | Journal |
 |---|------|-------|------|--------|----------------|---------|
 | 1 | 2026-05-06 | redesign xtest as a test-rootfs pipeline | `redesign-xtest` | `feat/redesign-xtest` | <PENDING:redesign-xtest> | `journal-1.md` |
+| 2 | 2026-05-06 | Add vDSO support | `vdso-support` | `feat/vdso-support` | <PENDING:vdso-support> | `journal-1.md` |
 
 <!-- ARK:SESSIONS:END -->
 

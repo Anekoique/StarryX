@@ -17,6 +17,12 @@ exclude = [
     "arceos/crates/page_table_multiarch/*",
     "arceos/crates/lwext4_rust",
     "arceos/crates/smoltcp",
+    # vDSO source crate targets *-unknown-none with a custom linker script
+    # and `dynamic-linking = true` to produce `cdylib`. Built out-of-band
+    # by `make regenerate-vdso-blobs`; the resulting `.so` is committed
+    # under `xcore/src/vdso/blobs/` and embedded into the kernel via
+    # `.incbin`.
+    "xmodules/xvdso",
 ]
 
 [workspace.package]

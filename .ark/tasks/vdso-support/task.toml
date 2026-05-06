@@ -1,0 +1,14 @@
+id = "vdso-support"
+title = "Add vDSO support"
+tier = "deep"
+phase = "committed"
+iteration = 2
+max_iterations = 3
+created_at = "2026-05-06T04:02:25.564952Z"
+updated_at = "2026-05-06T11:36:18.232566Z"
+committed_at = "2026-05-06T11:36:18.232566Z"
+branch = "feat/vdso-support"
+worktree_path = ".ark/worktrees/feat/vdso-support"
+base_branch = "main"
+start_head = "dda046def96f0e1cdfafcb38c0c34cfc772ea4b5"
+journal_path = ".ark/workspace/anekoique/journal-1.md"

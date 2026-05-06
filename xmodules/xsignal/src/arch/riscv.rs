@@ -2,18 +2,8 @@ use axhal::arch::{GeneralRegisters, TrapFrame};
 
 use crate::{SignalSet, SignalStack};
 
-core::arch::global_asm!(
-    "
-.section .text
-.balign 4096
-.global signal_trampoline
-signal_trampoline:
-    li a7, 139
-    ecall
-
-.fill 4096 - (. - signal_trampoline), 1, 0
-"
-);
+// The signal trampoline previously defined here is gone — `rt_sigreturn`
+// now lives in the vDSO (`__vdso_rt_sigreturn`).
 
 #[repr(C, align(16))]
 #[derive(Clone)]

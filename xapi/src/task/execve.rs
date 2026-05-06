@@ -53,9 +53,16 @@ pub fn sys_execve(
     let (file_data, new_args) = load_file(Some(&path), &args)?;
 
     let mut aspace = uspace.aspace.lock();
-    let (entry_point, user_stack_base) = load_app(&mut aspace, file_data, &new_args, &envs, false)?;
+    let loaded = load_app(&mut aspace, file_data, &new_args, &envs, false)?;
+    let entry_point = loaded.entry;
+    let user_stack_base = loaded.user_sp;
     uspace.vma_manager.write().clear();
     drop(aspace);
+
+    // Publish the new vDSO trampoline to this process's signal manager.
+    xprocess
+        .signal
+        .set_default_restorer(loaded.vdso_rt_sigreturn.as_usize());
 
     let name = path
         .rsplit_once('/')

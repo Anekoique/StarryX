@@ -44,6 +44,16 @@ unsafe extern "C" {
     fn main();
 }
 
+/// Hook called from the timer IRQ to refresh the vDSO data page.
+///
+/// The kernel's `xcore::vdso` module provides the impl. If a downstream
+/// build doesn't include xcore (e.g. an embedded ArceOS app), it must
+/// supply its own no-op `impl VdsoTickIf for ...`.
+#[crate_interface::def_interface]
+pub trait VdsoTickIf {
+    fn on_timer_tick();
+}
+
 struct LogIfImpl;
 
 #[crate_interface::impl_interface]
@@ -273,6 +283,9 @@ fn init_interrupt() {
         update_timer();
         #[cfg(feature = "multitask")]
         axtask::on_timer_tick();
+        // Refresh the vDSO data page (no-op on non-boot CPUs and if the
+        // kernel did not register a vdso tick handler).
+        crate_interface::call_interface!(VdsoTickIf::on_timer_tick);
     });
 
     // Enable IRQs before starting app

@@ -1,0 +1,21 @@
+[package]
+name = "xvdso"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
+description = "StarryX vDSO image (linux-vdso.so.1)."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+debug = false
+
+[workspace]

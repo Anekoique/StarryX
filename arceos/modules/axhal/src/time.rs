@@ -14,6 +14,31 @@ pub use crate::platform::irq::TIMER_IRQ_NUM;
 pub use crate::platform::time::set_oneshot_timer;
 pub use crate::platform::time::{current_ticks, epochoffset_nanos, nanos_to_ticks, ticks_to_nanos};
 
+/// Returns the platform's hardware timer frequency in Hz.
+///
+/// Re-exports `axconfig::devices::TIMER_FREQUENCY` so callers (e.g. the
+/// vDSO `mult/shift` derivation) don't have to import `axconfig` directly.
+/// Returns 0 on the `dummy` platform (no real timer); callers should treat
+/// 0 as "vDSO time fast path disabled".
+pub const fn timer_frequency() -> u64 {
+    #[cfg(any(
+        platform_family = "riscv64-qemu-virt",
+        platform_family = "riscv64-visionfive2",
+        platform_family = "loongarch64-qemu-virt",
+    ))]
+    {
+        axconfig::devices::TIMER_FREQUENCY as u64
+    }
+    #[cfg(not(any(
+        platform_family = "riscv64-qemu-virt",
+        platform_family = "riscv64-visionfive2",
+        platform_family = "loongarch64-qemu-virt",
+    )))]
+    {
+        0
+    }
+}
+
 /// Number of milliseconds in a second.
 pub const MILLIS_PER_SEC: u64 = 1_000;
 /// Number of microseconds in a second.

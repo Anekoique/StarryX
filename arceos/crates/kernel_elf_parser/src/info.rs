@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use memory_addr::VirtAddr;
 use page_table_entry::MappingFlags;
 
+use crate::AUXV_LEN;
 use crate::auxv::{AuxvEntry, AuxvType};
 
 /// ELF Program Header applied to the kernel
@@ -142,7 +143,10 @@ impl<'a> ELFParser<'a> {
     /// * `pagesz` - The page size of the system
     ///
     /// Details about auxiliary vectors are described in <https://articles.manugarg.com/aboutelfauxiliaryvectors.html>
-    pub fn auxv_vector(&self, pagesz: usize) -> [AuxvEntry; 17] {
+    ///
+    /// `SYSINFO_EHDR` is left as `0` here; the kernel patches it after
+    /// `xcore::vdso::install` knows the per-process vDSO base.
+    pub fn auxv_vector(&self, pagesz: usize) -> [AuxvEntry; AUXV_LEN] {
         [
             AuxvEntry::new(AuxvType::PHDR, self.phdr()),
             AuxvEntry::new(AuxvType::PHENT, self.phent()),
@@ -160,6 +164,7 @@ impl<'a> ELFParser<'a> {
             AuxvEntry::new(AuxvType::EGID, 0),
             AuxvEntry::new(AuxvType::RANDOM, 0),
             AuxvEntry::new(AuxvType::EXECFN, 0),
+            AuxvEntry::new(AuxvType::SYSINFO_EHDR, 0),
             AuxvEntry::new(AuxvType::NULL, 0),
         ]
     }

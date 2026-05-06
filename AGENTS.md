@@ -118,6 +118,12 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   cargo feature on the root crate) and boots it against that image. Both
   targets require Docker — the cross-build runs inside
   `docker.educg.net/cg/os-contest@sha256:742479b…`. See `xtest/README.md`.
+- **vDSO** — the kernel maps `linux-vdso.so.1` into every user address
+  space. Pre-built blobs live under `xcore/src/vdso/blobs/`, embedded
+  via `.incbin`. Source under `xmodules/xvdso/` (workspace-excluded).
+  Run `make regenerate-vdso-blobs` after touching the source and commit
+  the updated `.so`. See `docs/StarryX/vdso.md`. Tests under
+  `xtest/c/time/vdso_*.c`.
 - Use the **tdd-guide** agent when starting a new feature or bug fix.
 
 ## Git & PR Workflow

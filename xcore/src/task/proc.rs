@@ -212,10 +212,7 @@ impl XProcess {
             ns: AxNamespace::new_thread_local(),
             child_exit_wq: WaitQueue::new(),
             exit_signal,
-            signal: Arc::new(ProcessSignalManager::new(
-                signal_actions,
-                crate::config::SIGNAL_TRAMPOLINE,
-            )),
+            signal: Arc::new(ProcessSignalManager::new(signal_actions, 0)),
             rlimits: RwLock::new(rlimits.unwrap_or_default()),
             futex_table: FutexTable::new(),
             credentials: ProcessCredentials::default(),

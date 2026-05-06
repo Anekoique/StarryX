@@ -40,5 +40,7 @@ pub mod net;
 pub mod sys;
 /// Task and process management with signal handling
 pub mod task;
+/// vDSO image, data page, and per-process install hook.
+pub mod vdso;
 
 pub use sys::*;

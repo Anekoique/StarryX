@@ -35,16 +35,7 @@ cfg_if::cfg_if! {
     }
 }
 
-unsafe extern "C" {
-    fn signal_trampoline();
-}
-
-/// Returns the address of the signal trampoline function
-///
-/// This address is used by the kernel when setting up signal frames to
-/// specify where execution should return after the signal handler completes.
-/// The trampoline handles the transition back to kernel mode and any necessary
-/// cleanup.
-pub fn signal_trampoline_address() -> usize {
-    signal_trampoline as *const () as usize
-}
+// The legacy fixed signal trampoline (`signal_trampoline` / `signal_trampoline_address`)
+// has been replaced by the vDSO-resident `__vdso_rt_sigreturn`. The per-process
+// restorer address is published by `xcore::vdso::install` via
+// `ProcessSignalManager::set_default_restorer`.
