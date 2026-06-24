@@ -15,10 +15,10 @@
 ## Active Developers
 
 <!-- ARK:DEVELOPERS:START -->
-| Developer | Last Active | Sessions | Active Journal |
-|-----------|-------------|----------|----------------|
-| `Anekoique` | 2026-05-06 | 1 | `journal-1.md` |
-| `anekoique` | 2026-05-06 | 1 | `journal-1.md` |
+| Developer   | Last Active | Sessions | Active Journal |
+| ----------- | ----------- | -------- | -------------- |
+| `Anekoique` | 2026-05-06  | 1        | `journal-1.md` |
+| `anekoique` | 2026-06-24 | 3 | `journal-1.md` |
 
 <!-- ARK:DEVELOPERS:END -->
 

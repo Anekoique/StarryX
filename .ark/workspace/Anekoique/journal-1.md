@@ -65,3 +65,18 @@ Added a Linux-compatible vDSO (`linux-vdso.so.1`) mapped into every user address
 | Hash | Message |
 |------|---------|
 | <PENDING:vdso-support> |   |
+
+## Session 3: Port OS-COMP testsuites into xtest
+
+### Summary
+
+Vendored 11 OS-COMP suites into `xtest/testsuites/` with a generic build/run pipeline; both arches boot and run all suites end-to-end.
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Vendored suites | `xtest/testsuites/{basic,busybox,libctest,lua,unixbench,lmbench,libcbench,iperf,netperf,cyclictest,iozone}` — each minimally vendored with a `BUILD.sh` + upstream `_testcode.sh`; iozone moved here from the bespoke `xtest/iozone/`. LTP excluded. Provenance + patches + run results + known-fails in `UPSTREAM.md`. |
+| Build pipeline | `build-suites.sh` dispatches each `BUILD.sh` in Docker via a shared `scripts/build/lib/suite.sh` (suite_init/enter/stage/need/retry); `stage.sh` adds a busybox shim + `.arch` marker per suite; `bake-image.sh` symlinks the la64 musl loader the contest binaries request. |
+| Run pipeline | `run-suite.sh` drives each suite under a process-group-aware `lib/timeout.sh` and maps native results to `[PASS]/[FAIL]` via per-suite adapters in `lib/suite-adapters.sh` (GROUP markers stripped, never scored); `run-all.sh` iterates and arch-skips iperf on rv64. |
+| Results | rv64 + la64 run all 11 end-to-end: libctest 217/217 both; iperf 6/6 la64; netperf 4/5. cyclictest/unixbench/lmbench quarantined (uniprocessor scheduling); rv64 iperf3 server hang documented. No kernel `src/` changes. |

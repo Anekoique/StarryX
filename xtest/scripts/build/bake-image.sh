@@ -69,5 +69,28 @@ mount -o ro "$SRC_LOOP" "$SRC_MNT"
 mkdir -p "$MNT/root/tests"
 cp -a "$STAGE_DIR/root/tests/." "$MNT/root/tests/"
 
+# Dynamic-loader compatibility shim. The contest musl cross toolchain emits a
+# different ELF interpreter name than the Alpine rootfs ships, so dynamically
+# linked test binaries (e.g. libc-test's entry-dynamic.exe) fail to exec with
+# "No such file or directory" unless we provide the interpreter path they
+# request. We symlink the requested interp to whatever ld-musl the rootfs has.
+#   - loongarch64: binaries want /lib64/ld-musl-loongarch-lp64d.so.1, rootfs
+#     ships /lib/ld-musl-loongarch64.so.1.
+#   - riscv64: binaries want /lib/ld-musl-riscv64.so.1, which the rootfs already
+#     ships verbatim — nothing to do.
+case "$ARCH" in
+    loongarch64)
+        real_ld=$(find "$MNT/lib" "$MNT/lib64" -maxdepth 1 -name 'ld-musl-loongarch*.so.1' 2>/dev/null | head -n1)
+        if [ -n "$real_ld" ]; then
+            mkdir -p "$MNT/lib64"
+            # Point the requested interp at the real loader (relative target).
+            ln -sf "../lib/$(basename "$real_ld")" "$MNT/lib64/ld-musl-loongarch-lp64d.so.1"
+            echo "[bake-image] la64: linked /lib64/ld-musl-loongarch-lp64d.so.1 -> $(basename "$real_ld")"
+        else
+            echo "[bake-image] warning: no ld-musl-loongarch loader found in rootfs" >&2
+        fi
+        ;;
+esac
+
 sync
 echo "[bake-image] OK: $OUT_IMG"

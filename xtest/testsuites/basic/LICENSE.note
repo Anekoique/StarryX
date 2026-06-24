@@ -1,0 +1,26 @@
+Basic OS-COMP syscall test suite — license provenance
+=======================================================
+
+Upstream: https://github.com/oscomp/testsuits-for-oskernel  (path: basic/)
+
+The `basic/` suite ships no standalone LICENSE file upstream — only a short
+README (vendored here as README.upstream.md). The programs are rCore-Tutorial
+lineage: small standalone C syscall exercisers derived from the rCore-Tutorial
+user-mode test programs.
+
+The rCore-Tutorial project (https://github.com/rcore-os/rCore-Tutorial-v3 and
+related rcore-os repositories) is dual-licensed:
+
+    GPL-3.0-or-later OR MIT
+
+Per that dual license, the recipient may choose either. We record the suite's
+provenance under that dual grant.
+
+SPDX-License-Identifier: GPL-3.0-or-later OR MIT
+
+Notes:
+  - Only the syscall sources (src/*.c), the per-case driver (run-all.sh), the
+    OS-COMP group driver (basic_testcode.sh), and the data file (text.txt) are
+    vendored. The rCore/bare-metal build machinery and first-party libc-shim
+    headers were dropped; we cross-compile directly against musl, with
+    oscomp_shim.h (force-included) reconciling the rCore-isms.

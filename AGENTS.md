@@ -112,17 +112,23 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   fetches `rootfs-$(ARCH).img`; `make rv` / `make la` runs it.
 - **xtest pipeline** — `make tests ARCH=...` builds a separate
   `tests-rootfs-$ARCH.img` (under `xtest/build/`) by baking first-party C
-  tests and vendored OS-COMP suites into a copy of the upstream rootfs.
+  tests and the vendored OS-COMP suites into a copy of the upstream rootfs.
   `make run-tests ARCH=...` builds the kernel with `ROOT_FEATURES=init-test`
   (which embeds `src/test.sh` instead of `src/init.sh` via the `init-test`
   cargo feature on the root crate) and boots it against that image. Both
   targets require Docker — the cross-build runs inside
   `docker.educg.net/cg/os-contest@sha256:742479b…`. See `xtest/README.md`.
-  The vendored `iozone` benchmark (`xtest/iozone/`) builds alongside the
-  first-party C tests and runs a bounded smoke pass in-guest. User ELFs must
-  be **static-PIE** (the loader rejects fixed-address `EXEC`), so iozone is
-  linked `-static-pie` like the C tests — which needs the contest image's
-  PIC-capable musl `libc.a`.
+- **OS-COMP testsuites** — `xtest/testsuites/<suite>/` vendors the suites
+  (basic, busybox, libctest, lua, unixbench, lmbench, libcbench, iperf,
+  netperf, cyclictest, iozone; LTP excluded). Each ships a `BUILD.sh` (cross-
+  builds it in Docker, sourcing the shared `scripts/build/lib/suite.sh`
+  helpers) and the upstream `<suite>_testcode.sh`; `build-suites.sh` dispatches
+  the builds, `run-suite.sh` drives each in-guest and maps native results to
+  `[PASS]/[FAIL]` via `scripts/lib/suite-adapters.sh`. User ELFs link plain
+  `-static` — the contest musl toolchain makes that a loadable static-PIE the
+  loader runs (the loader rejects fixed-address `EXEC` and `-static-pie`).
+  Provenance, per-suite patches, run results, and known-fails are in
+  `xtest/testsuites/UPSTREAM.md`. To add a suite: see `xtest/README.md`.
 - **vDSO** — the kernel maps `linux-vdso.so.1` into every user address
   space. Pre-built blobs live under `xcore/src/vdso/blobs/`, embedded
   via `.incbin`. Source under `xmodules/xvdso/` (workspace-excluded).
