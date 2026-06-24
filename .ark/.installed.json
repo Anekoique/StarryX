@@ -1,6 +1,5 @@
 {
-  "version": "0.1.4",
-  "installed_at": "2026-05-06T02:41:09.208814Z",
+  "version": "0.1.7",
   "files": [
     ".ark/.gitignore",
     ".ark/workflow.md",
@@ -17,7 +16,13 @@
     ".claude/commands/ark/discard.md",
     ".claude/commands/ark/quick.md",
     ".claude/commands/ark/record.md",
-    ".claude/commands/ark/resume.md"
+    ".claude/commands/ark/resume.md",
+    ".claude/commands/ark/research.md",
+    ".claude/commands/ark/spec-audit.md",
+    ".claude/commands/ark/spec-extract.md",
+    ".claude/agents/ark-researcher.md",
+    ".claude/agents/ark-reviewer.md",
+    ".claude/agents/ark-verifier.md"
   ],
   "managed_blocks": [
     {
@@ -26,21 +31,27 @@
     }
   ],
   "hashes": {
-    ".ark/.gitignore": "be619e7da0436ad2054164edae1960361e431d8e69a6e4e00c54c7545d1b9afb",
-    ".ark/specs/INDEX.md": "0e404d5c47fd687afe97aa94f55ade016ecb729b671a7a97f1ccd9f55e67c246",
-    ".ark/specs/features/INDEX.md": "a03b5d6dc281a747b7c950213f7cd0dc36d8e9b493a5a75d5d15186565310290",
+    ".ark/.gitignore": "f9daf1bb6cd65c968bb094965058314c78e0c61ac86a90dcfd2204ae55ec071a",
+    ".ark/specs/INDEX.md": "04926b580be21fc0ca5553254e2fff40136ac3fda507052edf41b9c96ff906f3",
+    ".ark/specs/features/INDEX.md": "0fd93e4cb9f76783b42b3ccdbbb17f4f1515ea3bfd8145270c41523a4057d0fe",
     ".ark/specs/project/INDEX.md": "0a284c21203ef52b6fa2789075064874936ff406985a1046612f80909929f4cf",
-    ".ark/templates/PLAN.md": "9ed190a058dd289299d1ff7dfe09908df88d7e2035ed4798bf9d4e531cc94bd8",
-    ".ark/templates/PRD.md": "ec3ff89b872f90084379eba7bf97ddf6cdc9bcb7d175be663cd0a1df07e24dae",
-    ".ark/templates/REVIEW.md": "4959ae0d8571f878745de7cf283f4992c5f1e8dfc3b3e3efed115fabf86868e5",
-    ".ark/templates/SPEC.md": "fa8c1e8511cc73a31ea69d42576d9831f7384e969571535d00e73bfb382ee547",
-    ".ark/templates/VERIFY.md": "b516630d1ad9d2e4a7b6a2d69afb670baa330a881f0bd189ffd069b811785550",
-    ".ark/workflow.md": "6fcc43d1b3150929403f56722efb5578c94d4fe2e648a35f5abddd01e6af5abd",
-    ".claude/commands/ark/commit.md": "0ee7964b550493814e0dc088a61379e0df4ce678bf27ae3f21b58bbd5f20dcd2",
-    ".claude/commands/ark/design.md": "9283ff2b5d50a84d5da1db94d509db66e27aec1317b180bf3ba0ccbb4018a8c2",
-    ".claude/commands/ark/discard.md": "0fca71bdcbb3ef7f4a67c855bcebfb5c9b23800b67393dd1314f58c3875b30c7",
-    ".claude/commands/ark/quick.md": "7ae85ccf71b8d966ed029ea3f3bd263f2f4387b6f1dfe886d32055e29fa7903c",
-    ".claude/commands/ark/record.md": "17f60461a6ff0552ebe1aae36fc603d65ab8f34c990d7a9833a9b35c5356af9d",
-    ".claude/commands/ark/resume.md": "8dbb14fdd331ab85d3c7503d476efdc34ed72aa99eea3014b3bf0b03c0a57b73"
+    ".ark/templates/PLAN.md": "4560a3b514262d8cb19829141775730763da4740b17998459dd08320673d724a",
+    ".ark/templates/PRD.md": "f95b14d683aed0992949b51de159067640dbf195d777beddc250e07cb8e18d8f",
+    ".ark/templates/REVIEW.md": "b7a6f717d009cb4967a2cb42418ebfeb314f0d02740f64b31ff023be6b9a7988",
+    ".ark/templates/SPEC.md": "18ba3e94d58beb17e0e8bb25869d62747559562ddf23f76df603a5c5dc42f96a",
+    ".ark/templates/VERIFY.md": "2ccd9bd1504ed96d268d23d083723cfd8fadc9990ff92f6886de39bf28c3814f",
+    ".ark/workflow.md": "d196952fbf8a82c5f6fb3ffc76e65640e8eadb408cb09744386b54839db76767",
+    ".claude/agents/ark-researcher.md": "eb03fd90d3bb126b5e0a62fb1b1c701d7b8fdd1b19570c030d6deb62b0427b44",
+    ".claude/agents/ark-reviewer.md": "a01fcfbf68cade08c08ba4c2e10246f51ab07bf4f6346c6d95806c0c8a515040",
+    ".claude/agents/ark-verifier.md": "b6be4f3c9564e88696af060e4489440026bfd60b7a7f88a157ce26116ac54b16",
+    ".claude/commands/ark/commit.md": "695f2f244aae6f6d44114031451af99cd5abd19e8f07a8747b301dacaef0eb24",
+    ".claude/commands/ark/design.md": "d0c14617097abcafb2aef90703ff54fbd5981f5f053ab23e636b996791c5d2f9",
+    ".claude/commands/ark/discard.md": "630027979f058eb416fadc976d757d81b6e6c9b83fc1e1ce254aad9b53e66d65",
+    ".claude/commands/ark/quick.md": "79e643cf260fc1aa891bfbd1b6e9a1df31fbf11e38d423c8c61b0df8915f8402",
+    ".claude/commands/ark/record.md": "b5df88aa70007194b61e96cd5852b1326ff929b53f30033270c42affa3cfe93b",
+    ".claude/commands/ark/research.md": "31d4a57c2500575a5355ac62ba2ce5857e5e9473c427dde0f2153546bebd9ac8",
+    ".claude/commands/ark/resume.md": "47bcdd70e475948cc3b2539012857e98f8a4dcabda762e272e415562e430be77",
+    ".claude/commands/ark/spec-audit.md": "ddb43a4eb9eff3c0f754aaa4c1e7acadb3b673637532d83b72020d58ea10a47c",
+    ".claude/commands/ark/spec-extract.md": "248f3ccdb24ee46daf92bf9a1b09ee720f4c87d143514a851e42770631e1f244"
   }
 }

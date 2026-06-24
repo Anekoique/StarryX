@@ -1,23 +1,27 @@
-# `{Feature Name}` PRD
+# `<feature-name>` PRD
 
 ---
 
 [**What**]
-`{One-line description of the change or feature.}`
 
-
+<one-line description of the change>
 
 [**Why**]
-`{The reason: bug, cleanup, policy, user request, architectural need.}`
 
-
+<the reason: bug, cleanup, policy, user request, architectural need>
 
 [**Outcome**]
-`{What "done" looks like — observable success criteria. For quick tier, this also serves as the verification checklist.}`
 
-
+<observable success criteria — what "done" looks like. For quick tier, doubles as the verification checklist.>
 
 [**Related Specs**]
-`{Feature specs from specs/features/ that this task touches or depends on. List paths; leave blank if none.}`
 
-- `{specs/features/oauth/SPEC.md}` — `{how this task interacts with it}`
+<feature specs from `specs/features/` this task touches. List paths + one line on how each interacts. Leave the block empty if none.>
+
+- `specs/features/<name>/SPEC.md` — <how this task interacts with it>
+
+[**SPEC Path**]
+
+<path relative to `specs/features/`, slash-separated, ending in the task slug.
+ Examples: `xemu/csr`, `klib`, `core/runtime/scheduler`. Required for deep tier;
+ ignored on quick / standard tiers.>

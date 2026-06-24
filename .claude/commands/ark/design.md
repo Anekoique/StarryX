@@ -1,168 +1,127 @@
 ---
-description: Start a standard or deep-tier task. Produces PRD → PLAN → (REVIEW loop if --deep) → EXECUTE → VERIFY.
+description: Start a standard or deep-tier task. Produces PRD → PLAN → (REVIEW if --deep) → EXECUTE → VERIFY.
 argument-hint: "[--deep] <title>"
 ---
 
 # `/ark:design $ARGUMENTS`
 
-Create a standard-tier task (default) or deep-tier task (if `--deep` is in arguments).
+Create a **standard**-tier task (default) or **deep**-tier task (if `--deep` is in `$ARGUMENTS`).
 
-- **Standard** — feature work with testable scope. Single PLAN, no REVIEW loop, single VERIFY gate.
-- **Deep** — architectural or cross-cutting work. Iterated PLAN ↔ REVIEW loop, VERIFY gate, SPEC extracted on archive.
+- **Standard** — feature work with testable scope. Single PLAN, no REVIEW, single VERIFY gate.
+- **Deep** — architectural / cross-cutting work. PLAN → REVIEW → EXECUTE (single pass), VERIFY gate, SPEC extracted on commit.
 
-Parse `$ARGUMENTS`:
-- If it contains `--deep`, tier = `deep`, title = remainder.
-- Otherwise, tier = `standard`, title = `$ARGUMENTS`.
+Parse `$ARGUMENTS`: if it contains `--deep`, tier = deep, title = remainder; else tier = standard, title = `$ARGUMENTS`.
 
-Structural operations (creating task dirs, phase transitions, archive moves, SPEC extraction, index upserts) are handled by the `ark agent` CLI — do not hand-edit `task.toml` or move directories with `mv`, except where this command later explicitly instructs a deep-tier iteration or reopen update (for example, bumping `iteration` and resetting `phase`). Artifact bodies (PRD prose, PLAN sections, REVIEW findings) are yours to write.
+Structural ops (task dirs, phase transitions, SPEC extraction, INDEX upserts) are owned by `ark agent`. Artifact bodies (PRD prose, PLAN sections, REVIEW findings) are yours to write.
 
 ## Preconditions
 
 - `.ark/` is initialized.
-- For **standard**: change is feature-scoped, testable, doesn't break APIs or architecture. If it does, use `--deep`.
-- For **deep**: change is architectural, cross-cutting, or introduces a new subsystem.
+- **Standard:** scope is feature-shaped, testable, doesn't break APIs/architecture. If it does, use `--deep`.
+- **Deep:** scope is architectural, cross-cutting, or introduces a new subsystem.
 
 ## Phase 1 — DESIGN
 
-### 1.1 Pull design-phase context
+### Step 1.1: Pull design-phase context `[AI]`
 
 ```bash
 ark context --scope phase --for design --format json
 ```
 
-This bundles git state, current task (if any), project specs, feature specs, and recent archive in one structured snapshot. Read the returned JSON before reading the workflow doc — it tells you what specs to consult.
+See `workflow.md` §4 for the projection contract. Read every SPEC under `specs.project` and any `specs.features` rows that look related.
 
-`.ark/workflow.md` is worth a quick re-read if you haven't seen it recently:
+### Step 1.2: Brainstorm `[AI]` `[USER]`
 
-```bash
-cat .ark/workflow.md
-```
-
-Then read every SPEC referenced under `specs.project` and any `specs.features` rows that look related to the task — they're all listed in the context output.
-
-### 1.3 Brainstorm with the user
-
-**Standard tier** — ask up to **3** clarifying questions focused on what's ambiguous in the title. Examples:
-- What's the observable outcome?
-- Any constraints you'd call out up front?
-- Any existing patterns I should follow?
-
-**Deep tier** — conduct a thorough brainstorm covering:
-- Problem framing and non-goals
-- Boundaries and constraints (performance, security, compatibility)
-- Alternatives considered and why rejected
-- Risks and assumptions
-- Interaction with existing feature SPECs
+- **Standard:** ≤3 clarifying questions on what's ambiguous in the title (observable outcome? constraints? existing patterns to follow?).
+- **Deep:** thorough brainstorm — problem framing, non-goals, performance/security/compat boundaries, alternatives + why rejected, risks/assumptions, interaction with existing feature SPECs.
 
 Do not proceed until the user confirms direction.
 
-### 1.4 Create the task
+### Step 1.3: Create the task `[AI]`
 
-Derive slug from title: lowercase, hyphen-separated, ASCII, ≤40 chars.
+Slugify the title (lowercase, hyphen-separated, ASCII, ≤40 chars).
 
 ```bash
-# standard tier — opt in to --worktree only if work would collide with in-flight changes on the active branch
+# standard tier — opt in to --worktree only if work would collide with in-flight changes
 ark agent task new --slug <slug> --title "<title>" --tier standard
 
 # deep tier — --worktree is REQUIRED
 ark agent task new --slug <slug> --title "<title>" --tier deep --worktree
 ```
 
-This scaffolds `.ark/tasks/<slug>/` with `PRD.md` + `task.toml` (`phase = design`, `iteration = 0`), registers the slug in `.ark/.state.toml` as this session's focus, and warns to stderr if other active tasks already exist. Refuses if the slug already exists.
+Scaffolds `.ark/tasks/<slug>/{PRD.md, task.toml}`, registers the slug, sets this session's focus. **Deep tier:** `cd .ark/worktrees/<branch>/` and run all subsequent steps from there.
 
-**Deep tier MUST use `--worktree`.** After scaffolding, `cd .ark/worktrees/<branch>/` and run all subsequent phase commands (plan / review / execute / verify / archive) from the worktree.
+### Step 1.4: Fill the PRD `[AI]` `[USER]`
 
-### 1.5 Fill the PRD
+Edit `.ark/tasks/<slug>/PRD.md`: **What**, **Why**, **Outcome**, **Related Specs** (one bullet per touched feature SPEC + how it interacts).
 
-Edit `.ark/tasks/<slug>/PRD.md`:
-- **What** — one-line description
-- **Why** — the reason
-- **Outcome** — observable success criteria
-- **Related Specs** — feature specs this task touches (list each path with one line on how it interacts)
+**Deep — STOP and ask the user before drafting** if any topic needs research (third-party library, prior art, cross-cutting pattern). Offer `ark-researcher` and wait for their answer; do not decide silently. On dispatch, findings land at `<task>/research/<topic>.md`. After: `git status`, `git restore` out-of-scope edits, `git clean -fd` out-of-scope new files.
+
+**Gate:** PRD complete → Phase 2.
 
 ## Phase 2 — PLAN
 
-### 2.0 Refresh phase context
+### Step 2.1: Refresh phase context `[AI]`
 
 ```bash
 ark context --scope phase --for plan --format json
 ```
 
-This narrows the snapshot to current task + PRD + related feature specs (filtered to those mentioned in the PRD's `[**Related Specs**]`) + project specs.
-
-### 2.1 Advance phase
+### Step 2.2: Advance phase `[AI]`
 
 ```bash
 ark agent task plan
 ```
 
-This transitions `task.toml.phase` to `Plan` and seeds `00_PLAN.md` from the embedded PLAN template.
+Transitions to `Plan` and seeds `PLAN.md` (standard and deep).
 
-### 2.2 Fill the PLAN
+### Step 2.3: Fill the PLAN `[AI]`
 
-Using the PRD and related specs as input, fill `00_PLAN.md`:
+Per the template: `## Summary`, `## Spec` (Goals/NG/Architecture/Data Structure/API Surface/Constraints), `## Runtime`, `## Implementation`, `## Trade-offs`, `## Validation` with Acceptance Mapping.
 
-- Frontmatter: Status = `Draft`, Iteration = `00`, Depends on = PRD + related specs
-- `## Summary` — what this PLAN proposes
-- `## Log` — *None in 00_PLAN*
-- `## Spec` — Goals (G-N), Non-goals (NG-N), Architecture, Data Structure, API Surface, Constraints (C-N)
-- `## Runtime` — Main Flow, Failure Flow, State Transitions
-- `## Implementation` — phases (Phase 1, Phase 2, Phase 3 as needed)
-- `## Trade-offs` — options with adv./disadv. (T-N)
-- `## Validation` — Unit/Integration/Failure/Edge tests (V-*-N), Acceptance Mapping linking each G/C to a V
+**Spec discipline (the `## Spec` section is what gets promoted to a feature SPEC verbatim on deep commit — write it like a contract, not a narrative):**
 
-**Gate:** every Goal (G-N) must be mapped to at least one Validation (V-*-N) in the Acceptance Mapping table.
+- Goals: one line each, ≤80 chars, verb-led (the *what*). Soft cap of 5.
+- Non-goals: list only when a reader would assume in-scope. Soft cap of 3.
+- Constraints: one declarative sentence each, ≤120 chars. The *why* goes in Trade-offs, not the Constraint body.
+- If a goal sounds like a procedure ("Two flags control X..."), it is a Constraint, not a Goal.
 
-### 2.3 Advance
+**Deep — STOP and ask the user before drafting** if PLAN authoring needs library/API or pattern comparison research. Offer `ark-researcher` and wait. Same post-check: `git status`, `git restore` out-of-scope edits, `git clean -fd` out-of-scope new files.
 
-**Standard tier:** `ark agent task execute` — skip to Phase 4.
+**Gate:** every Goal `G-N` mapped to ≥1 Validation `V-*-N` in the Acceptance Mapping table.
 
-**Deep tier:** `ark agent task review` — proceed to Phase 3.
+### Step 2.4: Advance `[AI]`
 
-## Phase 3 — REVIEW (deep tier only — plan review loop)
+```bash
+# standard
+ark agent task execute   # → Phase 4
 
-### 3.0 Refresh phase context
+# deep
+ark agent task review    # → Phase 3
+```
+
+## Phase 3 — REVIEW (deep only, single pass)
+
+### Step 3.1: Refresh phase context `[AI]`
 
 ```bash
 ark context --scope phase --for review --format json
 ```
 
-Returns current task + latest PLAN + related feature specs + project specs — exactly what a reviewer needs to evaluate the plan.
+### Step 3.2: Pick the reviewer `[AI]` `[USER]`
 
-### 3.1 Review is seeded
+**STOP. Ask the user: `ark-reviewer` subagent, a different model, or self-review?** Wait for the answer; do not pick.
 
-`ark agent task review` (called in 2.3) has already transitioned to Review and seeded `00_REVIEW.md`.
+- **`ark-reviewer`:** dispatch it. `git status` after; `git restore` edits outside `REVIEW.md` and `git clean -fd` any new files.
+- **Self-review:** switch framing — *you are now the reviewer*. Read `PLAN.md` against the PRD and project specs; fill `REVIEW.md` with verdict, findings (`R-NNN`), trade-off advice (`TR-N`).
 
-### 3.2 Act as reviewer
+**Reject (HIGH)** if the PLAN's `## Spec` is not self-contained (leans on external docs or diff-style phrasing).
 
-Ideally, this is a fresh agent or a reviewer model. For this command, ask the user: *"Should I self-review, or will you run the reviewer?"*
+### Step 3.3: Fold findings into the PLAN `[AI]`
 
-If self-review: switch framing — *you are now the reviewer*. Read the latest `NN_PLAN.md` critically against the PRD and project specs. Fill the matching `NN_REVIEW.md` with:
+There is no review loop. Edit `PLAN.md` **in place** to address every CRITICAL/HIGH finding — keep the `## Spec` self-contained. `REVIEW.md` and git history are the audit trail; do not add a response-matrix section. If a finding is genuinely architectural and warrants a redraft beyond in-place edits, halt and ask the user.
 
-- Verdict (Approved / Approved with Revisions / Rejected)
-- Blocking / Non-blocking counts
-- Findings (R-NNN) with Severity, Section, Problem, Why it matters, Recommendation
-- Trade-off Advice (TR-N)
-
-### 3.3 Loop if revisions needed
-
-If verdict is *Rejected* or *Approved with Revisions*:
-
-1. Copy `.ark/templates/PLAN.md` to `NN+1_PLAN.md` (next iteration number).
-2. Copy `.ark/templates/REVIEW.md` to `NN+1_REVIEW.md`.
-3. Edit `task.toml`: bump `iteration` to `NN+1`, set `phase = "plan"`, update `updated_at`.
-4. Fill `NN+1_PLAN.md`:
-   - Fill the `Response Matrix` in `## Log` — every prior CRITICAL/HIGH finding must appear with Accepted/Rejected/Deferred + reasoning.
-   - Revise the relevant sections. `## Spec` must stay self-contained (deltas go in `## Log`); it is the body of the future feature SPEC.
-5. `ark agent task review` — transition back to Review, ready for the next review pass.
-6. Fill `NN+1_REVIEW.md` with the next verdict.
-7. Repeat until verdict is *Approved* (zero open CRITICAL).
-
-**Max iterations** is recorded in `task.toml.max_iterations` (agent-judged — typically 3–5 for deep). If exhausted without approval, halt and ask the user how to proceed.
-
-### 3.4 Advance
-
-When the latest REVIEW is *Approved* with zero open CRITICAL:
+### Step 3.4: Advance `[AI]`
 
 ```bash
 ark agent task execute
@@ -170,58 +129,59 @@ ark agent task execute
 
 ## Phase 4 — EXECUTE
 
-### 4.0 Refresh phase context
+### Step 4.1: Refresh phase context `[AI]`
 
 ```bash
 ark context --scope phase --for execute --format json
 ```
 
-Returns current task + latest PLAN + git dirty files + project specs. Use the dirty-files list to know what's already in flight before you start editing.
+### Step 4.2: Implement `[AI]`
 
-### 4.1 Implement the plan
+Work through the latest PLAN's Implementation phases. Follow project specs and related feature SPECs. **If implementation reveals design gaps, update the latest PLAN's `## Spec` to reflect reality** — do not silently diverge.
 
-Work through the latest PLAN's Implementation phases. Follow project specs and related feature SPECs.
+Run project checks (tests, lints, builds).
 
-If implementation reveals gaps in the design, **update the latest PLAN's `## Spec` section** to reflect reality. Do not silently diverge.
-
-### 4.2 Run checks
-
-Run whatever checks the project enforces (tests, lints, builds). Implementation is complete when checks pass and code is committed (by the user).
-
-### 4.3 Advance
-
-Once code is committed:
+### Step 4.3: Advance `[AI]`
 
 ```bash
 ark agent task verify
 ```
 
-This transitions to Verify and seeds `VERIFY.md` from the embedded template.
+Seeds `VERIFY.md` with auto-populated sections.
 
 ## Phase 5 — VERIFY
 
-### 5.0 Refresh phase context
+### Step 5.1: Refresh phase context `[AI]`
 
 ```bash
 ark context --scope phase --for verify --format json
 ```
 
-Returns current task with PRD + latest PLAN + VERIFY.md path (if exists) + git state — the inputs a verifier needs to check plan-fidelity, correctness, and SPEC drift.
+### Step 5.2: Pick the verifier `[AI]` `[USER]`
 
-### 5.1 Act as verifier
+**STOP. Ask the user: `ark-verifier` subagent, a different model, or self-verify?** Wait for the answer; do not pick.
 
-Ideally a fresh agent or reviewer model. If self-verifying, apply the **higher quality bar**: this is not just "does it work" — it covers plan fidelity, correctness, code quality, organization, abstraction, and SPEC drift.
+- **`ark-verifier`:** dispatch it. Runs the project's build / test / lint / format-check; fills `VERIFY.md`. Does not self-fix — FAIL items return to the main session. `git status` after; `git restore` edits outside `VERIFY.md` and `git clean -fd` any new files.
+- **Self-verify:** apply the higher quality bar — plan fidelity, correctness, code quality, abstraction, SPEC drift. Resolve every item PASS / FAIL / N/A; capture cross-cutting observations as Findings (`V-NNN`) with a Resolution.
 
-Fill VERIFY.md:
-- Verdict (Approved / Approved with Follow-ups / Rejected)
-- Findings (V-NNN) with Severity, Scope, Location, Problem, Why it matters, Expected
-- Follow-ups (FU-NNN) if any
+**No verdict line — completion = no `PENDING`.**
 
-**VERIFY does not loop.** Single-pass gate.
+Stems `ark-researcher`/`ark-reviewer`/`ark-verifier` are reserved; user agents at those stems are overwritten on `init`/`upgrade`/`load`.
 
-### 5.2 Decide
+### Step 5.3: Close out `[AI]` then `[USER]`
 
-- **Approved / Approved with Follow-ups** → report the verdict to the user. If follow-ups exist, list them; they can create new tasks. Tell the user: "Stage your work with `git add <files>`, then run `/ark:commit -m \"<message>\"` to close out the task." Do NOT commit automatically — the staged-work precondition belongs to the user.
-- **Rejected** → halt. Summarize findings to the user and ask how to proceed (create fix tasks, promote tier via `ark agent task promote`, accept with acknowledgement, discard).
+- **All items resolved** → tell the user: *"Stage your work with `git add <files>`, then run `/ark:commit -m \"<message>\"`."* Do NOT commit automatically.
+- **Open Findings** → halt, summarize, ask the user how to proceed (fix tasks, tier promotion via `ark agent task promote`, accept with acknowledgement, discard).
 
-Closure is a separate user-invoked step. See `/ark:commit`. Bulk archive (post-closure) is a manager-only operation via the top-level `ark archive` CLI; slash commands no longer archive.
+## Failure Modes
+
+| Code | Cause | Recovery |
+|------|-------|----------|
+| `IllegalPhaseTransition` | `task <verb>` called from wrong phase | Re-check `task.toml.phase`; advance from the correct phase |
+| `WrongTier` | tier-specific verb on the wrong tier | Promote with `ark agent task promote --to <tier>` |
+| `TaskNotFound` | slug not in `tasks.active` | Check active set with `ark context --scope session` |
+
+## See Also
+
+- `workflow.md` §3 (tiers), §4 (phase contracts), §5 (lifecycle), §6 (specs)
+- `/ark:commit` — closure contract; `/ark:resume`, `/ark:discard` — focus / cleanup

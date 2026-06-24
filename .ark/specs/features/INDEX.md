@@ -1,8 +1,8 @@
 # Feature Specs
 
-Feature specifications extracted from deep-tier tasks on archive. Layout: `<feature>/SPEC.md`.
+Feature specifications extracted from deep-tier tasks at commit. Layout: `<feature>/SPEC.md`.
 
-The table below is managed by `ark agent spec register` — new rows appear when a deep-tier task is archived with a promoted SPEC. Do not hand-edit rows between the markers; edit outside the block or let the CLI do it.
+The table below is managed by `ark agent spec register` — new rows appear when a deep-tier task is committed with a promoted SPEC. **Do not hand-edit rows between the markers.** Edit outside the block, or let the CLI do it.
 
 ## Index
 
@@ -16,7 +16,7 @@ The table below is managed by `ark agent spec register` — new rows appear when
 
 ---
 
-## How to Use
+## How to use
 
-**When reading:** scan the table, open the SPEC for any feature you'll touch.
-**When a task modifies a feature SPEC:** update its `[**CHANGELOG**]` entry; Ark re-writes the table's `Promoted` column with the latest touch date.
+- **Read:** scan the table; open the SPEC for any feature you'll touch.
+- **Modify a feature SPEC:** append a `[**CHANGELOG**]` entry. Ark re-writes the `Promoted` column with the latest touch date.

@@ -25,3 +25,69 @@ journal_max_lines = 2000
 
 # Identity lives exclusively in `.ark/.developer` (gitignored). Bootstrap
 # via `ark init --developer <name>` or write the file manually.
+
+[upgrade]
+# Per-path strategy for `ark upgrade`. Paths are project-relative and must
+# stay inside the project (no absolute paths, no `..`). Both lists default
+# to empty — every path then follows the standard hash-classify pipeline.
+
+# `ejected` — Ark stops managing these paths entirely. They are never
+# written, deleted, prompted about, or classified. Ejection beats every
+# policy, including `--force`. Use it once you have taken ownership of a
+# shipped file and never want an upgrade to touch it again.
+ejected = []
+
+# `merged` — for these non-managed-block files, when both Ark's template and
+# your copy have changed, `ark upgrade` runs a diff3 3-way merge instead of
+# overwrite/skip. Clean merges apply silently; conflicts are written with
+# Git-style `<<<<<<<`/`=======`/`>>>>>>>` markers for you to resolve. A path
+# with no recorded base (e.g. one you diverged before listing it here) falls
+# back to the standard conflict prompt. Managed-block files (CLAUDE.md,
+# AGENTS.md) are rejected here — their block is already preserved on upgrade.
+merged = []
+
+[sandbox]
+# `ark sandbox` runs a task's worktree inside a container. Requires `docker`
+# on PATH. The cage confines filesystem + process to the worktree; it does
+# NOT confine network (the box has open outbound internet in v1).
+
+# Backend engine. Only "docker" is implemented today.
+engine = "docker"
+
+# Published image to pull and run. Defaults to the version-matched tag
+# `ghcr.io/anekoique/ark-sandbox:<ark-version>`; override to pin or to use a
+# private image. `ark sandbox create` pulls this image — it never builds.
+# image = "ghcr.io/anekoique/ark-sandbox:0.1.6"
+
+# Mount the git common dir read-write so the in-box agent can commit to its
+# branch. Set false for a workspace-only box where git is unavailable.
+mount_git = true
+
+# Host environment variables forwarded into the container, when set. Only
+# names listed here that actually exist on the host are passed; an unset
+# name is skipped. For subscription login, run `claude /login` once inside
+# the box instead — the token persists in the sandbox's named volume.
+#
+# Proxy variables get host-loopback addresses rewritten on forward —
+# `http://127.0.0.1:7897` on the host becomes `http://host.docker.internal:7897`
+# in the box, so a host-side proxy is reachable from inside the container
+# without manual rewriting. Uppercase is the formal spelling; add lowercase
+# explicitly (e.g. `https_proxy`) if your tools or shell only set that case.
+env_passthrough = [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+]
+
+# Bind-mount the host's `~/.claude`, `~/.claude.json`, `~/.codex`,
+# `~/.codex.toml`, `~/.gitconfig`, and `~/.config/git` into the box
+# read-write. The agent CLIs inherit the host's login and settings; git
+# inherits the host's identity so in-box commits use your `user.name` /
+# `user.email`. Default false (isolated): the box gets a per-task volume
+# that starts empty; you log in once inside it and set in-box git identity
+# explicitly. Setting true is more convenient — host login + git identity
+# carry over with no in-box setup — but the agent in /workspace can read
+# AND write to your host Anthropic / OpenAI session and git config.
+share_host_config = false

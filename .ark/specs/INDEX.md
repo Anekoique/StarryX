@@ -1,8 +1,10 @@
 # Specs
 
-Two layers under this directory:
+Two layers under this directory.
 
-- `project/` — user-authored conventions (language style, testing, architecture). Read before any task.
-- `features/` — feature specs promoted from deep-tier tasks at archive time.
+| Layer       | Path        | Authored by | Read pattern                                                            |
+| ----------- | ----------- | ----------- | ----------------------------------------------------------------------- |
+| Project     | `project/`  | User        | Read every entry before any task — these are conventions that always apply. |
+| Features    | `features/` | Promoted on deep-tier commit | Scan the index, then read only SPECs the task touches. |
 
-Each layer has its own `INDEX.md`. Start there.
+Each layer has its own `INDEX.md` — start there.

@@ -1,67 +1,47 @@
 ---
 description: Close out the current (or a named) Ark task. Atomically commits work + task.toml + (deep) SPEC in one git commit.
-argument-hint: "[-m <message>] [--no-commit] [<slug>]"
+argument-hint: "[-m <message>] [-a] [--no-commit] [<slug>]"
 ---
 
 # `/ark:commit $ARGUMENTS`
 
-Close an Ark task by committing the user's staged work plus the Ark-managed
-closure artifacts (updated `task.toml`, and on deep tier the promoted feature
-SPEC + features INDEX) in **one** git commit. Replaces the older
-`/ark:archive`; bulk archive is now a manager-only operation via the
-top-level `ark archive` CLI.
+Close an Ark task by committing the user's staged work plus the Ark-managed closure artifacts (updated `task.toml`; on deep tier, the promoted feature SPEC + features INDEX) in **one** git commit. Bulk archive is a separate manager-only operation via the top-level `ark archive` CLI.
 
 ## Preconditions
 
-- The task has reached its tier's pre-commit phase:
-  - Quick: `phase = "execute"`
-  - Standard / Deep: `phase = "verify"` (VERIFY.md filled in)
-- **The user has staged their work first.** `/ark:commit` only stages
-  Ark-managed closure artifacts; user code/edits must already be in the
-  index via `git add <files>`. If the staging area is empty, `task_commit`
-  errors with `NothingStaged`.
-- Deep tier: VERIFY.md has no `PENDING` checklist items or unresolved
-  findings (the gate refuses; resolve each before invoking).
-- Standard tier: any pending VERIFY entries warn but do not block.
+- Task has reached its tier's pre-commit phase:
+  - **Quick:** `phase = "execute"`
+  - **Standard / Deep:** `phase = "verify"` (VERIFY.md filled)
+- **User has staged work first.** `/ark:commit` only stages Ark-managed artifacts; user code must already be in the index. Empty staging area → `NothingStaged` error. Pass `-a` to stage every tracked + untracked change (`git add -A`) first; incompatible with `--no-commit`.
+- **Deep tier:** VERIFY.md has no `PENDING` items / unresolved Findings (gate refuses).
+- **Standard tier:** pending VERIFY entries warn but do not block.
 
 ## Steps
 
-### 1. Pull commit-phase context
+### Step 1: Pull commit-phase context `[AI]`
 
 ```bash
 ark context --scope phase --for commit --format json
 ```
 
-Returns paths to the latest VERIFY.md and the latest `NN_PLAN.md`, plus git
-state. Read VERIFY.md from the returned path before composing the commit
-message — flagged FAIL items or open Findings need acknowledgement, and the
-staged diff plus the recent `git log` style are the inputs to the message
-generator.
+Body-free projection (per `ark-context` SPEC). Returns paths to the latest VERIFY.md and `PLAN.md` plus git state. Read VERIFY.md from the returned path before composing the message.
 
-### 2. Resolve the slug
+### Step 2: Resolve the slug `[AI]`
 
-Parse `$ARGUMENTS`:
-- If a bare slug is supplied, use it.
-- Otherwise, default to this session's focused slug from `.ark/.state.toml`.
+Parse `$ARGUMENTS`. If a bare slug is present, use it; otherwise default to this session's focused slug.
 
-### 3. Compose the commit message
+### Step 3: Compose the commit message `[AI]` `[USER]`
 
 If `$ARGUMENTS` includes `-m "<msg>"`, use it verbatim. Otherwise:
 
-1. Run `git diff --cached` to see what the user staged.
-2. Run `git log -n 5 --oneline` to mirror the project's commit-message style.
-3. Generate a Conventional Commits message that summarizes the staged diff
-   in one short subject line (≤ 70 chars), with optional body lines for
-   non-trivial changes.
-4. Show the generated message to the user and ask for confirmation/edit
-   before invoking the CLI. **Do not invent a message without asking.**
+1. `git diff --cached` — see what the user staged.
+2. `git log -n 5 --oneline` — mirror the project's commit-message style.
+3. Generate a Conventional Commits subject (≤70 chars) + optional body for non-trivial changes.
+4. Show the message to the user and ask for confirmation/edit. **Do not invent a message without asking.**
 
-### 4. Append the journal entry (workspace)
+### Step 4: Append the journal entry (workspace) `[AI]`
 
-If `.ark/.developer` exists, append a session block **directly to the
-active journal file** (its path is in the `active_journal_path` field of
-`ark context --scope record`). The block must include exactly three
-agent-authored sections, in this order:
+If `.ark/.developer` exists, append a session block to the active journal at `active_journal_path` (from `ark context --scope record`):
 
 ```markdown
 ## Session N: <title>
@@ -77,61 +57,48 @@ agent-authored sections, in this order:
 | <area> | <description> |
 ```
 
-Do **not** write `**Date**`, `**Slug**`, `**Branch**`, `**Base Branch**`,
-`**Start Head**`, `**Closing Commit**`, or `### Git Commits`. The CLI
-inserts those auto-fields after your `## Session N: <title>` heading
-during `task commit`. Show the user what you wrote and let them revise
-before continuing.
+The CLI inserts `**Date**`, `**Slug**`, `**Branch**`, `**Base Branch**`, `**Start Head**`, `**Closing Commit**`, and `### Git Commits` after your `## Session N:` heading. Do not write them.
 
-If `.ark/.developer` is absent, skip this step. The journal write is
-silently skipped on installs without identity.
+**Style — keep it tight.**
+- `### Summary`: one line, ≤120 chars. Lead with the user-visible effect. Drop "now" / "currently" / "going forward".
+- `### Main Changes`: ≤4 rows, one line per cell, ≤80 chars. No nested code blocks. Drop incidental rows (`tests`, `template parity`, `doc updates`, downstream SPEC amendments) unless that *is* the change. Skip the row rather than pad it.
 
-### 5. Run the commit
+If `.ark/.developer` is absent, skip this step.
+
+### Step 5: Run the commit `[AI]`
 
 ```bash
 ark agent task commit -m "<message>"
+# pass -a to stage every tracked + untracked change before committing:
+ark agent task commit -a -m "<message>"
 # or to skip the git commit entirely:
 ark agent task commit --no-commit
 ```
 
-`--no-commit` skips the git commit but still flips phase to `Committed`
-and (deep tier) extracts the SPEC. The user is responsible for any
-follow-up commit.
+`--no-commit` flips phase to `Committed` and (deep tier) extracts the SPEC, but skips the git commit. The user owns any follow-up commit.
 
-The CLI does:
-- VERIFY gate check (deep refuses on `PENDING`; standard warns).
-- Deep tier: SPEC extraction (`specs/features/<slug>/SPEC.md`) + features
-  INDEX upsert.
-- Save updated `task.toml` (phase = `Committed`, `committed_at = now`).
-- Stage exactly the Ark-managed files (task.toml, plus on deep tier the
-  SPEC + features INDEX) — **not** `git add -A`.
-- Run `git commit -m "<message>"`.
+The CLI does (in order): VERIFY gate → deep-tier SPEC extraction (`specs/features/<slug>/SPEC.md`) + features INDEX upsert → save `task.toml` (`phase = Committed`, `committed_at = now`) → stage exactly the Ark-managed files (no `git add -A`) → `git commit -m "<message>"`.
 
-If `git commit` fails (pre-commit hook rejects, etc.), `task_commit` rolls
-back every snapshot it took: `task.toml` restored, deep-tier SPEC files
-restored, and the targeted `git reset HEAD <ark-files>` unstages only what
-ark added. The user's pre-existing index entries are preserved.
+If `git commit` fails, a scoped rollback restores every snapshot (task.toml, deep-tier SPEC + features INDEX) and unstages only what Ark added — the user's pre-existing index entries survive.
 
-### 5. Report to user
+### Step 6: Report `[AI]`
 
 After success, summarize:
 - The commit SHA (`summary.head_sha`).
 - Deep tier only: the promoted SPEC path.
-- A note that **no Ark-managed file is dirty** post-commit. (The user's
-  pre-existing unstaged files outside Ark's purview were intentionally
-  not touched, by design.)
+- A note that no Ark-managed file is dirty post-commit.
 
-## Failure modes
+## Failure Modes
 
-- `NothingStaged` — staging area is empty. Tell the user to `git add <files>`
-  first.
-- `VerifyIncomplete` (deep tier) — VERIFY.md has `PENDING` items or
-  findings. Tell the user which counts and to resolve each.
-- `CommitMessageRequired` — the CLI was invoked without `-m` and without
-  `--no-commit`. The slash command should have generated and confirmed the
-  message before reaching this; treat as a logic bug.
-- `GitCommitFailed` — the pre-commit hook (or git itself) rejected the
-  commit. Surface the original `stderr` to the user; rollback already
-  happened. Re-run after fixing the hook.
-- `IllegalPhaseTransition` — the task is not in its pre-commit phase. Tell
-  the user which phase it's in and what's expected.
+| Code | Cause | Recovery |
+|------|-------|----------|
+| `NothingStaged` | empty staging area | User runs `git add <files>` first |
+| `VerifyIncomplete` (deep) | VERIFY.md has `PENDING` items / Findings | Resolve each, then re-run |
+| `CommitMessageRequired` | invoked without `-m` and without `--no-commit` | Logic bug — Step 3 should have produced one |
+| `GitCommitFailed` | pre-commit hook (or git) rejected | Surface stderr to user; rollback already happened; re-run after fixing the hook |
+| `IllegalPhaseTransition` | task not in pre-commit phase | Tell the user current phase + expected |
+
+## See Also
+
+- `workflow.md` §4 (commit phase contract), §7 (CLI surfaces)
+- `/ark:design`, `/ark:quick` — task creators that flow into `/ark:commit`

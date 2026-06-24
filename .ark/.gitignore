@@ -3,3 +3,5 @@ worktrees/
 .state.toml.lock
 .state.toml.tmp.*
 .developer
+.upgrade-base/
+.upgrade-backup/

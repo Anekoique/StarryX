@@ -1,80 +1,51 @@
-# `{Feature Name}` PLAN `{NN}`
+# `<feature-name>` PLAN
 
-> Status: Draft | Revised | Approved for Implementation
-> Feature: `{feature-name}`
-> Iteration: `{NN}`
+> Status: Draft | Approved for Implementation
+> Feature: `<feature-name>`
 > Owner: Executor
-> Depends on:
-> - Previous Plan: `{NN-1_PLAN.md | none}`
-> - Review: `{NN_REVIEW.md | none}`
-> - Master Directive: `{NN_MASTER.md | none}`
 
 ---
 
 ## Summary
-`{A concise summary of the proposal in this round.}`
 
-## Log `{None in 00_PLAN}`
+<one paragraph: what this PLAN proposes>
 
-[**Added**]
-`{newly added content}`
-`{new design / validation / constraint}`
-
-
-
-[**Changed**]
-`{what changed}`
-`{why it changed}`
-
-
-
-[**Removed**]
-`{what was removed}`
-`{why it was removed}`
-
-
-
-[**Unresolved**]
-`{what remains open}`
-`{why it is still unresolved}`
-
-
-
-[**Response Matrix**]
-
-| Source | ID | Decision | Resolution |
-|--------|----|----------|------------|
-| Review | R-001 | Accepted | `{what changed in this plan}` |
-| Review | R-002 | Rejected | `{reason for rejecting it}` |
-| Master | M-001 | Applied | `{how it was implemented}` |
-
-> Rules:
-> - Every prior HIGH / CRITICAL finding must appear here.
-> - Every Master directive must appear here.
-> - Rejections must include explicit reasoning.
+> Deep tier: REVIEW findings are folded into this PLAN in place before EXECUTE — there is no iteration history to track here.
 
 ---
 
-## Spec `{Core specification}`
+## Spec
+
+> This section is the durable design record. On deep-tier commit, it is copied **verbatim** into `specs/features/<slug>/SPEC.md`. Keep it tight: the SPEC is what future readers consult to understand what was built, not why each step happened. Why-explanations belong in `## Trade-offs`. Implementation steps belong in `## Implementation`. The Spec is the contract.
 
 [**Goals**]
-`{Clear definition of the "What" and "Why".}`
-- G-1: ...
-- G-2: ...
-- G-3: ...
 
-- NG-1: ...
-- NG-2: ...
+> One line per bullet, ≤80 chars, verb-led, capability-oriented (the *what*, not the *how*). Soft cap: 5. If you have more goals, you are listing implementation steps — promote them to Constraints or drop them.
+>
+> Good: `G-1: ark context prints a JSON snapshot of git + tasks + specs.`
+> Bad:  `G-1: Two flags control output: --scope {session|phase} and --for {design|...} ...`  ← that's a Constraint.
 
+- G-1:
+- G-2:
+- G-3:
 
+[**Non-goals**]
+
+> Only list when a reasonable reader would assume the item is in scope. Skip blanket exclusions of features nobody requested. Soft cap: 3.
+
+- NG-1:
 
 [**Architecture**]
-`{System diagram or component interaction logic.}`
 
+> Module / file layout with a one-line note per file. Prefer a tree or diagram; avoid prose narration.
 
+```
+<directory tree or component diagram>
+```
 
 [**Data Structure**]
-`{Core types (structs, enums, traits).}`
+
+> Public types only. Field names + types + a one-line comment when meaning is non-obvious.
 
 ```rust
 struct ...
@@ -82,105 +53,87 @@ enum ...
 trait ...
 ```
 
-
-
 [**API Surface**]
-`{Function signatures and interface semantics.}`
+
+> Public function signatures + one-line semantics. No bodies.
 
 ```rust
 fn ...
 ```
 
-
-
 [**Constraints**]
-`{Limitations and Boundaries of the API or Related Functionality.}`
 
-- C-1: ...
-- C-2: ...
-- C-3: ...
+> Invariants the implementation must hold, each a two-line bullet. Line 1 is the actuator tag `- C-N: @<kind>[: <arg>]` — `tool`, `source-scan` (`<pattern> @ <glob>`), `test-binding` (a test id), or `judgment`; the arg names a real test or command, never a `V-*` label. Line 2 is one declarative sentence (≤120 chars). The *why* belongs in Trade-offs, not here.
+>
+> Good:
+> - C-1: @test-binding: <your_test_fn_name>
+> ark context emits exactly one stdout write per invocation.
+>
+> Bad (elaboration is the *how*, belongs in Implementation): `ark context emits one stdout write: JSON via a pre-rendered string + newline, text via a single Display write. No interspersed debug prints.`
 
+- C-1: @judgment
+<constraint>
+- C-2: @judgment
+<constraint>
 
+---
 
-## Runtime `{runtime logic}`
+## Runtime
 
 [**Main Flow**]
-1. ...
-2. ...
-3. ...
 
-
+1.
+2.
 
 [**Failure Flow**]
-1. ...
-2. ...
-3. ...
 
-
+1.
+2.
 
 [**State Transitions**]
 
-- State A -> State B when ...
-- State B -> State C when ...
+- State A → State B when …
 
+---
 
-
-## Implementation `{split task into phases}`
+## Implementation
 
 [**Phase 1**]
 
-
-
 [**Phase 2**]
-
-
 
 [**Phase 3**]
 
+---
 
+## Trade-offs
 
-## Trade-offs `{ask reviewer for advice}`
-`{Provide detailed possible options and their respective adv. and disadv.}`
+- T-1: <option A vs option B; adv. / disadv.>
+- T-2:
 
-- T-1: ...
-- T-2: ...
-- T-3: ...
+---
 
-
-
-## Validation `{test design}`
-`{Specific situations require specific analysis. Parts can be none for some situations.}`
+## Validation
 
 [**Unit Tests**]
-- V-UT-1: ...
-- V-UT-2: ...
 
-
+- V-UT-1:
 
 [**Integration Tests**]
-- V-IT-1: ...
-- V-IT-2: ...
 
+- V-IT-1:
 
+[**Failure / Robustness**]
 
-[**Failure / Robustness Validation**]
-- V-F-1: `{validate failure behavior under ...}`
-- V-F-2: `{validate retry / rollback / abort behavior}`
-- V-F-3: `{validate crash / timeout / interruption handling}`
+- V-F-1: <failure / retry / rollback / crash / timeout>
 
+[**Edge Cases**]
 
-
-[**Edge Case Validation**]
-- V-E-1: `{duplicate request}`
-- V-E-2: `{empty / max / invalid input}`
-- V-E-3: `{concurrency / ordering / boundary condition}`
-
-
+- V-E-1: <duplicate / empty / max / invalid input / concurrency / boundary>
 
 [**Acceptance Mapping**]
 
 | Goal / Constraint | Validation |
 |-------------------|------------|
-| G-1 | ... |
-| C-1 | ... |
-| C-2 | ... |
+| G-1 | … |
+| C-1 | … |

@@ -1,197 +1,382 @@
 # Ark Workflow
 
-How work flows from intent to archive. Read before starting any task.
+The CLI drives the workflow. Every transition is an `ark` command. Read this once; return to a section when you need detail.
 
 ---
 
-## 1. Principles
+## Quick Start
 
-1. **Right ceremony for the right task.** Three tiers. Pick the smallest that fits.
-2. **Intent before edits.** Write down what the change is before touching code.
-3. **Review is a gate, not a ritual.** Verdicts block progress; do not fabricate compliance.
-4. **Archive is memory.** Every completed task leaves a traceable record.
+### Step 1: Get session context
+
+```bash
+ark context
+```
+
+Shows git state, active tasks, project specs, feature specs, recent archive, current focus.
+
+### Step 2: Read project specs
+
+Read every SPEC listed under `specs.project` in the context output. These conventions always apply.
+
+```bash
+cat .ark/specs/project/INDEX.md
+cat .ark/specs/project/<name>/SPEC.md   # one per row
+```
+
+### Step 3: Pick a tier and start
+
+```bash
+/ark:quick "<title>"               # trivial, reversible — PRD only
+/ark:design "<title>"              # standard — PRD + PLAN + VERIFY
+/ark:design --deep "<title>"       # deep — adds REVIEW + promoted SPEC
+/ark:research "<topic>"            # research — corpus IS the deliverable; follow-up optional
+```
 
 ---
 
-## 2. Layout
+## Tiers
+
+Pick the smallest tier that fits.
+
+- **Quick** — reversible in one commit, no new abstractions. Artifact: `PRD.md`.
+- **Standard** — feature work with testable scope, no API/architecture break. Artifacts: `PRD.md`, `PLAN.md`, `VERIFY.md`.
+- **Deep** — architectural, cross-cutting, or new subsystem. Artifacts: `PRD.md`, `PLAN.md`, `REVIEW.md`, `VERIFY.md`, promoted `SPEC.md`.
+- **Research** — knowledge-gathering; corpus IS the deliverable; follow-up implementation optional. Artifacts: `PRD.md`, `research/`.
+
+Promote mid-flight when scope grows: `ark agent task promote --to <tier>`. Prior artifacts are preserved. **Research tier does not participate in promotion** — cross-over between research and tiered implementation is by a fresh `task new` whose PRD cites the research slug in prose.
+
+When in doubt, pick lower. Promotion is cheap; demotion is awkward.
+
+---
+
+## Layout
 
 ```
 .ark/
 ├── workflow.md
-├── templates/             # read-only source templates
+├── templates/                # seed templates (read-only)
+├── tasks/<slug>/             # active task
+│   ├── task.toml             # phase, tier, dates
 │   ├── PRD.md
 │   ├── PLAN.md
-│   ├── REVIEW.md
-│   ├── VERIFY.md
-│   └── SPEC.md
-├── tasks/
-│   ├── <slug>/            # active task
-│   │   ├── task.toml      #   phase, tier, dates
-│   │   ├── PRD.md         #   all tiers — design-phase artifact
-│   │   ├── NN_PLAN.md     #   standard (NN=00) / deep (iterated)
-│   │   ├── NN_REVIEW.md   #   deep only — pairs with NN_PLAN
-│   │   └── VERIFY.md      #   standard + deep
-│   └── archive/YYYY-MM/<slug>/
+│   ├── REVIEW.md             # deep only
+│   └── VERIFY.md             # standard + deep
+├── tasks/archive/YYYY-MM/<tier>/    # closed tasks, bucketed by tier (see INDEX.md)
 └── specs/
-    ├── project/<name>/SPEC.md     # user-authored conventions
-    └── features/<name>/SPEC.md    # promoted on archive (deep)
+    ├── project/<name>/SPEC.md     # user-authored
+    └── features/<...>/<name>/SPEC.md    # promoted on deep commit (recursive tree)
 ```
 
 ---
 
-## 3. Tiers
+## Lifecycle
 
-| Tier     | Claude command       | Codex skill   | OpenCode command     | Artifacts                                                               | Path through states                                              |
-| -------- | -------------------- | ------------- | -------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Quick    | `/ark:quick`         | `ark-quick`   | `/ark:quick`         | `PRD.md`                                                                | design → execute → committed → archived                          |
-| Standard | `/ark:design`        | `ark-design`  | `/ark:design`        | `PRD.md`, `PLAN.md`, `VERIFY.md`                                        | design → plan → execute → verify → committed → archived          |
-| Deep     | `/ark:design --deep` | `ark-design`  | `/ark:design --deep` | `PRD.md`, `NN_PLAN.md`, `NN_REVIEW.md`, `VERIFY.md`, promoted `SPEC.md` | design → plan ⇄ review → execute → verify → committed → archived |
-
-PRD captures *what we're building and why*. PLAN elaborates *how*. VERIFY is a living checklist + findings document the implementer maintains during EXECUTE → COMMIT (no verdict, no loop; completion = no `PENDING` items or findings). `/ark:commit` atomically lands work + task.toml + (deep) SPEC + features INDEX in one git commit. Archive is a manager-only bulk operation via the top-level `ark archive` CLI; slash commands no longer archive.
+Each phase: pull context, run the CLI, write the artifact, advance.
 
 ```
-quick:    reversible + no new abstractions
-deep:     breaking / cross-cutting / new subsystem
-standard: everything else
+DESIGN  → PLAN  → REVIEW  → EXECUTE  → VERIFY  → COMMIT  → (later) ARCHIVE
+            quick skips PLAN/REVIEW/VERIFY; standard skips REVIEW
+RESEARCH → COMMIT → (later) ARCHIVE          research tier (no PLAN/REVIEW/EXECUTE/VERIFY)
 ```
 
-Promote mid-flight with `ark agent task promote --to <tier>`; prior artifacts are preserved.
+### DESIGN — write PRD
 
-To run multiple tasks in parallel without `.current` collisions, pass `--worktree` at scaffold time: `ark agent task new --slug foo --tier <t> --worktree` creates branch `feat/foo` (override with `--branch-type fix|refactor|...` or `--branch <full>`) at `.ark/worktrees/<branch>/` and scaffolds the task dir inside it. The parent checkout's `.current` is untouched. Configure copies and post-create hooks via `.ark/config.toml`'s `[worktree]` section (user-editable; preserved across `ark upgrade`).
-
----
-
-## 4. Lifecycle
-
-```
-       ┌────────────┐
-       │  /ark:*    │  slash command starts a task
-       └─────┬──────┘
-             ▼
-       ┌────────────┐
-       │  DESIGN    │  write PRD.md — What / Why / Outcome
-       └─────┬──────┘
-             │  (quick skips plan/review/verify)
-             ▼
-       ┌────────────┐
-       │    PLAN    │  write NN_PLAN.md — elaborate how
-       └─────┬──────┘
-             │         (deep only — plan review loop)
-             │         ┌──────────────┐
-             ├────────►│    REVIEW    │  NN_REVIEW.md
-             │         └──────┬───────┘
-             │ ◄─── rejected ─┘
-             ▼
-       ┌────────────┐
-       │  EXECUTE   │  implement; update PLAN's Spec section if gaps emerge
-       └─────┬──────┘
-             ▼
-       ┌────────────┐
-       │   VERIFY   │  living checklist + findings; complete when
-       └─────┬──────┘  no `PENDING` items or findings remain
-             ▼
-       ┌────────────┐
-       │   COMMIT   │  atomic: VERIFY gate, deep-tier SPEC extract,
-       └─────┬──────┘  one git commit covering work + task.toml +
-             │        (deep) SPEC + features INDEX
-             │
-             ▼  (later, manager-invoked)
-       ┌────────────┐
-       │  ARCHIVE   │  `ark archive` (top-level CLI, manager-only)
-       └────────────┘  bulk-moves committed tasks to
-                       tasks/archive/YYYY-MM/, side-effect-free
+```bash
+ark context --scope phase --for design --format json
+ark agent task new --slug <slug> --title "<title>" --tier <quick|standard|deep|research> [--worktree]
 ```
 
-Each stage below names its **purpose**, the **calls** to make, and the **gate** to advance.
+- Read every project SPEC and any related feature SPECs from the context output.
+- Brainstorm: quick = none; standard ≤3 questions; deep = thorough.
+- Fill `PRD.md`: **What** / **Why** / **Outcome** / **Related Specs** / **SPEC Path** (deep only).
+- Deep tier: `--worktree` is required; then `cd .ark/worktrees/<branch>/`.
 
-### DESIGN — capture what & why
+**SPEC Path (deep only):** body is a single `/`-separated path relative to `specs/features/`, ending in the task slug. Examples: `xemu/csr`, `klib`, `core/runtime/scheduler`. `task commit` extracts the deep-tier `## Spec` to `features/<path>/SPEC.md` and upserts INDEX rows from leaf to root. Missing or malformed block → `FeaturePathMissing` / `InvalidFeaturePath` at commit time. Quick / standard tiers ignore the block.
 
-- **Purpose:** write `PRD.md` (What / Why / Outcome / Related Specs). Brainstorm: quick = none, standard = ≤3 clarifying questions, deep = thorough.
-- **Calls:**
-  - `ark context --scope phase --for design` — orient on git, project specs, feature specs index, recent archive.
-  - `ark agent task new --slug <s> --title "<t>" --tier {quick|standard|deep} [--worktree]` — scaffolds the task dir + PRD + `task.toml`. Pass `--worktree` to bind the task to a fresh git worktree at `.ark/worktrees/<branch>/` (see §3 and §6).
-- **Gate:** PRD drafted, Outcome stated. Quick → EXECUTE; standard/deep → PLAN.
+**Gate:** PRD has What, Why, Outcome filled (deep also requires SPEC Path). Quick → EXECUTE; standard/deep → PLAN.
 
 ### PLAN — elaborate how
 
-- **Purpose:** fill `NN_PLAN.md` from the embedded template (Spec, Runtime, Implementation, Trade-offs, Validation). Every Goal mapped to ≥1 Validation.
-- **Calls:**
-  - `ark context --scope phase --for plan` — pulls current PRD + related feature specs (filtered to the PRD's `[**Related Specs**]`) + project specs.
-  - `ark agent task plan` — transitions DESIGN → PLAN and seeds `00_PLAN.md`.
-- **Gate:** PLAN complete; Acceptance Mapping fills every Goal. Standard → EXECUTE; deep → REVIEW.
-- **Rule:** `## Spec` must be self-contained every iteration (deltas go in `## Log`). It is copied verbatim to `specs/features/<name>/SPEC.md` on archive.
+```bash
+ark context --scope phase --for plan --format json
+ark agent task plan
+```
 
-### REVIEW — pre-execute gate (deep only, iterative)
+Fill the seeded `PLAN.md` (standard and deep):
 
-- **Purpose:** evaluate the latest `NN_PLAN.md` against PRD and project specs; write `NN_REVIEW.md` with verdict + findings. Loop until verdict = *Approved* with zero open CRITICAL.
-- **Calls:**
-  - `ark context --scope phase --for review` — pulls current task, latest PLAN, related feature specs, project specs.
-  - `ark agent task review` — transitions PLAN → REVIEW and seeds `NN_REVIEW.md`.
-- **Reject (HIGH)** if the latest PLAN's `## Spec` references prior iterations instead of restating in full.
-- **Iteration:** copy `NN_PLAN.md`/`NN_REVIEW.md` to the next number, bump `task.toml.iteration`, reset `phase = "plan"` (hand-edited; the state machine is small).
-- **Gate:** verdict *Approved*, zero open CRITICAL. → EXECUTE.
+- **Summary** — one paragraph.
+- **Spec** — Goals (`G-N`), Non-goals, Architecture, Data Structure, API Surface, Constraints (`C-N`). **Self-contained.** Promoted verbatim to `specs/features/<slug>/SPEC.md` on deep commit.
+- **Runtime** — main / failure flow + state transitions.
+- **Implementation** — phases.
+- **Trade-offs** — options with adv. / disadv.
+- **Validation** — Unit / Integration / Failure / Edge tests + Acceptance Mapping.
+
+**Gate:** every `G-N` mapped to ≥1 `V-*-N` in Acceptance Mapping.
+
+```bash
+ark agent task execute   # standard → EXECUTE
+ark agent task review    # deep → REVIEW
+```
+
+### REVIEW — deep only, single pass
+
+```bash
+ark context --scope phase --for review --format json
+```
+
+**STOP. Ask the user which reviewer to use: `ark-reviewer` subagent, a different model, or self-review.** Do not pick on the user's behalf.
+
+The chosen reviewer fills `REVIEW.md`:
+
+- Verdict: Approved / Approved with Revisions / Rejected.
+- Findings (`R-NNN`): Severity, Section, Problem, Why it matters, Recommendation.
+- Trade-off Advice (`TR-N`).
+
+Reject as HIGH if the PLAN's `## Spec` is not self-contained (leans on external docs or diff-style phrasing).
+
+There is no review loop. Fold every CRITICAL/HIGH finding into `PLAN.md` by editing it in place — keep the `## Spec` self-contained — then advance:
+
+```bash
+ark agent task execute   # → EXECUTE
+```
 
 ### EXECUTE — implement
 
-- **Purpose:** work through the latest PLAN's Implementation phases. If implementation reveals design gaps, **update the latest PLAN's `## Spec` section** to reflect reality.
-- **Calls:**
-  - `ark context --scope phase --for execute` — git dirty files + current task + latest PLAN + project specs.
-  - `ark agent task execute` — transitions to EXECUTE.
-- **Gate:** implementation complete; project's checks pass.
-- **Worktree note:** if the task was created with `--worktree`, all phase commands (plan/review/execute/verify/commit) operate on the *worktree's* `.ark/`. `cd .ark/worktrees/<branch>/` and run them there. After merging the branch, run `ark agent task worktree cleanup --slug <s> [--delete-branch]` from the parent to remove the dir; archive does NOT auto-clean.
+```bash
+ark context --scope phase --for execute --format json
+```
 
-### VERIFY — living checklist + findings
+- Work through the latest PLAN's Implementation phases.
+- Follow project SPECs and related feature SPECs.
+- If implementation reveals design gaps, **update the latest PLAN's `## Spec`**. Do not silently diverge.
+- Keep Ark workflow context (SPEC-rule labels, task slugs, iteration numbers, finding IDs) out of shipped source — comments, identifiers, tests, errors, logs.
+- Run project checks (tests, lints, builds).
 
-- **Purpose:** maintain `VERIFY.md` as the implementer audits the shipped code against project specs, related feature specs, PRD constraints, plan goals, and SPEC drift. Each section's items resolve to PASS / FAIL / N/A; findings (V-NNN) capture cross-cutting observations with a Resolution. **No verdict line.**
-- **Calls:**
-  - `ark context --scope phase --for verify` — current task with PRD + latest PLAN + VERIFY.md path + git state.
-  - `ark agent task verify` — transitions to VERIFY and seeds `VERIFY.md` with sections auto-populated from project SPEC INDEX, the PRD's Related Specs and Outcome, and the latest PLAN's Goals.
-- **Gate:** every checklist item has a non-`PENDING` state and every finding's Resolution is non-`PENDING`. Then run `/ark:commit`. Deep tier refuses commit when any `PENDING` remains; standard warns; quick has no VERIFY.
+```bash
+ark agent task verify    # → VERIFY (seeds VERIFY.md)
+```
 
-### COMMIT — atomic closure
+### VERIFY — audit shipped code
 
-- **Purpose:** land the user's staged work alongside the Ark-managed closure artifacts (updated `task.toml`, deep-tier promoted SPEC + features INDEX) in **one** git commit. Replaces the older slash-command archive step; bulk archive (post-closure) is a separate manager-only operation.
-- **Preconditions:** user has staged work (`git add <files>`); deep-tier VERIFY has no `PENDING`.
-- **Calls:**
-  - `ark context --scope phase --for commit` — paths to VERIFY.md and the latest plan, plus git state. **Body-free** by design — slash commands read the artifact files from the returned paths.
-  - `ark agent task commit -m "<message>"` (hidden CLI; user-facing slash command is `/ark:commit`). Performs: VERIFY gate; deep-tier SPEC extract; save `task.toml` (`phase = Committed`, `committed_at = now`); explicit per-file `git add` of only Ark-managed artifacts; `git commit -m "<message>"`. On any failure, a scoped `RollbackGuard` restores every snapshot it took (task.toml, deep-tier SPEC + features INDEX) and unstages only what Ark added — the user's pre-existing index entries survive.
-- **`--no-commit`:** skips the git commit but still flips phase to `Committed` and (deep tier) extracts SPEC. The user owns any follow-up commit.
+```bash
+ark context --scope phase --for verify --format json
+```
 
-### ARCHIVE — manager-only bulk operation
+**STOP. Ask the user which verifier to use: `ark-verifier` subagent, a different model, or self-verify.** Do not pick on the user's behalf.
 
-- **Purpose:** sweep every `phase = Committed` task into `tasks/archive/YYYY-MM/<slug>/` using each task's own `committed_at` for the month bucket. Side-effect-free: no SPEC promotion — that already happened at commit time.
-- **Calls:**
-  - `ark archive [--month YYYY-MM] [--dry-run]` — top-level CLI, visible in `ark --help`. Default: archive every committed task. `--month` filters to one bucket. `--dry-run` lists candidates without moving.
-  - `ark agent task archive --slug <s> [--month YYYY-MM]` — hidden internal helper for one-off archive moves; defaults `--month` to the task's own `committed_at`.
-- **Reopen:** move the archived dir back to `.ark/tasks/<slug>/` and hand-edit `task.toml` to `phase = "verify"` + clear `archived_at`. Refuse if a same-slug active task exists.
+`VERIFY.md` is seeded with auto-populated checklist sections. Resolve each item:
 
+- **Project Spec Compliance** — one item per registered SPEC. Mark PASS / FAIL / N/A with explanation.
+- **Related Feature Spec Compliance** — one item per SPEC the PRD listed.
+- **PRD Constraints** — one item per Outcome criterion.
+- **Plan Fidelity** — one item per Goal `G-N`. PASS when delivered, FAIL when not, N/A when withdrawn (PLAN's Log explains).
+- **SPEC Drift** — PASS once any modified feature SPEC has a `[**CHANGELOG**]` entry.
+
+Add **Findings** (`V-NNN`) for cross-cutting issues that don't map to a single seeded item: Severity, Location, Problem, Why it matters, Recommendation, Resolution (`PENDING` / `FIXED in <ref>` / `ACCEPTED — <reason>`).
+
+**Gate:** no item is `PENDING`. No verdict line. Quality bar covers plan fidelity, correctness, code quality, abstraction, SPEC drift — not just "does it work".
+
+When all items resolve, tell the user:
+
+> Stage your work with `git add <files>`, then run `/ark:commit -m "<message>"`.
+
+Do not commit automatically — staging is the user's step.
+
+### COMMIT — close atomically
+
+```bash
+git add <files>                                          # USER stages work first
+ark context --scope phase --for commit --format json
+ark agent task commit -m "<message>"
+# or:  ark agent task commit --no-commit
+```
+
+**Preconditions:**
+- User has staged their work (CLI errors `NothingStaged` on empty index).
+- Quick: `phase = execute`. Standard / Deep: `phase = verify`.
+- Deep: VERIFY has no `PENDING` (refused as `VerifyIncomplete`). Standard: PENDING warns but proceeds.
+
+**Compose the message:**
+- If `-m` was passed, use verbatim.
+- Otherwise: `git diff --cached` to see staged work, `git log -n 5 --oneline` for style, generate Conventional Commits subject (≤70 chars). **Show the message and ask for confirmation before invoking the CLI.**
+
+**Journal entry (workspace, when `.ark/.developer` exists):** append a session block to the path returned by `ark context --scope record`:
+
+```markdown
+## Session N: <title>
+
+### Summary
+
+<one line ≤120 chars; user-visible effect>
+
+### Main Changes
+
+| Area   | Description |
+| ------ | ----------- |
+| <area> | <≤80 chars> |
+```
+
+Do not write `**Date**`, `**Slug**`, `**Branch**`, etc. — `task commit` stamps them. Keep Main Changes ≤4 rows; skip incidental rows rather than pad.
+
+**The CLI does, in order:**
+1. VERIFY gate.
+2. Deep: parse PRD `[**SPEC Path**]`; extract `## Spec` to `specs/features/<path>/SPEC.md`; upsert every INDEX along the leaf-to-root path (seeding missing subtree INDEXes from the template).
+3. Save `task.toml` with `phase = Committed`, `committed_at = now`.
+4. Stage exactly the Ark-managed files (no `git add -A`).
+5. `git commit -m "<message>"`.
+
+**On `git commit` failure:** scoped rollback restores all snapshots and unstages only what Ark added. User's pre-existing index entries survive.
+
+`--no-commit` flips phase + extracts SPEC but skips `git commit`. User owns any follow-up commit.
+
+**Failure modes:** `NothingStaged` → user runs `git add`. `VerifyIncomplete` → resolve PENDING items. `CommitMessageRequired` → slash command logic bug. `GitCommitFailed` → surface stderr; rollback already happened. `IllegalPhaseTransition` → wrong phase; tell the user the current one.
+
+### ARCHIVE — manager-only bulk move
+
+```bash
+ark archive                       # all committed tasks
+ark archive --month 2026-05       # one bucket
+ark archive --dry-run             # list candidates only
+```
+
+Moves every `phase = Committed` task to `tasks/archive/YYYY-MM/<tier>/<slug>/`. Month derived from each task's own `committed_at`, tier from its `task.toml`. Side-effect-free for tasks — no SPEC promotion (already happened on commit), no journal writes. A real run then regenerates `tasks/archive/INDEX.md` (tier-grouped index) from the tree; `--dry-run` does not.
+
+Reopen by hand: move the archived dir back to `.ark/tasks/<slug>/`, set `phase = "verify"`, clear `archived_at`. Refused if a same-slug active task exists.
 
 ---
 
-## 5. Specs
+## Research
 
-Two layers: `specs/project/<name>/SPEC.md` (user-authored conventions) and `specs/features/<name>/SPEC.md` (extracted from deep-tier PLANs on archive).
+A research task gathers a reference corpus on a question — the corpus IS the deliverable, follow-up implementation is optional.
 
-**Read pattern.**
-- **Project specs** — read every SPEC listed in `specs/project/INDEX.md` before any task. These are conventions that apply always.
-- **Feature specs** — scan `specs/features/INDEX.md`, then read only the SPECs the task touches. Record them in PRD's `[**Related Specs**]` so VERIFY can check adherence. The DESIGN/PLAN/REVIEW context calls above expose both indices in their JSON output.
+**When to use research tier vs. embedded `ark-researcher` dispatch:**
 
-**SPEC promotion (deep tier).** `/ark:commit` extracts the final PLAN's Spec section to `specs/features/<name>/SPEC.md` and appends a row to the features INDEX. The new SPEC + INDEX rows land in the closing commit alongside the work. If the task modifies an existing feature SPEC, a `[**CHANGELOG**]` entry is appended to that SPEC. (Bulk `ark archive` does **not** touch SPEC files.)
+- **Research tier** — you cannot yet write a PRD's What/Why/Outcome. The question is what to build, or whether to build at all. Use `/ark:research`.
+- **Embedded `ark-researcher` (during DESIGN/PLAN of a tiered task)** — you can already write the PRD; you just need to fill in technical unknowns inside it (third-party library shape, prior-art comparison, codebase pattern map). Stays inside the tiered task; the subagent persists to `.ark/tasks/<slug>/research/<topic>.md` of the *parent* task.
 
-**Divergence.** If a PLAN contradicts an existing feature SPEC, REVIEW flags it. Either the PLAN conforms or explicitly updates the SPEC.
+**PRD field remap on research tier:**
+
+- **What** — the question / direction being investigated.
+- **Why** — motivation. Not required to lead to implementation.
+- **Outcome** — "Why this corpus is the right next step" (optional; the corpus itself is the deliverable).
+- **Related Specs** — feature SPECs consulted (optional).
+- **SPEC Path** — ignored.
+
+**Lifecycle:** `Research → Committed → Archived`. No PLAN, no VERIFY, no SPEC promotion. `task_commit` stages `task.toml` + `PRD.md` + every file under `research/` recursively.
+
+**Cross-over to implementation:** `task promote` is rejected for any source-or-target involving research tier. When the corpus is ready and you want to build, close the research task and start a fresh `/ark:quick` or `/ark:design` whose PRD references the research slug in prose.
 
 ---
 
-## 6. Mechanics
+## Worktrees
 
-Three CLI surfaces drive the workflow; all are referenced inline above.
+Run multiple tasks in parallel without collisions. Each worktree is a separate git working tree at `.ark/worktrees/<branch>/`.
 
-- **`ark context`** — top-level, semver-stable, **read-only**. Reports git + active tasks + specs + recent archive + current task. Auto-invoked at session start via the `SessionStart` hook in `.claude/settings.json`. Use `--scope session` (default) for orientation; `--scope phase --for <phase>` for phase-targeted slices (`design | plan | review | execute | verify | commit`). `--format json` for machine consumers; default text for humans. The `commit` projection is body-free per the `ark-context` SPEC's additive-only schema; slash commands read VERIFY.md and the latest plan from the artifact paths the projection carries on `current_task`.
-- **`ark archive`** — top-level, **manager-only**, visible in `ark --help`. Bulk-moves every `phase = Committed` task to `tasks/archive/YYYY-MM/<slug>/`, deriving the month from each task's own `committed_at`. Side-effect-free: no SPEC promotion. Run after a release cut or whenever you want to consolidate completed work.
-- **`ark agent`** — hidden, **not semver-stable**, structural mutation only. Each subcommand prints a one-line summary; illegal transitions error out (e.g. `IllegalPhaseTransition`, `WrongTier`) — never bypass them with hand-edits. Every `--slug`-taking command defaults to *this session's focused task* in `.ark/.state.toml`. `ark agent task commit` is the structural mutation invoked by `/ark:commit`; `ark agent task archive` is the per-slug helper that backs `ark archive` (also useful for one-off recovery). `ark agent --help` lists the children.
+```bash
+ark agent task new --slug <slug> --title "<t>" --tier <t> --worktree
+# branch defaults to feat/<slug>; override:
+#   --branch-type fix|refactor|docs|...
+#   --branch <full-name>
+cd .ark/worktrees/<branch>/        # required before any subsequent ark command
+```
 
-**Operations without a CLI.** Deep-tier iteration (copy `NN_PLAN.md`/`NN_REVIEW.md` to the next number, bump `iteration`, reset `phase = "plan"`) and task reopening are handled by direct file edits — the state machine is small enough that hand-edits stay manageable, and `ark agent task plan/review/...` rejects illegal transitions if the agent gets the phase wrong.
+**Deep tier MUST use `--worktree`.** Architectural work spans many files; isolate it on a dedicated branch.
 
-**Cleanup after merge.** When a `--worktree` task's branch has been merged, run `ark agent task worktree cleanup --slug <s> [--delete-branch]` from the parent to remove the worktree dir and (optionally) the branch. Archive does NOT auto-clean. `ark agent task worktree list` enumerates active worktree-backed tasks. `.ark/config.toml`'s `[worktree]` section configures the workflow knobs (`worktree_dir`, `branch_prefix`, `copy`, `post_create`).
+Configure under `[worktree]` in `.ark/config.toml`: `worktree_dir`, `branch_prefix`, files to copy, `post_create` hooks. Preserved across `ark upgrade`.
 
-**Multi-session focus.** `.ark/.state.toml` carries developer identity, the active-task slug set, and a per-session focus map. Each shell that drives Ark gets its own session id (cached under the OS temp dir, keyed by `(project, ppid)`), so two terminals in the same checkout each see their own focused task. `ark agent task new` warns to stderr when other active tasks already exist (does not refuse). `ark agent task resume --slug <slug>` switches this session's focus to an existing active task. `ark agent task discard --slug <slug>` removes an unarchived task; pass `--force` if seeded files (`PRD.md`, `NN_PLAN.md`, `NN_REVIEW.md`, `VERIFY.md`) have user content. The state file is gitignored, per-checkout (each worktree owns its own), and skipped by `ark unload`.
+After the branch is merged, clean up from the parent checkout:
+
+```bash
+ark agent task worktree list                          # what's active
+ark cleanup                                           # dry-run: every prunable worktree
+ark cleanup --apply [--delete-branch] [--force]       # remove dirs + (optionally) branches
+ark cleanup --slug <s> --apply                        # remove just one
+```
+
+`ark cleanup` surfaces every worktree whose backing task is Committed, Archived, or whose branch is gone locally. Archive does NOT auto-clean worktrees — cleanup is a deliberate step.
+
+---
+
+## Specs
+
+Two layers, opposite ownership rules.
+
+**Project specs** — `specs/project/<name>/SPEC.md`. User-authored conventions. Apply to every task. **Read every entry in `specs/project/INDEX.md` before any task.** Agents never edit project SPECs without explicit instruction.
+
+**Feature specs** — `specs/features/<...>/<name>/SPEC.md`. Auto-extracted from deep-tier PLANs at commit. Scan `specs/features/INDEX.md`; read only the SPECs your task touches. **List them in the PRD's `[**Related Specs**]` block** so VERIFY can check adherence. The features tree is recursive — leaves may live at any depth, parent `INDEX.md` files at each level row their immediate children (leaves as `<seg>/SPEC.md`, subtree branches as `<seg>/INDEX.md`), mirroring `specs/project/`.
+
+**SPEC promotion (deep commit, automatic):** `task commit` reads the PRD's `[**SPEC Path**]` block (required on deep tier), extracts the final PLAN's `## Spec` to `specs/features/<path>/SPEC.md`, and upserts a row in every `INDEX.md` along the path from leaf to root. Missing intermediate INDEXes are seeded from the shipped subtree template. Both the SPEC and every touched INDEX land in the closing commit. Modifying an existing SPEC appends a `[**CHANGELOG**]` entry instead. Single-segment paths reproduce the pre-recursive flat layout bit-for-bit.
+
+**Divergence:** REVIEW must flag a PLAN that contradicts an existing feature SPEC as CRITICAL. The PLAN either conforms or explicitly updates the SPEC.
+
+**Actuator tags:** each constraint's first line is `- C-N: @<kind>[: <arg>]`, with the constraint on the next line. `<kind>` is `tool`, `source-scan` (`<pattern> @ <glob>`), `test-binding` (a test id), or `judgment`. VERIFY runs the check for the first three and judges `judgment` itself. `/ark:spec-audit` checks tag health and helps add tags.
+
+---
+
+## CLI surfaces
+
+Three commands. Different stability promises.
+
+**`ark context`** — read-only projections. Semver-stable; slash commands depend on it. Auto-invoked at session start.
+
+```bash
+ark context                                            # session scope (default)
+ark context --scope phase --for <phase>               # phase scope
+ark context --scope record                             # journal scope
+ark context [...] --format json                       # machine output
+```
+
+Phases: `design`, `plan`, `review`, `execute`, `verify`, `commit`. The `commit` projection is body-free — slash commands read VERIFY.md and the latest plan from the artifact paths it returns.
+
+**`ark archive`** — manager-only bulk move. Semver-stable. Only job: relocate committed tasks. No SPEC promotion, no journal writes.
+
+**`ark cleanup`** — worktree prune. Semver-stable. Dry-run by default; `--apply` removes worktrees of Committed / Archived tasks and worktrees whose branch is gone. Reuses `worktree cleanup` per slug; never touches `task.toml` or state.
+
+**`ark agent`** — structural mutation. **Hidden, not semver-stable.** Errors out on illegal transitions:
+
+- `IllegalPhaseTransition` — wrong phase for this verb.
+- `WrongTier` — tier-specific verb on the wrong tier.
+- `TaskNotFound` — slug not in `tasks.active`.
+- `NoFocus` — non-targeted verb run with no `[focus]` bound; run `ark agent task new` or `task resume --slug <s>` first.
+
+```bash
+ark agent task new --slug <s> --title "<t>" --tier <t> [--worktree]
+ark agent task plan                                   # → Plan
+ark agent task review                                 # → Review (deep)
+ark agent task execute                                # → Execute
+ark agent task verify                                 # → Verify
+ark agent task commit -m "<msg>" | --no-commit       # → Committed (atomic)
+ark agent task archive                                # → Archived (single task)
+ark agent task resume   --slug <s>                    # focus this session
+ark agent task discard  --slug <s> [--force]          # delete unarchived task
+ark agent task promote  --to <tier>                   # change tier mid-flight
+ark agent task worktree list | cleanup [--delete-branch]
+```
+
+`task new`, `task resume`, `task discard` require `--slug`. Other verbs resolve the slug from `.ark/.state.toml`'s `[focus]` field — `task new` and `task resume` write it; `task archive` and `task discard` clear it when their slug matches. With no focus bound, the CLI errors `NoFocus` and asks you to `task resume` first.
+
+**Hand-edited operations (no CLI):**
+- Reopen archived task: move dir back to `.ark/tasks/<slug>/`, set `phase = "verify"`, clear `archived_at`.
+
+---
+
+## Focus model
+
+`.ark/.state.toml` (gitignored, per-checkout — each worktree owns its own) carries developer identity, the active-slug set, and a single `focus` slug naming the task this checkout is currently driving. One focus per checkout: deep-tier worktrees own their own `.state.toml` and so their own focus.
+
+- `task new --slug <s>` creates the task and binds focus to `<s>`. Warns when an existing focus is rebound and suggests `--worktree` for parallel work.
+- `task resume --slug <s>` switches focus to `<s>`. Idempotent. Same rebind warning as `task new`.
+- `task commit` clears focus on success; the slug stays in `tasks.active` until `ark archive` runs.
+- `task archive` clears focus when the archived slug matched.
+- `task discard --slug <s>` removes an unarchived task and clears focus when it matched. Refused (`TaskStillActive`) if seeded files diverge from templates; pass `--force` to override. **Never pass `--force` on the user's behalf without explicit go-ahead.**
+
+For genuinely parallel work, use a worktree (`task new --worktree`) — each worktree has its own focus, so the two tasks don't share a slot.
+
+---
+
+## Principles
+
+1. **Right ceremony for the right task.** Three tiers — pick the smallest that fits.
+2. **Intent before edits.** Write the PRD before touching code.
+3. **Review is a gate, not a ritual.** Verdicts block progress; do not fabricate compliance.
+4. **Archive is memory.** Every completed task leaves a traceable record.
