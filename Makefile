@@ -163,7 +163,7 @@ $(TESTS_ROOTFS_IMG):
 	@$(MAKE) ARCH=$(ARCH) tests
 
 rv:
-	@$(MAKE) ARCH=riscv64    BLK=y NET=y FEATURES=$(QEMU_FEATURES) qemu_run
+	@$(MAKE) ARCH=riscv64 BLK=y NET=y FEATURES=$(QEMU_FEATURES) qemu_run
 
 la:
 	@$(MAKE) ARCH=loongarch64 BLK=y NET=y FEATURES=$(QEMU_FEATURES) qemu_run

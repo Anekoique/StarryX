@@ -67,7 +67,7 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         .uspace()
         .populate_file_pages(vaddr.align_down_4k(), PAGE_SIZE_4K)
         .map_err(|_| send_sigsegv())
-        .ok();
+        .expect("Failed to populate file pages");
 
     true
 }

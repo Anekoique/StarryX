@@ -1,9 +1,10 @@
 #!/bin/sh
-# stage.sh — assemble xtest/build/<arch>/stage/root/tests/{c,scripts}.
+# stage.sh — assemble xtest/build/<arch>/stage/root/tests/{c,iozone,scripts}.
 #
 # Layout under $STAGE_DIR/root/tests:
 #   c/         ELFs from build-c.sh
-#   scripts/   run-all.sh, run-c.sh
+#   iozone/    iozone ELF from build-iozone.sh (if built)
+#   scripts/   run-all.sh, run-c.sh, run-iozone.sh
 
 set -eu
 
@@ -17,6 +18,12 @@ mkdir -p "$DEST/c" "$DEST/scripts"
 
 # Compiled C-test ELFs.
 [ -d "$BUILD_DIR/c" ] && cp -a "$BUILD_DIR/c/." "$DEST/c/"
+
+# iozone benchmark (optional — only staged when build-iozone.sh ran).
+if [ -x "$BUILD_DIR/iozone/iozone" ]; then
+    mkdir -p "$DEST/iozone"
+    cp -a "$BUILD_DIR/iozone/iozone" "$DEST/iozone/iozone"
+fi
 
 # In-guest runtime scripts.
 cp -a "$ROOT_DIR"/xtest/scripts/run-*.sh "$DEST/scripts/"

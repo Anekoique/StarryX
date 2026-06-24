@@ -30,13 +30,17 @@ DOCKER_RUN := docker run --rm --privileged \
     -e MUSL_CC=$(MUSL_CC) \
     $(DOCKER_IMAGE)
 
-.PHONY: all build-c stage bake-image clean docker-shell
+.PHONY: all build-c build-iozone stage bake-image clean docker-shell
 
-all: build-c stage bake-image
+all: build-c build-iozone stage bake-image
 
 build-c:
 	@command -v docker >/dev/null 2>&1 || { echo "error: docker not found — install Docker and pull $(DOCKER_IMAGE)" >&2; exit 1; }
 	$(DOCKER_RUN) sh /code/xtest/scripts/build/build-c.sh
+
+build-iozone:
+	@command -v docker >/dev/null 2>&1 || { echo "error: docker not found — install Docker and pull $(DOCKER_IMAGE)" >&2; exit 1; }
+	$(DOCKER_RUN) sh /code/xtest/scripts/build/build-iozone.sh
 
 stage:
 	ARCH=$(ARCH) ROOT_DIR=$(ROOT_DIR) sh $(ROOT_DIR)/xtest/scripts/build/stage.sh

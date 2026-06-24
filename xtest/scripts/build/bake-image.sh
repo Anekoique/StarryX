@@ -51,6 +51,12 @@ target_mb=$(( (target_mb / 16 + 1) * 16 ))
 echo "[bake-image] creating $OUT_IMG (${target_mb} MB; stage=$((stage_kb/1024)) MB, rootfs=$((rootfs_kb/1024)) MB)"
 
 truncate -s "${target_mb}M" "$OUT_IMG"
+# Use the contest image's mke2fs (1.46.5) default feature set — the StarryX
+# ext4 driver reads it correctly. Do NOT pass an explicit `-O metadata_csum`
+# list: with the writes this script then makes (mount + tar-extract), the
+# block-bitmap checksums end up inconsistent and the kernel driver can no
+# longer resolve some inodes (read returns ENOENT). Must run inside the
+# contest image, not a newer host e2fsprogs.
 mkfs.ext4 -q -F -L tests-rootfs "$OUT_IMG"
 
 LOOP_DEV=$(losetup --show -f  "$OUT_IMG")

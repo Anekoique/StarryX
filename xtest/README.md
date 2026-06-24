@@ -1,9 +1,9 @@
 # xtest — StarryX test environment
 
 `xtest/` produces a test rootfs image that boots StarryX with first-party
-C tests under `/root/tests/c`. The kernel side is selected at build time
-via the `init-test` cargo feature, so `make run` (the normal boot path)
-is unaffected.
+C tests under `/root/tests/c` plus the vendored `iozone` benchmark under
+`/root/tests/iozone`. The kernel side is selected at build time via the
+`init-test` cargo feature, so `make run` (the normal boot path) is unaffected.
 
 ## Layout
 
@@ -18,13 +18,16 @@ xtest/
 │   ├── signal/           kill_self, ...
 │   ├── mm/               mmap_anon, ...
 │   └── fs/               open_close, ...
+├── iozone/               vendored iozone benchmark (src/ + LICENSE + README)
 ├── scripts/
 │   ├── build/
-│   │   ├── build-c.sh    in-Docker: cross-compile xtest/c/**/*.c
-│   │   ├── stage.sh      assemble the staged tree
-│   │   └── bake-image.sh in-Docker: build a fresh ext4 image and rsync
+│   │   ├── build-c.sh      in-Docker: cross-compile xtest/c/**/*.c
+│   │   ├── build-iozone.sh in-Docker: cross-compile xtest/iozone/src
+│   │   ├── stage.sh        assemble the staged tree
+│   │   └── bake-image.sh   in-Docker: build a fresh ext4 image and rsync
 │   ├── run-all.sh        in-guest: drive the whole run
-│   └── run-c.sh          in-guest: iterate /root/tests/c/
+│   ├── run-c.sh          in-guest: iterate /root/tests/c/
+│   └── run-iozone.sh     in-guest: bounded iozone smoke pass
 └── build/                gitignored: per-arch outputs and the test rootfs image
 ```
 
@@ -68,11 +71,20 @@ int main(void) {
 ```
 make -C xtest all          ARCH=riscv64|loongarch64
 make -C xtest build-c      ARCH=...
+make -C xtest build-iozone ARCH=...
 make -C xtest stage        ARCH=...
 make -C xtest bake-image   ARCH=...
 make -C xtest clean        ARCH=...
 make -C xtest docker-shell                      # interactive shell in the contest image
 ```
+
+## iozone
+
+The vendored iozone benchmark lives under `xtest/iozone/` (see its README for
+provenance and license). `build-iozone.sh` cross-compiles it to a static-PIE
+musl ELF; `run-iozone.sh` runs a bounded smoke pass in the guest and reports
+`[PASS]/[FAIL] iozone`. Building it needs the contest Docker image — a stock
+host musl toolchain whose `libc.a` is not PIC-capable cannot link `-static-pie`.
 
 ## Docker image
 

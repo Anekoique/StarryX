@@ -118,6 +118,11 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   cargo feature on the root crate) and boots it against that image. Both
   targets require Docker — the cross-build runs inside
   `docker.educg.net/cg/os-contest@sha256:742479b…`. See `xtest/README.md`.
+  The vendored `iozone` benchmark (`xtest/iozone/`) builds alongside the
+  first-party C tests and runs a bounded smoke pass in-guest. User ELFs must
+  be **static-PIE** (the loader rejects fixed-address `EXEC`), so iozone is
+  linked `-static-pie` like the C tests — which needs the contest image's
+  PIC-capable musl `libc.a`.
 - **vDSO** — the kernel maps `linux-vdso.so.1` into every user address
   space. Pre-built blobs live under `xcore/src/vdso/blobs/`, embedded
   via `.incbin`. Source under `xmodules/xvdso/` (workspace-excluded).
