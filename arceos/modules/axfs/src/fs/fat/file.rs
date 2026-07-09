@@ -1,7 +1,7 @@
 use core::{any::Any, mem, ops::Deref};
 
 use alloc::{sync::Arc, vec};
-use axfs_ng_vfs::{
+use axfs_vfs::{
     FileNode, FileNodeOps, FilesystemOps, Metadata, MetadataUpdate, NodeOps, NodeType, VfsError,
     VfsResult,
 };

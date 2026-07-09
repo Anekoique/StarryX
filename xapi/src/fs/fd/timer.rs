@@ -1,5 +1,5 @@
 use axerrno::LinuxResult;
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 
 use xcore::{
     fs::{fd::TimerFd, file::FileLike},

@@ -1,5 +1,5 @@
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use xcore::fs::{fd::EventFd, file::FileLike};
 use xutils::ctypes::{EFD_CLOEXEC, EFD_NONBLOCK, EFD_SEMAPHORE};
 

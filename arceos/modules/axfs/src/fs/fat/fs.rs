@@ -2,7 +2,7 @@ use core::marker::PhantomPinned;
 
 use alloc::sync::Arc;
 use axdriver::AxBlockDevice;
-use axfs_ng_vfs::{
+use axfs_vfs::{
     DirEntry, Filesystem, FilesystemOps, Reference, StatFs, VfsResult, path::MAX_NAME_LEN,
 };
 use lock_api::{Mutex, MutexGuard, RawMutex};

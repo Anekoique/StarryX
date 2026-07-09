@@ -3,7 +3,7 @@ use core::{any::Any, borrow::Borrow, cmp::Ordering, time::Duration};
 use alloc::{
     borrow::ToOwned, collections::btree_map::BTreeMap, string::String, sync::Arc, vec::Vec,
 };
-use axfs_ng_vfs::*;
+use axfs_vfs::*;
 use axsync::{Mutex, RawMutex};
 
 use xutils::collections::slab::Slab;

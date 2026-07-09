@@ -4,7 +4,7 @@ use alloc::{
     sync::{Arc, Weak},
 };
 
-use axfs_ng_vfs::VfsResult;
+use axfs_vfs::VfsResult;
 use axtask::{TaskExtRef, TaskInner, get_task_by_id};
 
 use xutils::collections::weak_map::StrongRef;

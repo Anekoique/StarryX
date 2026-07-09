@@ -2,8 +2,8 @@ use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
-use axfs_ng_vfs::Location;
+use axfs::FileFlags;
+use axfs_vfs::Location;
 use axio::PollState;
 use axsync::RawMutex;
 use inherit_methods_macro::inherit_methods;

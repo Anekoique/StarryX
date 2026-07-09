@@ -1,7 +1,7 @@
 use core::mem::size_of;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 
 use xuspace::{UserPtr, UserSpaceAccess};
 use xutils::ctypes::{

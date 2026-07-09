@@ -73,7 +73,7 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 - Respect module decoupling: component crates in `xmodules/*` must stay
   reusable — do not pull `xcore`/`xapi` into them. Exchange behaviour through
   traits (`UserSpaceAccess`, `InodeOps`/`PageOps`, `WaitQueue`, `VmFile`, …).
-- ArceOS modules (`axhal`, `axmm`, `axfs-ng`, `axtask`, `axnet`, …) must stay
+- ArceOS modules (`axhal`, `axmm`, `axfs`, `axtask`, `axnet`, …) must stay
   OS-agnostic. If macrokernel logic creeps in, move it up to `xmodules`.
 - `xapi` wraps POSIX syscalls; `xcore` owns macrokernel state; `xmodules`
   holds reusable algorithms. Pick the smallest layer that fits.
@@ -162,3 +162,11 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 - Assuming x86_64/aarch64 still build from the root — they don't. Keep
   arch-gated code behind `cfg(target_arch = "riscv64"|"loongarch64")` or
   `cfg(feature = "...")` so the root workspace stays green.
+
+<!-- ARK:START -->
+Ark is installed in this project. Use `/ark:quick` or `/ark:design` to start tasks.
+
+See `.ark/workflow.md` for the full workflow.
+
+@.ark/specs/INDEX.md
+<!-- ARK:END -->

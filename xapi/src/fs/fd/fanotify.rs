@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use axsync::Mutex;
 
 use xcore::{

@@ -2,8 +2,8 @@ use alloc::sync::Arc;
 use core::ffi::c_int;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, FileFlags, FsContext};
-use axfs_ng_vfs::Location;
+use axfs::{FS_CONTEXT, FileFlags, FsContext};
+use axfs_vfs::Location;
 use axsync::RawMutex;
 
 use xutils::ctypes::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW};

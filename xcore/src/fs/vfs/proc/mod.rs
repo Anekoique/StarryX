@@ -8,7 +8,7 @@ use alloc::{
     sync::Arc,
 };
 
-use axfs_ng_vfs::Filesystem;
+use axfs_vfs::Filesystem;
 use axsync::RawMutex;
 
 use self::dummy::*;

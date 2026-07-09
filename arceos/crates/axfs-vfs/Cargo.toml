@@ -1,5 +1,5 @@
 [package]
-name = "axfs-ng-vfs"
+name = "axfs-vfs"
 version = "0.1.0"
 edition = "2024"
 authors = ["Mivik <mivikq@gmail.com>"]

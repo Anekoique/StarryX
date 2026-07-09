@@ -296,7 +296,7 @@ dependencies = [
  "axalloc",
  "axdisplay",
  "axdriver",
- "axfs-ng",
+ "axfs",
  "axhal",
  "axlog",
  "axnet",
@@ -307,13 +307,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "axfs-ng"
+name = "axfs"
 version = "0.1.0"
 dependencies = [
  "axdriver",
  "axdriver_block",
  "axerrno",
- "axfs-ng-vfs",
+ "axfs-vfs",
  "axio",
  "axns",
  "axsync",
@@ -330,7 +330,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "axfs-ng-vfs"
+name = "axfs-vfs"
 version = "0.1.0"
 dependencies = [
  "axerrno",
@@ -441,8 +441,8 @@ dependencies = [
  "axconfig",
  "axdisplay",
  "axdriver",
- "axfs-ng",
- "axfs-ng-vfs",
+ "axfs",
+ "axfs-vfs",
  "axhal",
  "axlog",
  "axmm",
@@ -2191,7 +2191,7 @@ dependencies = [
  "axdriver",
  "axerrno",
  "axfeat",
- "axfs-ng",
+ "axfs",
  "axhal",
  "axio",
  "axlog",
@@ -2790,8 +2790,8 @@ dependencies = [
  "axconfig",
  "axerrno",
  "axfeat",
- "axfs-ng",
- "axfs-ng-vfs",
+ "axfs",
+ "axfs-vfs",
  "axhal",
  "axio",
  "axlog",
@@ -2838,8 +2838,8 @@ dependencies = [
  "axalloc",
  "axconfig",
  "axerrno",
- "axfs-ng",
- "axfs-ng-vfs",
+ "axfs",
+ "axfs-vfs",
  "axhal",
  "axio",
  "axlog",
@@ -2929,8 +2929,8 @@ name = "xutils"
 version = "0.1.0"
 dependencies = [
  "axerrno",
- "axfs-ng",
- "axfs-ng-vfs",
+ "axfs",
+ "axfs-vfs",
  "axhal",
  "axlog",
  "bitflags 2.11.1",

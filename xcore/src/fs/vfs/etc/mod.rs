@@ -1,6 +1,6 @@
 use alloc::{string::ToString, sync::Arc};
 
-use axfs_ng_vfs::Filesystem;
+use axfs_vfs::Filesystem;
 use axsync::RawMutex;
 
 use super::{

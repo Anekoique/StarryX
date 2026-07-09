@@ -1,5 +1,5 @@
-use axfs_ng::OpenOptions;
-use axfs_ng_vfs::{DeviceId, Metadata};
+use axfs::OpenOptions;
+use axfs_vfs::{DeviceId, Metadata};
 use axhal::time::TimeValue;
 
 use super::{

@@ -1,4 +1,4 @@
-use axfs_ng_vfs::{NodeType, VfsError};
+use axfs_vfs::{NodeType, VfsError};
 use lwext4_rust::{DummyHal, Ext4Error, InodeType};
 
 use super::Ext4Disk;

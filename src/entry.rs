@@ -1,6 +1,6 @@
 use alloc::{borrow::ToOwned, string::String, sync::Arc};
 
-use axfs_ng::FS_CONTEXT;
+use axfs::FS_CONTEXT;
 use axhal::arch::UspaceContext;
 use axsync::Mutex;
 use spin::RwLock;

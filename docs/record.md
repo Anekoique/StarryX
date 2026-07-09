@@ -4243,7 +4243,7 @@ Todo：
 - add docs
 - impl Posix Ipc
 - Page Cache （msync）and copy-on-write
-- Modify axfs_ng's management of cache and mount points
+- Modify axfs's management of cache and mount points
 - Iperf and netpert
 - Io mpx：epoll
 - glibc libctest
@@ -4252,7 +4252,7 @@ Todo：
 
 Progress:
 
-- replace axfs with axfs-ng
+- replace the legacy filesystem layer with the current axfs
 - impl system V shm
 - pass musl Basic/libc/busybox/lua/iozone
 
@@ -4267,7 +4267,7 @@ Todo:
 ### 5.20
 
 - add docs
-- new filesystem (reffer to axfs-ng/axfs-ng-vfs/axfs)
+- new filesystem (refer to axfs/axfs-vfs)
 - testcode (shmem need)
   - libctest (pthread_cancel_points pthread_robust_detach)
   - iozone
@@ -4577,7 +4577,7 @@ classDiagram
 
 ## FileSystem
 
-### axfs-ng
+### axfs
 
 ```mermaid
 graph TD
@@ -4598,15 +4598,15 @@ graph TD
     Socket["Socket"]
     Stdio["Standard IO"]
     
-    %% AXFS-NG Layer
-    AxfsLayer["axfs-ng Layer"]
+    %% AXFS Layer
+    AxfsLayer["axfs Layer"]
     FsContext["FsContext<M>\n(Filesystem Context)"]
     HighLevelFile["File<M>\n(High-level file operations)"]
     OpenOptions["OpenOptions\n(File open parameters)"]
     ReadDir["ReadDir\n(Directory iterator)"]
     
     %% VFS Layer
-    VfsLayer["VFS Layer (axfs-ng-vfs)"]
+    VfsLayer["VFS Layer (axfs-vfs)"]
     Location["Location<M>\n(File/Dir reference)"]
     Metadata["Metadata\n(File attributes)"]
     Path["Path\n(Filesystem paths)"]

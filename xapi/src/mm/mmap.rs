@@ -1,7 +1,7 @@
 use alloc::vec;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use axhal::paging::PageSize;
 use axtask::current;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};

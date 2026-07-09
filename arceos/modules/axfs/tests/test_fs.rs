@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 
 use axdriver_block::ramdisk::RamDisk;
-use axfs_ng::{File, FsContext, fs};
-use axfs_ng_vfs::{
+use axfs::{File, FsContext, fs};
+use axfs_vfs::{
     Filesystem, Location, Mountpoint, NodePermission, NodeType, VfsError, VfsResult, path::Path,
 };
 use axio::Read;

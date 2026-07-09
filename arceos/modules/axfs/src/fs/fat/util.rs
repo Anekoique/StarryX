@@ -1,7 +1,7 @@
 use core::time::Duration;
 
 use alloc::string::String;
-use axfs_ng_vfs::{DeviceId, Metadata, MetadataUpdate, NodePermission, NodeType, VfsError};
+use axfs_vfs::{DeviceId, Metadata, MetadataUpdate, NodePermission, NodeType, VfsError};
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Timelike, Utc};
 
 use super::{ff, fs::FatFilesystemInner};

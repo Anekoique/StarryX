@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::ffi::c_int;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use xprocess::Pid;
 use xsignal::SignalInfo;
 

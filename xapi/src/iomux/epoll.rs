@@ -1,7 +1,7 @@
 use alloc::{sync::Arc, vec::Vec};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 
 use xcore::{
     fs::fd::{EpollEventInfo, EpollInstance, FD_TABLE, add_file_like, get_file_like},

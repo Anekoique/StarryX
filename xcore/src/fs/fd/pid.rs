@@ -2,7 +2,7 @@ use alloc::{sync::Arc, sync::Weak};
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use axio::PollState;
 use xprocess::{Pid, Thread};
 use xutils::ctypes::fs::Kstat;

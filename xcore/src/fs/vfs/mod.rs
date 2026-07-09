@@ -9,8 +9,8 @@ pub use virt_file::*;
 pub use virt_fs::*;
 
 use axerrno::LinuxResult;
-use axfs_ng::FS_CONTEXT;
-use axfs_ng_vfs::{Filesystem, NodePermission};
+use axfs::FS_CONTEXT;
+use axfs_vfs::{Filesystem, NodePermission};
 use axsync::RawMutex;
 
 /// Initialize a virtual filesystem at the given path

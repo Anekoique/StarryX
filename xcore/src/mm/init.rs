@@ -7,7 +7,7 @@ use alloc::{
     vec::Vec,
 };
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
-use axfs_ng::FS_CONTEXT;
+use axfs::FS_CONTEXT;
 use axhal::paging::{MappingFlags, PageSize};
 use axmm::{AddrSpace, kernel_aspace};
 use kernel_elf_parser::{AUXV_LEN, AuxvEntry, AuxvType, ELFParser, app_stack_region};

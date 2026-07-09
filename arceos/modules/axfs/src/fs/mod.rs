@@ -5,7 +5,7 @@ pub mod fat;
 pub mod ext4;
 
 use axdriver::AxBlockDevice;
-use axfs_ng_vfs::{Filesystem, VfsResult};
+use axfs_vfs::{Filesystem, VfsResult};
 use cfg_if::cfg_if;
 use lock_api::RawMutex;
 

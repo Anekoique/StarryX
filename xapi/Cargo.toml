@@ -10,8 +10,8 @@ repository.workspace = true
 axfeat.workspace = true
 
 axconfig.workspace = true
-axfs-ng.workspace = true
-axfs-ng-vfs.workspace = true
+axfs.workspace = true
+axfs-vfs.workspace = true
 axhal.workspace = true
 axlog.workspace = true
 axmm.workspace = true

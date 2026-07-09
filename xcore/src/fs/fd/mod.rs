@@ -20,7 +20,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::ffi::c_int;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, FileFlags};
+use axfs::{FS_CONTEXT, FileFlags};
 use axns::{ResArc, def_resource};
 use axsync::Mutex;
 use spin::RwLock;

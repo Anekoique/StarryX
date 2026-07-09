@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 use core::net::{Ipv4Addr, SocketAddr};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use axio::{PollState, Read};
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;

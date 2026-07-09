@@ -8,8 +8,8 @@ use alloc::{format, string::ToString, sync::Arc};
 use core::{any::Any, ffi::c_void};
 
 use axerrno::LinuxResult;
-use axfs_ng::FsContext;
-use axfs_ng_vfs::{DeviceId, Filesystem, NodeType, VfsResult};
+use axfs::FsContext;
+use axfs_vfs::{DeviceId, Filesystem, NodeType, VfsResult};
 use axsync::{Mutex, RawMutex};
 use chrono::{Datelike, Timelike};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -30,7 +30,7 @@ const RANDOM_SEED: &[u8; 32] = b"0123456789abcdef0123456789abcdef";
 /// Initialize the device filesystem with common devices and mount /dev/shm
 pub fn init_devfs() -> LinuxResult<Filesystem<RawMutex>> {
     let fs = VirtFs::new_with("devtmpfs".into(), 0x01021994, create_dev_root);
-    let mp = axfs_ng_vfs::Mountpoint::new_root(&fs);
+    let mp = axfs_vfs::Mountpoint::new_root(&fs);
 
     FsContext::new(mp.root_location())
         .resolve("/shm")?

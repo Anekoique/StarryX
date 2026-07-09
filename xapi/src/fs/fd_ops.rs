@@ -1,8 +1,8 @@
 use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FileFlags, OpenResult};
-use axfs_ng_vfs::NodePermission;
+use axfs::{FileFlags, OpenResult};
+use axfs_vfs::NodePermission;
 use axsync::{Mutex, RawMutex};
 
 use xcore::{

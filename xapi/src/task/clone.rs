@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FS_CONTEXT;
+use axfs::FS_CONTEXT;
 use axhal::arch::{TrapFrame, UspaceContext};
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};

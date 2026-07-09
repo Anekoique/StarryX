@@ -5,8 +5,8 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FS_CONTEXT, FileFlags};
-use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
+use axfs::{FS_CONTEXT, FileFlags};
+use axfs_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
 
 use xcore::{
     fs::{

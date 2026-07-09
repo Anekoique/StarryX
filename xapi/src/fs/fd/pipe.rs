@@ -1,7 +1,7 @@
 use core::ffi::c_int;
 
 use axerrno::LinuxResult;
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 
 use xcore::{
     fs::{

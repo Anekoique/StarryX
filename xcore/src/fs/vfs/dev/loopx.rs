@@ -6,8 +6,8 @@ use core::{
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FsFile;
-use axfs_ng_vfs::{DeviceId, VfsResult};
+use axfs::FsFile;
+use axfs_vfs::{DeviceId, VfsResult};
 use axsync::{Mutex, RawMutex};
 
 use xuspace::{UserPtr, UserSpaceAccess};

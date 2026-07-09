@@ -55,7 +55,7 @@ axruntime  = { path = "arceos/modules/axruntime" }
 axsync     = { path = "arceos/modules/axsync", features = ["multitask"] }
 axtask     = { path = "arceos/modules/axtask", features = ["smp"] }
 axalloc    = { path = "arceos/modules/axalloc" }
-axfs-ng    = { path = "arceos/modules/axfs-ng", default-features = false, features = ["fat", "thread-local"] }
+axfs       = { path = "arceos/modules/axfs", default-features = false, features = ["fat", "thread-local"] }
 
 # ----- Vendored crates (under arceos/crates/) ---------------------------------
 allocator            = { path = "arceos/crates/allocator" }
@@ -66,7 +66,7 @@ axdriver_display     = { path = "arceos/crates/axdriver_crates/axdriver_display"
 axdriver_net         = { path = "arceos/crates/axdriver_crates/axdriver_net" }
 axdriver_pci         = { path = "arceos/crates/axdriver_crates/axdriver_pci" }
 axdriver_virtio      = { path = "arceos/crates/axdriver_crates/axdriver_virtio" }
-axfs-ng-vfs          = { path = "arceos/crates/axfs-ng-vfs" }
+axfs-vfs             = { path = "arceos/crates/axfs-vfs" }
 axio                 = { path = "arceos/crates/axio" }
 axsched              = { path = "arceos/crates/axsched" }
 kernel-elf-parser    = { path = "arceos/crates/kernel_elf_parser" }
@@ -128,7 +128,7 @@ axfeat.workspace = true
 
 axconfig.workspace  = true
 axdriver.workspace  = true
-axfs-ng.workspace   = true
+axfs.workspace      = true
 axhal.workspace     = true
 axlog.workspace     = true
 axruntime.workspace = true

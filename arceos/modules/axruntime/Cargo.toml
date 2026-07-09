@@ -19,7 +19,7 @@ alloc = ["axalloc"]
 paging = ["axhal/paging", "axmm"]
 
 multitask = ["axtask/multitask"]
-fs = ["axdriver", "axfs-ng", "axfs-ng-vfs"]
+fs = ["axdriver", "axfs", "axfs-vfs"]
 net = ["axdriver", "axnet"]
 display = ["axdriver", "axdisplay"]
 rtc = []
@@ -31,8 +31,8 @@ axconfig = { workspace = true }
 axalloc = { workspace = true, optional = true }
 axmm = { workspace = true, optional = true }
 axdriver = { workspace = true, optional = true }
-axfs-ng = { workspace = true, optional = true }
-axfs-ng-vfs = { workspace = true, optional = true }
+axfs = { workspace = true, optional = true }
+axfs-vfs = { workspace = true, optional = true }
 axnet = { workspace = true, optional = true }
 axdisplay = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }

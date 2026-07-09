@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use core::{any::Any, ffi::c_void};
 
 use axerrno::{AxResult, LinuxError};
-use axfs_ng_vfs::VfsResult;
+use axfs_vfs::VfsResult;
 use axio::{BufReader, Read};
 use axsync::Mutex;
 

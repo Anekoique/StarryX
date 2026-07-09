@@ -2,8 +2,8 @@ use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
-use axfs_ng_vfs::FileNodeOps;
+use axfs::FileFlags;
+use axfs_vfs::FileNodeOps;
 use axmm::{AddrSpace, PageIter4K};
 use axsync::{Mutex, RawMutex};
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
@@ -146,7 +146,7 @@ impl PageOps for XUserSpace {
 }
 
 #[derive(Clone)]
-pub struct FileWrapper(pub Arc<Mutex<axfs_ng::FsFile<RawMutex>>>);
+pub struct FileWrapper(pub Arc<Mutex<axfs::FsFile<RawMutex>>>);
 impl VmFile for FileWrapper {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
         let inner = self.0.lock();

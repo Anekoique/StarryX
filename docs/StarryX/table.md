@@ -72,7 +72,7 @@ xuspace
 
 ## 1.1 整体架构
 
-axfs-vfs -> axfs-ng -> xcore fs
+axfs-vfs -> axfs -> xcore fs
 
 ## 1.2 虚拟文件系统
 

@@ -1,7 +1,7 @@
 use core::fmt;
 
 use alloc::sync::Arc;
-use axfs_ng_vfs::{FileNode, FileNodeOps, Location, Metadata, VfsError, VfsResult};
+use axfs_vfs::{FileNode, FileNodeOps, Location, Metadata, VfsError, VfsResult};
 use axio::SeekFrom;
 use lock_api::RawMutex;
 

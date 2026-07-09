@@ -6,8 +6,8 @@ use alloc::{
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
-use axfs_ng_vfs::{Mountpoint, NodeOps};
+use axfs::FileFlags;
+use axfs_vfs::{Mountpoint, NodeOps};
 use axio::PollState;
 use axsync::{Mutex, RawMutex};
 

@@ -2,8 +2,8 @@ use alloc::sync::Arc;
 use core::{any::Any, ffi::c_int};
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::{FileFlags, FsFile};
-use axfs_ng_vfs::Location;
+use axfs::{FileFlags, FsFile};
+use axfs_vfs::Location;
 use axio::{PollState, Read};
 use axsync::{Mutex, MutexGuard, RawMutex};
 
@@ -26,7 +26,7 @@ impl File {
         }
     }
 
-    /// Create a new File from an existing Arc<Mutex<axfs_ng::FsFile<RawMutex>>>
+    /// Create a new File from an existing Arc<Mutex<axfs::FsFile<RawMutex>>>
     pub fn from_shared(inner: Arc<Mutex<FsFile<RawMutex>>>) -> Self {
         Self { inner }
     }

@@ -7,7 +7,7 @@ use alloc::{
 use axio::{Read, Write};
 use lock_api::RawMutex;
 
-use axfs_ng_vfs::{
+use axfs_vfs::{
     Location, Metadata, NodePermission, NodeType, VfsError, VfsResult,
     path::{Component, Components, Path, PathBuf},
 };

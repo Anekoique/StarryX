@@ -1,7 +1,7 @@
 use core::net::SocketAddr;
 
 use axerrno::{LinuxError, LinuxResult};
-use axfs_ng::FileFlags;
+use axfs::FileFlags;
 use axnet::{TcpSocket, UdpSocket, UnixSocket};
 use axsync::Mutex;
 
