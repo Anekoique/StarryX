@@ -20,10 +20,23 @@
 
 [**Architecture**]
 
-> Diagram or Module/file layout, with a one-line note per file describing its role. For complex mechanisms, using a diagram is more appropriate. If the diagram says everything, no prose is needed.
+> Show the design, not just where code lives: name the components, what each owns, and how data / control flows between them — put shared state at the top, label the edges. Prefer a fenced-ASCII component diagram (or a layered stack / call graph). A bare file→responsibility tree is the weakest form — if you use one, add the arrows. A short module map may follow.
+>
+> ```
+>            ┌──────── shared Layout (paths) + task.toml ────────┐
+>            │                                                   │
+>            ▼                                                   ▼
+>      ┌───────────┐      ┌───────────┐                    ┌───────────┐
+>      │  verify   │      │ spec_x    │  extract `## Spec` │  commit   │
+>      │ gate: no  │─ok─▶ │ deep tier │─▶ features INDEX ─▶│ stage +   │
+>      │ PENDING   │      │ → SPEC.md │   upsert (leaf→root)│ git commit│
+>      └───────────┘      └───────────┘                    └─────┬─────┘
+>            ▲                                                   │
+>            └──────────── scoped rollback ◀── on failure ───────┘
+> ```
 
 ```
-<directory tree or component diagram>
+<component / flow diagram — then optional module map with relationships>
 ```
 
 [**Data Structure**]

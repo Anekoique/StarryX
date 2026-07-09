@@ -1,15 +1,15 @@
 ---
-description: Extract a feature SPEC from an existing codebase. For brownfield projects adopting Ark mid-life — produces specs/features/<slug>/SPEC.md without faking a deep-tier task.
-argument-hint: "<feature-name> [hint]"
+name: ark-spec-extract
+description: Extract a feature SPEC from an existing codebase for brownfield Ark adoption. Produces specs/features/<slug>/SPEC.md without faking a deep-tier task. Use when the project already implements the feature and Ark needs a SPEC to reference.
 ---
 
-# `/ark:spec-extract $ARGUMENTS`
+# `ark-spec-extract <feature-name> [hint]`
 
 Author a feature SPEC for an existing implementation, then register it in the features INDEX with a provenance CHANGELOG entry. Use when the project already ships the feature (an OS kernel with copy-on-write, a webapp with auth) and Ark needs a SPEC to reference, but no deep-tier task ever produced one.
 
 Structural mutation (write SPEC, upsert INDEX) is owned by `ark agent spec import`. Discovery, confirmation, and synthesis are yours.
 
-Parse `$ARGUMENTS`: first token is `<feature-name>` (slugified for the SPEC dir); remainder is an optional hint to scope the search.
+Parse arguments: first token is `<feature-name>` (slugified for the SPEC dir); remainder is an optional hint to scope the search.
 
 ## Preconditions
 
@@ -17,7 +17,7 @@ Parse `$ARGUMENTS`: first token is `<feature-name>` (slugified for the SPEC dir)
 - `.ark/specs/features/<slug>/SPEC.md` does not already exist. If it does, stop and tell the user to amend via a deep-tier task instead — extraction is an *initial* SPEC operation.
 - Project is a git repo (extraction stamps the current HEAD short-SHA into the SPEC's CHANGELOG as provenance).
 
-## Phase 1 — Discover `[AI]`
+## Phase 1 — Discover
 
 Slugify `<feature-name>` (lowercase, hyphen-separated, ASCII).
 
@@ -29,7 +29,7 @@ Sweep three sources in parallel:
 
 Build a **candidate set**: ranked list of files, symbols, doc sections, and key commits. Do NOT synthesize a SPEC yet — discovery alone overweights "what's in the code" relative to "what the feature is."
 
-## Phase 2 — Confirm `[AI]` `[USER]`
+## Phase 2 — Confirm
 
 Present the candidate set to the user. Ask them to:
 
@@ -39,7 +39,7 @@ Present the candidate set to the user. Ask them to:
 
 Do NOT proceed without explicit user confirmation. The confirm gate is mandatory; brownfield extraction without it reliably produces SPECs that describe the codebase rather than the feature.
 
-## Phase 3 — Synthesize `[AI]`
+## Phase 3 — Synthesize
 
 Read every confirmed source in full. Then author the SPEC body in the feature-SPEC template's shape:
 
@@ -56,9 +56,9 @@ Read every confirmed source in full. Then author the SPEC body in the feature-SP
 - Do NOT add a `[**CHANGELOG**]` section — `spec import` stamps the provenance entry.
 - The SPEC describes *what was built*, not *how the extraction happened*. Process metadata belongs nowhere in the body.
 
-Write the body to a tempfile (`.ark/.spec-extract-<slug>.md` or any path the slash command can clean up).
+Write the body to a tempfile (`.ark/.spec-extract-<slug>.md` or any path the skill can clean up).
 
-## Phase 4 — Import `[AI]`
+## Phase 4 — Import
 
 ```bash
 SHA=$(git rev-parse --short HEAD)
@@ -80,7 +80,7 @@ The CLI:
 
 Clean up the tempfile.
 
-## Phase 5 — Hand off `[USER]`
+## Phase 5 — Hand off
 
 Tell the user:
 
@@ -99,5 +99,5 @@ Do NOT commit on the user's behalf — the SPEC is a deliberate artifact and the
 ## See Also
 
 - `workflow.md` §6 (Specs) — the feature-spec layer extraction is feeding into.
-- `/ark:design --deep` — the path for *new* features; produces a SPEC by promotion, not import.
-- `ark agent spec import --help` — the CLI surface this slash command drives.
+- `ark-design --deep` — the path for *new* features; produces a SPEC by promotion, not import.
+- `ark agent spec import --help` — the CLI surface this skill drives.

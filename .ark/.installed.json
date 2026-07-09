@@ -33,12 +33,12 @@
   "hashes": {
     ".ark/.gitignore": "f9daf1bb6cd65c968bb094965058314c78e0c61ac86a90dcfd2204ae55ec071a",
     ".ark/specs/INDEX.md": "04926b580be21fc0ca5553254e2fff40136ac3fda507052edf41b9c96ff906f3",
-    ".ark/specs/features/INDEX.md": "0fd93e4cb9f76783b42b3ccdbbb17f4f1515ea3bfd8145270c41523a4057d0fe",
+    ".ark/specs/features/INDEX.md": "d23a1274ce49935bfae5b69f7ceadc26b7e004527d70860861e9ba4b02792b6a",
     ".ark/specs/project/INDEX.md": "0a284c21203ef52b6fa2789075064874936ff406985a1046612f80909929f4cf",
-    ".ark/templates/PLAN.md": "4560a3b514262d8cb19829141775730763da4740b17998459dd08320673d724a",
+    ".ark/templates/PLAN.md": "f8738f05febb2f99ee3fabca6b10d1bdb1502a21ecf7bb9b350d767f49d29324",
     ".ark/templates/PRD.md": "f95b14d683aed0992949b51de159067640dbf195d777beddc250e07cb8e18d8f",
     ".ark/templates/REVIEW.md": "b7a6f717d009cb4967a2cb42418ebfeb314f0d02740f64b31ff023be6b9a7988",
-    ".ark/templates/SPEC.md": "18ba3e94d58beb17e0e8bb25869d62747559562ddf23f76df603a5c5dc42f96a",
+    ".ark/templates/SPEC.md": "1501574b341fb97fb6c3cd0691800793a4e76c673a154020be803b64c8cfa24c",
     ".ark/templates/VERIFY.md": "2ccd9bd1504ed96d268d23d083723cfd8fadc9990ff92f6886de39bf28c3814f",
     ".ark/workflow.md": "d196952fbf8a82c5f6fb3ffc76e65640e8eadb408cb09744386b54839db76767",
     ".claude/agents/ark-researcher.md": "eb03fd90d3bb126b5e0a62fb1b1c701d7b8fdd1b19570c030d6deb62b0427b44",
@@ -52,6 +52,6 @@
     ".claude/commands/ark/research.md": "31d4a57c2500575a5355ac62ba2ce5857e5e9473c427dde0f2153546bebd9ac8",
     ".claude/commands/ark/resume.md": "47bcdd70e475948cc3b2539012857e98f8a4dcabda762e272e415562e430be77",
     ".claude/commands/ark/spec-audit.md": "ddb43a4eb9eff3c0f754aaa4c1e7acadb3b673637532d83b72020d58ea10a47c",
-    ".claude/commands/ark/spec-extract.md": "248f3ccdb24ee46daf92bf9a1b09ee720f4c87d143514a851e42770631e1f244"
+    ".claude/commands/ark/spec-extract.md": "e4ffb758993a271d7adbaff21a28b6a387c4a2e567c03d151d610235b45fe0ed"
   }
 }
