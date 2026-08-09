@@ -1,6 +1,5 @@
 use core::ffi::c_ulong;
 
-use axerrno::LinuxError;
 use bitflags::bitflags;
 use linux_raw_sys::{
     general::{
@@ -9,6 +8,7 @@ use linux_raw_sys::{
     },
     signal_macros::sig_ign,
 };
+use xerrno::LinuxError;
 
 use crate::SignalSet;
 

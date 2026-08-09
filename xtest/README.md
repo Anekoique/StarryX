@@ -58,7 +58,7 @@ make tests       ARCH=riscv64           # build xtest/build/riscv64/tests-rootfs
 make run-tests   ARCH=riscv64           # build kernel with init-test feature, build image, boot
 ```
 
-The kernel embeds `src/test.sh` instead of `src/init.sh` when built with
+The kernel embeds `starry/src/test.sh` instead of `starry/src/init.sh` when built with
 `ROOT_FEATURES=init-test`. `make run` does not set `ROOT_FEATURES` and is
 unaffected by anything in this directory.
 

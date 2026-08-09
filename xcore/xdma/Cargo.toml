@@ -1,0 +1,22 @@
+[package]
+name = "xdma"
+edition = "2024"
+version = "0.1.0"
+authors = ["Zhour Rui <zrufo747@outlook.com>"]
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
+homepage = "https://github.com/arceos-org/arceos"
+keywords = ["arceos", "kernel"]
+categories = ["os", "no-std"]
+repository = "https://github.com/arceos-org/arceos/tree/main/modules/axdma"
+documentation = "https://arceos-org.github.io/arceos/axdma/index.html"
+
+[dependencies]
+log = "0.4"
+kspin = "0.2"
+memory_addr = "0.4"
+xerrno = { path = "../../xmodules/xerrno" }
+allocator = { path = "../../crates/allocator" }
+xalloc = { path = "../xalloc" }
+xmm = { path = "../xmm" }
+xconfig = { path = "../xconfig" }
+xhal = { path = "../xhal", features = ["paging"]  }

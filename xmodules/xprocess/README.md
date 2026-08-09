@@ -1,4 +1,4 @@
-# axprocess
+# xprocess
 
 Process management for ArceOS.
 

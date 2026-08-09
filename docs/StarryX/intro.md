@@ -2,7 +2,7 @@
 
 ## 系统简介
 
-​	StarryX操作系统是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，内存管理，文件系统，信号系统等模块，通过硬件抽象层axhal能够运行在四个架构上（riscv64 / loongarch64 / x86_64 / aarch64），并成功移植到riscv visionfive和loongarch 2K1000硬件平台。
+​	StarryX操作系统是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，内存管理，文件系统，信号系统等模块，通过硬件抽象层xhal能够运行在四个架构上（riscv64 / loongarch64 / x86_64 / aarch64），并成功移植到riscv visionfive和loongarch 2K1000硬件平台。
 
 ​	ArceOS 采用模块化设计，将操作系统功能拆分为可重用的组件，允许开发者根据特定场景需求灵活组合功能模块。StarryX的设计理念是将 ArceOS 单内核(Unikernel)的组件化优势与宏内核的高性能特性相结合，通过在 ArceOS 的单内核架构上扩展实现宏内核的任务管理、内存管理等核心功能，构建一个高效、灵活且支持 Linux 应用兼容的组件化宏内核操作系统。 StarryX的设计理念基于以下核心原则：
 
@@ -14,18 +14,12 @@
 
 ## 系统架构
 
-<div style="text-align: center;">
-  <img src="./images/structure.png" alt="structure" width="70%">
-</div>
+StarryX的系统架构主要分为两层：
 
-StarrX的系统架构主要分为两层：
+1. 底层为 XCore，由 ArceOS 组件裁剪并演进而来，包括 `xruntime`、`xconfig`、`xalloc`、`xfs`、`xsync`、`xtask`、`xdriver`、`xnet` 等与具体系统策略解耦的基础组件；
+2. 上层为 StarryX Layer，主要由 XKernel 和 XModules 构成。XModules 扁平收纳可复用的基础契约与内核机制组件；XKernel 拥有文件系统、内存、任务、IPC、网络等内核服务，并由其 `syscall` 子模块实现 Linux ABI。
 
-1. 底层为ArceOS Layer，ArceOS的核心功能主要由各个模块构成，包括 axruntime、axconfig、axalloc、axfs、 axsync、axtask、axdriver、axnet 等，这些模块由与具体操作系统无关的基础组件构成；ArceOS layer为StarryX提供了内核的基础功能；
-2. 上层为StarryX Layer，StarryX在ArceOS提供的内核基础服务上扩展宏内核相关功能，其主要由三个模块X Core、X Modules和X API构成，其中X Modules是实现了宏内核功能的可供复用的基础组件、X Core实现了宏内核基础功能、X API通过X Core和X Modules提供的服务实现了标准POSIX接口。
-
-对于StarryX layer，X Core是实现宏内核功能的核心，主要实现了宏内核的进程管理、文件系统、内存管理、系统管理、进程通信和网络模块。
-
-![xcore](./images/xcore.png)
+XKernel 内部保持单向依赖：`syscall -> kernel services -> XModules / XCore`。
 
 ## 系统完成情况
 
@@ -40,4 +34,3 @@ StarrX的系统架构主要分为两层：
 | 进程管理 | 多核场景下的负载均衡<br>多种调度方式支持<br>完整实现的System V进程通信<br>模块解耦的进程管理 |
 | 网络模块 | 支持TCP和UDP套接字<br>实现端口复用 |
 | 信号系统 | 模块解耦的信号系统<br>可被信号中断的系统调用 |
-

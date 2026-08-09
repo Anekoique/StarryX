@@ -1,0 +1,47 @@
+[package]
+name = "xnet"
+version.workspace = true
+edition.workspace = true
+authors = [
+  "Yuekai Jia <equation618@gmail.com>",
+  "ChengXiang Qi <kuangjux@outlook.com>",
+]
+description = "ArceOS network module"
+license.workspace = true
+homepage.workspace = true
+repository = "https://github.com/arceos-org/arceos/tree/main/modules/axnet"
+documentation = "https://arceos-org.github.io/arceos/axnet/index.html"
+
+[features]
+smoltcp = []
+default = ["smoltcp"]
+
+[dependencies]
+log      = { workspace = true }
+cfg-if   = { workspace = true }
+spin     = { workspace = true }
+lazyinit = { workspace = true }
+xerrno  = { workspace = true }
+xio = { workspace = true }
+xhal = { workspace = true }
+xsync = { workspace = true }
+xtask = { workspace = true }
+xdriver = { workspace = true, features = ["net"] }
+xdriver_net = { workspace = true }
+
+[dependencies.smoltcp]
+workspace = true
+features = [
+  "alloc",
+  "log",             # no std
+  "medium-ethernet",
+  "medium-ip",
+  "proto-ipv4",
+  "proto-ipv6",
+  "socket-raw",
+  "socket-icmp",
+  "socket-udp",
+  "socket-tcp",
+  "socket-dns",
+  "multicast",
+]

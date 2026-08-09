@@ -45,7 +45,7 @@ pub struct ProcessSignalManager<M, WQ> {
     pub(crate) wq: WQ,
 
     /// The default restorer (signal-return trampoline) address. Patched
-    /// per-process by `xcore::vdso::install` after the vDSO is mapped.
+    /// per-process by `xkernel::vdso::install` after the vDSO is mapped.
     pub(crate) default_restorer: AtomicUsize,
 }
 impl<M: RawMutex, WQ: WaitQueue> ProcessSignalManager<M, WQ> {
@@ -61,7 +61,7 @@ impl<M: RawMutex, WQ: WaitQueue> ProcessSignalManager<M, WQ> {
         }
     }
 
-    /// Update the default restorer (called by `xcore::vdso::install` once
+    /// Update the default restorer (called by `xkernel::vdso::install` once
     /// the per-process vDSO mapping is in place).
     pub fn set_default_restorer(&self, addr: usize) {
         self.default_restorer.store(addr, Ordering::Release);

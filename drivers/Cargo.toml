@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "xdriver_base",
+    "xdriver_block",
+    "xdriver_net",
+    "xdriver_display",
+    "xdriver_pci",
+    "xdriver_virtio",
+]
+
+[workspace.package]
+version = "0.1.2"
+authors = ["Yuekai Jia <equation618@gmail.com>"]
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
+homepage = "https://github.com/arceos-org/arceos"
+documentation = "https://arceos-org.github.io/axdriver_crates"
+repository = "https://github.com/arceos-org/axdriver_crates"
+categories = ["os", "no-std", "hardware-support"]
+
+[workspace.dependencies]
+xdriver_base = { path = "xdriver_base", version = "0.1" }
+xdriver_block = { path = "xdriver_block", version = "0.1" }
+xdriver_net = { path = "xdriver_net", version = "0.1" }
+xdriver_display = { path = "xdriver_display", version = "0.1" }
+xdriver_pci = { path = "xdriver_pci", version = "0.1" }
+xdriver_virtio = { path = "xdriver_virtio", version = "0.1" }

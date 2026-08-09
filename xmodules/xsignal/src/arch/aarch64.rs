@@ -1,4 +1,4 @@
-use axhal::arch::TrapFrame;
+use xhal::arch::TrapFrame;
 
 use crate::{SignalSet, SignalStack};
 

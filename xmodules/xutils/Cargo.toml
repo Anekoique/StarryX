@@ -7,12 +7,12 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
-axhal.workspace = true
-axfs.workspace = true
-axfs-vfs.workspace = true
-axlog.workspace = true
+xhal.workspace = true
+xfs.workspace = true
+xvfs.workspace = true
+xlog.workspace = true
 
-axerrno.workspace = true
+xerrno.workspace = true
 bitflags.workspace = true
 
 bitmaps = { version = "3.2.1", default-features = false }

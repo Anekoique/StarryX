@@ -1,8 +1,8 @@
 use core::{alloc::Layout, time::Duration};
 
 use alloc::sync::Arc;
-use axhal::arch::TrapFrame;
 use lock_api::{Mutex, RawMutex};
+use xhal::arch::TrapFrame;
 use xuspace::access_user_memory;
 
 use crate::{
@@ -60,7 +60,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         action: &SignalAction,
     ) -> Option<SignalOSAction> {
         let signo = sig.signo();
-        info!("Handle signal: {:?} {}", signo, axtask::current().id_name());
+        info!("Handle signal: {:?} {}", signo, xtask::current().id_name());
         match action.disposition {
             SignalDisposition::Default => match signo.default_action() {
                 DefaultSignalAction::Terminate => Some(SignalOSAction::Terminate),
@@ -249,13 +249,13 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
         }
 
         let wq = &self.proc.wq;
-        let deadline = timeout.map(|dur| axhal::time::wall_time() + dur);
+        let deadline = timeout.map(|dur| xhal::time::wall_time() + dur);
 
         // There might be false wakeups, so we need a loop
         loop {
             match &deadline {
                 Some(deadline) => {
-                    match deadline.checked_sub(axhal::time::wall_time()) {
+                    match deadline.checked_sub(xhal::time::wall_time()) {
                         Some(dur) => {
                             if wq.wait_timeout(Some(dur)) {
                                 // timed out

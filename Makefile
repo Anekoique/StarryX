@@ -10,12 +10,12 @@ LOG        ?= off
 V          ?=
 
 A          ?=
-APP        := $(abspath $(if $(strip $(A)),$(A),$(ROOT_DIR)))
+APP        := $(abspath $(if $(strip $(A)),$(A),$(ROOT_DIR)/starry))
 TARGET_DIR ?= $(ROOT_DIR)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?=
 FEATURES   ?= fp_simd,lwext4_rs
-# Root-crate cargo features (NOT axfeat/-prefixed; threaded straight to cargo).
+# Root-crate cargo features (NOT xfeat/-prefixed; threaded straight to cargo).
 # Set to `init-test` by `make tests` / `make run-tests`; empty otherwise.
 ROOT_FEATURES ?=
 
@@ -58,7 +58,7 @@ FEATURES_CLI  := $(subst $(space),$(comma),$(FEATURES))
 QEMU_FEATURES := $(FEATURES_CLI),driver-virtio-blk
 VF2_FEATURES  := $(FEATURES_CLI),driver-visionfive2-sd
 
-OUT_CONFIG := $(abspath $(if $(strip $(OUT_CONFIG)),$(OUT_CONFIG),$(ROOT_DIR)/.axconfig.$(PLAT_NAME).toml))
+OUT_CONFIG := $(abspath $(if $(strip $(OUT_CONFIG)),$(OUT_CONFIG),$(ROOT_DIR)/.xconfig.$(PLAT_NAME).toml))
 
 ifeq ($(ARCH),riscv64)
   TARGET := riscv64gc-unknown-none-elf
@@ -68,24 +68,24 @@ else
   $(error "ARCH" must be one of "riscv64" or "loongarch64")
 endif
 
-# Exported as cfg env vars consumed by axconfig / build scripts.
-export AX_ARCH        := $(ARCH)
-export AX_PLATFORM    := $(PLAT_NAME)
-export AX_SMP         := $(SMP)
-export AX_MODE        := $(MODE)
-export AX_LOG         := $(LOG)
-export AX_TARGET      := $(TARGET)
-export AX_IP          := $(IP)
-export AX_GW          := $(GW)
-export AX_CONFIG_PATH := $(OUT_CONFIG)
+# Exported as build-time environment consumed by XCore components.
+export XCORE_ARCH        := $(ARCH)
+export XCORE_PLATFORM    := $(PLAT_NAME)
+export XCORE_SMP         := $(SMP)
+export XCORE_MODE        := $(MODE)
+export XCORE_LOG         := $(LOG)
+export XCORE_TARGET      := $(TARGET)
+export XCORE_IP          := $(IP)
+export XCORE_GW          := $(GW)
+export XCORE_CONFIG_PATH := $(OUT_CONFIG)
 
 # ----- Tool overrides --------------------------------------------------------
 OBJDUMP ?= rust-objdump -d --print-imm-hex --x86-asm-syntax=intel
 OBJCOPY ?= rust-objcopy --binary-architecture=$(ARCH)
 GDB     ?= gdb
 
-OUT_DIR   ?= $(APP)
-APP_NAME  := $(notdir $(APP))
+OUT_DIR   ?= $(abspath $(if $(strip $(A)),$(APP),$(ROOT_DIR)))
+APP_NAME  := $(if $(strip $(A)),$(notdir $(APP)),$(notdir $(ROOT_DIR)))
 LD_SCRIPT := $(TARGET_DIR)/$(TARGET)/$(MODE)/linker_$(PLAT_NAME).lds
 OUT_ELF   := $(OUT_DIR)/$(APP_NAME)_$(PLAT_NAME).elf
 OUT_BIN   := $(patsubst %.elf,%.bin,$(OUT_ELF))
@@ -107,10 +107,10 @@ include scripts/make/vdso.mk
 
 all: rv
 
-defconfig: _axconfig-gen
+defconfig: _xconfig-gen
 	$(call defconfig)
 
-oldconfig: _axconfig-gen
+oldconfig: _xconfig-gen
 	$(call oldconfig)
 
 build: $(OUT_DIR) $(FINAL_IMG)
@@ -149,7 +149,7 @@ qemu_rootfs:
 qemu_run: qemu_rootfs run
 
 # `make tests` (re)builds the test rootfs image; `make run-tests` boots a
-# kernel embedding src/test.sh (via the `init-test` cargo feature) against
+# kernel embedding starry/src/test.sh (via the `init-test` cargo feature) against
 # it. Mirrors the qemu_rootfs/run/qemu_run trio: split into a fetch/build
 # phase and a recursive phase that re-evaluates qemu.mk under BLK=y.
 tests: qemu_rootfs
@@ -180,7 +180,7 @@ else
 endif
 
 clean:
-	rm -rf $(APP)/*.bin $(APP)/*.elf $(OUT_CONFIG)
+	rm -rf $(OUT_DIR)/*.bin $(OUT_DIR)/*.elf $(OUT_CONFIG)
 	cargo clean
 
 docker:

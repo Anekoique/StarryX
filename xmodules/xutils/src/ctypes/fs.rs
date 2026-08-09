@@ -1,6 +1,6 @@
-use axfs::OpenOptions;
-use axfs_vfs::{DeviceId, Metadata};
-use axhal::time::TimeValue;
+use xfs::OpenOptions;
+use xhal::time::TimeValue;
+use xvfs::{DeviceId, Metadata};
 
 use super::{
     __kernel_mode_t, F_OK, O_APPEND, O_CREAT, O_DIRECT, O_DIRECTORY, O_EXCL, O_EXEC, O_PATH,

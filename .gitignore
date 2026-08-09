@@ -9,8 +9,8 @@
 apps/*/build/
 **/target/
 **/Cargo.lock
-!/vendor/**/Cargo.lock
 /.axconfig.*
+/.xconfig.*
 *.img
 /extern
 /diff
@@ -18,7 +18,6 @@ apps/*/build/
 .gdb_history
 **/actual.out
 kernel-*
-/vendor
 /testsuits
 *.rdb
 summary.txt

@@ -1,0 +1,14 @@
+[package]
+name = "xvfs"
+version = "0.1.0"
+edition = "2024"
+authors = ["Mivik <mivikq@gmail.com>"]
+
+[lib]
+
+[dependencies]
+xerrno               = { workspace = true }
+bitflags              = { workspace = true }
+inherit-methods-macro = { workspace = true }
+lock_api              = "0.4.12"
+log                   = { workspace = true }

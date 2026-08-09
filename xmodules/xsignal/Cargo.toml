@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axerrno  = { workspace = true }
+xerrno  = { workspace = true }
 bitflags = { workspace = true }
 
-axconfig.workspace = true
-axhal = { workspace = true, features = ["uspace"] }
-axtask = { workspace = true, features = [
+xconfig.workspace = true
+xhal = { workspace = true, features = ["uspace"] }
+xtask = { workspace = true, features = [
     "multitask",
 ] }
 

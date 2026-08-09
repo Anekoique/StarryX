@@ -1,0 +1,57 @@
+[package]
+name = "xkernel"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+xfeat.workspace = true
+xconfig.workspace = true
+xfs.workspace = true
+xvfs.workspace = true
+xhal.workspace = true
+xlog.workspace = true
+xruntime.workspace = true
+xmm.workspace = true
+xnet.workspace = true
+xns.workspace = true
+xsync.workspace = true
+xtask.workspace = true
+xio.workspace = true
+xalloc.workspace = true
+
+xcache.workspace = true
+xprocess.workspace = true
+xsignal.workspace = true
+xuspace.workspace = true
+xvma.workspace = true
+xutils.workspace = true
+
+xerrno.workspace = true
+bitflags.workspace = true
+linkme.workspace = true
+linux-raw-sys = { workspace = true, features = ["ioctl"] }
+memory_addr.workspace = true
+page_table_multiarch.workspace = true
+spin.workspace = true
+syscalls.workspace = true
+
+crate_interface    = { workspace = true }
+numeric-enum-macro = "0.2"
+xmas-elf           = "0.10"
+cfg-if             = { workspace = true }
+lazy_static        = "1.5"
+page_table_entry   = { workspace = true }
+ctor_bare          = "0.2.1"
+num_enum           = { version = "0.7", default-features = false }
+
+chrono = { version = "0.4.41", default-features = false }
+rand = { workspace = true, features = ["alloc"] }
+kernel-elf-parser = { workspace = true }
+inherit-methods-macro = "0.1.0"
+lock_api = "0.4.13"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86 = "0.52"

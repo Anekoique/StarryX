@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["Anekoique <ctolu01@gmail.com>"]
 
 [dependencies]
-axerrno              = { workspace = true }
+xerrno              = { workspace = true }
 memory_addr          = { workspace = true }
 page_table_multiarch = { workspace = true }
 spin                 = { workspace = true }

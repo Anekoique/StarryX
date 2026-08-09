@@ -1,4 +1,4 @@
-//! # Axsignal - Signal Management for StarryX
+//! # XSignal - Signal Management for StarryX
 //!
 //! This crate provides signal management functionality for the StarryX operating system.
 //! It implements UNIX-style signal handling with support for both standard and real-time signals.

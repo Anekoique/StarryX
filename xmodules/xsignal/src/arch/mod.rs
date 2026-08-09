@@ -37,5 +37,5 @@ cfg_if::cfg_if! {
 
 // The legacy fixed signal trampoline (`signal_trampoline` / `signal_trampoline_address`)
 // has been replaced by the vDSO-resident `__vdso_rt_sigreturn`. The per-process
-// restorer address is published by `xcore::vdso::install` via
+// restorer address is published by `xkernel::vdso::install` via
 // `ProcessSignalManager::set_default_restorer`.

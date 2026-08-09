@@ -1,10 +1,10 @@
 # Regenerate the vDSO blobs.
 #
 # Run after changing source under `xmodules/xvdso/`. Drops the rebuilt
-# `.so` files in-place under `xcore/src/vdso/blobs/` (committed and
+# `.so` files in-place under `xkernel/src/vdso/blobs/` (committed and
 # embedded into the kernel via `.incbin`).
 
-VDSO_BLOBS_DIR   := $(ROOT_DIR)/xcore/src/vdso/blobs
+VDSO_BLOBS_DIR   := $(ROOT_DIR)/xkernel/src/vdso/blobs
 VDSO_MANIFEST    := $(ROOT_DIR)/xmodules/xvdso/Cargo.toml
 VDSO_TARGETS_DIR := $(ROOT_DIR)/xmodules/xvdso/targets
 VDSO_TARGET_DIR  := $(ROOT_DIR)/target/vdso-build

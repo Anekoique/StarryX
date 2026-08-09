@@ -13,7 +13,7 @@ Every user address space contains:
 | VA                   | Region        | Flags | Backing                                        |
 | -------------------- | ------------- | ----- | ---------------------------------------------- |
 | `USER_VDSO_BASE`     | vDSO code     | R-X   | per-process `map_alloc`-backed copy of the ELF |
-| `USER_VDSO_DATA`     | vDSO data     | R--   | single shared phys page (`xcore::vdso::VDSO_DATA`) |
+| `USER_VDSO_DATA`     | vDSO data     | R--   | single shared phys page (`xkernel::vdso::VDSO_DATA`) |
 
 `USER_VDSO_BASE = 0x4001_0000`, `USER_VDSO_DATA = 0x4001_2000`. The data
 page is `map_linear`-mapped against the kernel-resident `'static
@@ -38,7 +38,7 @@ code — the trap is the same, just paid only when needed.
 ## Time fast path
 
 `vdso_tick()` runs in the boot CPU's timer ISR (gated by
-`axhal::cpu::this_cpu_is_bsp()`) and refreshes `VDSO_DATA` under a
+`xhal::cpu::this_cpu_is_bsp()`) and refreshes `VDSO_DATA` under a
 seqlock. The relevant fields are:
 
 ```rust
@@ -54,7 +54,7 @@ struct VdsoData {
 ```
 
 `mult` and `shift` are computed once from
-`axhal::time::timer_frequency()`:
+`xhal::time::timer_frequency()`:
 
 ```text
 shift = 24
@@ -74,7 +74,7 @@ so the in-flight delta stays under 10 ms by ~3 orders of magnitude.
 ## Signal trampoline
 
 `__vdso_rt_sigreturn` replaces the legacy `SIGNAL_TRAMPOLINE` mapping.
-On `execve`, `xcore::vdso::install` parses the embedded ELF's `.dynsym`
+On `execve`, `xkernel::vdso::install` parses the embedded ELF's `.dynsym`
 to find the symbol's offset, computes the per-process absolute address,
 and publishes it via `ProcessSignalManager::set_default_restorer`. When
 a signal is delivered, the kernel writes that address into the user
@@ -84,9 +84,9 @@ back via `rt_sigreturn`.
 ## Building
 
 Pre-built `linux-vdso.so.1` blobs are committed under
-`xcore/src/vdso/blobs/{vdso-riscv64.so, vdso-loongarch64.so}` and
+`xkernel/src/vdso/blobs/{vdso-riscv64.so, vdso-loongarch64.so}` and
 embedded into the kernel via `.incbin` inside a `global_asm!` block in
-`xcore/src/vdso/blob.rs`. The kernel build does not depend on a vDSO
+`xkernel/src/vdso/blob.rs`. The kernel build does not depend on a vDSO
 build step — `make build` / `make rv` / `make la` work with whatever
 blobs are committed.
 

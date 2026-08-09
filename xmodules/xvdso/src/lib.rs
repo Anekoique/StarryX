@@ -12,7 +12,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 mod arch;
 
-/// Mirror of the kernel-side `xcore::vdso::data::VdsoData`. The kernel
+/// Mirror of the kernel-side `xkernel::vdso::data::VdsoData`. The kernel
 /// patches `arch::VDSO_DATA_ADDR` at install time so the body below can
 /// locate this struct position-independently.
 #[repr(C, align(4096))]

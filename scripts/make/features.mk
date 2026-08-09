@@ -1,4 +1,4 @@
-# Feature resolution for the retained axfeat-based build.
+# Feature resolution for the retained xfeat-based build.
 
 empty :=
 space := $(empty) $(empty)
@@ -6,22 +6,22 @@ comma := ,
 
 override FEATURES := $(strip $(subst $(comma),$(space),$(FEATURES)))
 
-ax_feat :=
+xcore_features :=
 
 ifneq ($(filter $(LOG),off error warn info debug trace),)
-  ax_feat += log-level-$(LOG)
+  xcore_features += log-level-$(LOG)
 else
   $(error "LOG" must be one of "off", "error", "warn", "info", "debug", "trace")
 endif
 
 ifeq ($(BUS),mmio)
-  ax_feat += bus-mmio
+  xcore_features += bus-mmio
 endif
 
 ifeq ($(shell test $(SMP) -gt 1; echo $$?),0)
-  ax_feat += smp
+  xcore_features += smp
 endif
 
-ax_feat += $(FEATURES)
+xcore_features += $(FEATURES)
 
-AX_FEAT := $(strip $(addprefix axfeat/,$(ax_feat)))
+XCORE_FEATURES := $(strip $(addprefix xfeat/,$(xcore_features)))

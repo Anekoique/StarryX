@@ -5,7 +5,7 @@
 #   * a builtin platform name (e.g. PLATFORM=riscv64-qemu-virt),
 #   * a path to a custom platform .toml file.
 
-builtin_platforms := $(patsubst arceos/configs/platforms/%.toml,%,$(wildcard arceos/configs/platforms/*))
+builtin_platforms := $(patsubst configs/platforms/%.toml,%,$(wildcard configs/platforms/*))
 
 ifeq ($(PLATFORM),)
   ifeq ($(ARCH),riscv64)
@@ -15,16 +15,16 @@ ifeq ($(PLATFORM),)
   else
     $(error "ARCH" must be one of "riscv64" or "loongarch64")
   endif
-  PLAT_CONFIG := arceos/configs/platforms/$(PLAT_NAME).toml
+  PLAT_CONFIG := configs/platforms/$(PLAT_NAME).toml
 else ifneq ($(wildcard $(PLATFORM)),)
   # Custom platform supplied as a path to a .toml file.
   PLAT_CONFIG := $(PLATFORM)
   PLAT_NAME   := $(patsubst "%",%,$(shell axconfig-gen $(PLAT_CONFIG) -r platform))
   _arch       := $(patsubst "%",%,$(shell axconfig-gen $(PLAT_CONFIG) -r arch))
 else ifneq ($(filter $(PLATFORM),$(builtin_platforms)),)
-  # Builtin platform (matches a file under arceos/configs/platforms/).
+  # Builtin platform (matches a file under configs/platforms/).
   PLAT_NAME   := $(PLATFORM)
-  PLAT_CONFIG := arceos/configs/platforms/$(PLAT_NAME).toml
+  PLAT_CONFIG := configs/platforms/$(PLAT_NAME).toml
   _arch       := $(word 1,$(subst -, ,$(PLATFORM)))
 else
   $(error "PLATFORM" must be one of "$(builtin_platforms)" or a valid path to a toml file)

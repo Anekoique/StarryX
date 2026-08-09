@@ -1,26 +1,26 @@
 [workspace]
 resolver = "2"
 members = [
-    "xapi",
-    "xcore",
+    "starry",
+    "xkernel",
     "xmodules/*",
-    "arceos/modules/*",
-    "arceos/crates/*",
+    "xcore/*",
+    "crates/*",
 ]
 exclude = [
     "apps",
-    "arceos/modules/axdisplay",
-    "arceos/modules/axdma",
-    "arceos/crates/axdriver_crates",
-    "arceos/crates/axdriver_crates/*",
-    "arceos/crates/page_table_multiarch",
-    "arceos/crates/page_table_multiarch/*",
-    "arceos/crates/lwext4_rust",
-    "arceos/crates/smoltcp",
+    "xcore/xdisplay",
+    "xcore/xdma",
+    "drivers",
+    "drivers/*",
+    "crates/page_table_multiarch",
+    "crates/page_table_multiarch/*",
+    "crates/lwext4_rust",
+    "crates/smoltcp",
     # vDSO source crate targets *-unknown-none with a custom linker script
     # and `dynamic-linking = true` to produce `cdylib`. Built out-of-band
     # by `make regenerate-vdso-blobs`; the resulting `.so` is committed
-    # under `xcore/src/vdso/blobs/` and embedded into the kernel via
+    # under `xkernel/src/vdso/blobs/` and embedded into the kernel via
     # `.incbin`.
     "xmodules/xvdso",
 ]
@@ -40,51 +40,54 @@ keywords = ["arceos", "kernel"]
 categories = ["os", "no-std"]
 
 [workspace.dependencies]
-# ----- ArceOS modules ----------------------------------------------------------
-axfeat     = { path = "arceos/modules/axfeat", features = ["fs", "irq", "multitask", "net", "smp", "sched_rr"] }
-axconfig   = { path = "arceos/modules/axconfig" }
-axdisplay  = { path = "arceos/modules/axdisplay" }
-axdriver   = { path = "arceos/modules/axdriver" }
-axdma      = { path = "arceos/modules/axdma" }
-axhal      = { path = "arceos/modules/axhal", features = ["uspace", "rtc", "irq"] }
-axlog      = { path = "arceos/modules/axlog" }
-axmm       = { path = "arceos/modules/axmm", features = ["cow", "copy-from"] }
-axnet      = { path = "arceos/modules/axnet" }
-axns       = { path = "arceos/modules/axns", features = ["thread-local"] }
-axruntime  = { path = "arceos/modules/axruntime" }
-axsync     = { path = "arceos/modules/axsync", features = ["multitask"] }
-axtask     = { path = "arceos/modules/axtask", features = ["smp"] }
-axalloc    = { path = "arceos/modules/axalloc" }
-axfs       = { path = "arceos/modules/axfs", default-features = false, features = ["fat", "thread-local"] }
+# ----- XCore modules (derived from ArceOS) -----------------------------------
+xfeat     = { path = "xcore/xfeat", features = ["fs", "irq", "multitask", "net", "smp", "sched_rr"] }
+xconfig   = { path = "xcore/xconfig" }
+xdisplay  = { path = "xcore/xdisplay" }
+xdriver   = { path = "xcore/xdriver" }
+xdma      = { path = "xcore/xdma" }
+xhal      = { path = "xcore/xhal", features = ["uspace", "rtc", "irq"] }
+xlog      = { path = "xcore/xlog" }
+xmm       = { path = "xcore/xmm", features = ["cow", "copy-from"] }
+xnet      = { path = "xcore/xnet" }
+xns       = { path = "xcore/xns", features = ["thread-local"] }
+xruntime  = { path = "xcore/xruntime" }
+xsync     = { path = "xcore/xsync", features = ["multitask"] }
+xtask     = { path = "xcore/xtask", features = ["smp"] }
+xalloc    = { path = "xcore/xalloc" }
+xfs       = { path = "xcore/xfs", default-features = false, features = ["fat", "thread-local"] }
 
-# ----- Vendored crates (under arceos/crates/) ---------------------------------
-allocator            = { path = "arceos/crates/allocator" }
-axerrno              = { path = "arceos/crates/axerrno" }
-axdriver_base        = { path = "arceos/crates/axdriver_crates/axdriver_base" }
-axdriver_block       = { path = "arceos/crates/axdriver_crates/axdriver_block" }
-axdriver_display     = { path = "arceos/crates/axdriver_crates/axdriver_display" }
-axdriver_net         = { path = "arceos/crates/axdriver_crates/axdriver_net" }
-axdriver_pci         = { path = "arceos/crates/axdriver_crates/axdriver_pci" }
-axdriver_virtio      = { path = "arceos/crates/axdriver_crates/axdriver_virtio" }
-axfs-vfs             = { path = "arceos/crates/axfs-vfs" }
-axio                 = { path = "arceos/crates/axio" }
-axsched              = { path = "arceos/crates/axsched" }
-kernel-elf-parser    = { path = "arceos/crates/kernel_elf_parser" }
-lwext4_rust          = { path = "arceos/crates/lwext4_rust", default-features = false }
-page_table_entry     = { path = "arceos/crates/page_table_multiarch/page_table_entry" }
-page_table_multiarch = { path = "arceos/crates/page_table_multiarch/page_table_multiarch" }
-smoltcp              = { path = "arceos/crates/smoltcp", default-features = false }
-weak-map             = { path = "arceos/crates/weak-map" }
+# ----- Generic crates --------------------------------------------------------
+allocator             = { path = "crates/allocator" }
+kernel-elf-parser      = { path = "crates/kernel_elf_parser" }
+lwext4_rust            = { path = "crates/lwext4_rust", default-features = false }
+page_table_entry       = { path = "crates/page_table_multiarch/page_table_entry" }
+page_table_multiarch   = { path = "crates/page_table_multiarch/page_table_multiarch" }
+smoltcp                = { path = "crates/smoltcp", default-features = false }
+weak-map               = { path = "crates/weak-map" }
 
-# ----- StarryX modules ---------------------------------------------------------
-xapi     = { path = "xapi" }
-xcore    = { path = "xcore" }
+# ----- XModules --------------------------------------------------------------
 xcache   = { path = "xmodules/xcache" }
+xerrno   = { path = "xmodules/xerrno" }
+xio      = { path = "xmodules/xio" }
 xprocess = { path = "xmodules/xprocess" }
+xsched   = { path = "xmodules/xsched" }
 xsignal  = { path = "xmodules/xsignal" }
 xuspace  = { path = "xmodules/xuspace" }
 xutils   = { path = "xmodules/xutils" }
+xvfs     = { path = "xmodules/xvfs" }
 xvma     = { path = "xmodules/xvma" }
+
+# ----- Driver components -----------------------------------------------------
+xdriver_base        = { path = "drivers/xdriver_base" }
+xdriver_block       = { path = "drivers/xdriver_block" }
+xdriver_display     = { path = "drivers/xdriver_display" }
+xdriver_net         = { path = "drivers/xdriver_net" }
+xdriver_pci         = { path = "drivers/xdriver_pci" }
+xdriver_virtio      = { path = "drivers/xdriver_virtio" }
+
+# ----- Kernel ---------------------------------------------------------------
+xkernel = { path = "xkernel" }
 
 # ----- crates.io --------------------------------------------------------------
 bitflags              = "2.6"
@@ -108,50 +111,4 @@ memory_addr = "0.4"
 percpu      = "0.4"
 rand        = { version = "0.10", default-features = false }
 spin        = "0.10"
-
-[package]
-name = "starry"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-homepage.workspace = true
-repository.workspace = true
-
-[features]
-lwext4_rs = ["axfeat/lwext4_rs"]
-# When set, src/main.rs embeds src/test.sh instead of src/init.sh.
-# Driven by the top-level ROOT_FEATURES Make variable (see scripts/make/cargo.mk).
-init-test = []
-
-[dependencies]
-axfeat.workspace = true
-
-axconfig.workspace  = true
-axdriver.workspace  = true
-axfs.workspace      = true
-axhal.workspace     = true
-axlog.workspace     = true
-axruntime.workspace = true
-axsync.workspace    = true
-axtask.workspace    = true
-axmm.workspace      = true
-axio.workspace      = true
-
-xprocess.workspace = true
-xsignal.workspace  = true
-xuspace.workspace  = true
-xvma.workspace     = true
-xcache.workspace   = true
-
-axerrno.workspace               = true
-inherit-methods-macro.workspace = true
-linkme.workspace                = true
-linux-raw-sys.workspace         = true
-
-xcore.workspace  = true
-xapi.workspace   = true
-xutils.workspace = true
-
-spin.workspace = true
-shlex    = { version = "1.3.0", default-features = false }
 syscalls = { git = "https://github.com/jasonwhite/syscalls.git", rev = "92624de", default-features = false }

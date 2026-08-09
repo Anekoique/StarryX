@@ -10,11 +10,11 @@
 
 ## 1.1 硬件初始化
 
-axhal部分 （arch + platform）
+xhal部分 （arch + platform）
 
 ## 1.2 组件初始化
 
-axhal -> axruntime (axruntime do crate init ...) -> starry main
+xhal -> xruntime (xruntime do crate init ...) -> starry main
 
 ## 1.3 宏内核初始化
 
@@ -24,7 +24,7 @@ starry main spawn task and mm init ...
 
 ## 1.1 整体架构
 
-axtask(task runqueue waitqueue)
+xtask(task runqueue waitqueue)
 
 ## 1.2 任务结构
 
@@ -32,7 +32,7 @@ task structure
 
 ## 1.3 任务调度
 
-axsched 
+xsched
 
 multicore sched(runqueue)
 
@@ -48,15 +48,15 @@ System V ipc
 
 ## 1.1 整体架构
 
-axmm + axalloc + pagetable_multiarch
+xmm + xalloc + pagetable_multiarch
 
 ## 1.2 内存分配器
 
-axalloc + allocator
+xalloc + allocator
 
 ## 1.3 地址空间管理
 
-axmm (backend(leaner + alloc + shared) design)
+xmm (backend(leaner + alloc + shared) design)
 
 ## 1.4 延迟分配技术
 
@@ -72,7 +72,7 @@ xuspace
 
 ## 1.1 整体架构
 
-axfs-vfs -> axfs -> xcore fs
+xvfs -> xfs -> xkernel fs
 
 ## 1.2 虚拟文件系统
 
@@ -92,7 +92,7 @@ page cache(xcache)
 
 ## 1.5 抽象文件
 
-xcore XFile -> FileLike design
+xkernel XFile -> FileLike design
 
 virt_file virt_fs -> /proc /dev /tmp
 
@@ -100,7 +100,7 @@ virt_file virt_fs -> /proc /dev /tmp
 
 ## 1.1 整体架构
 
-smoltcp -> axnet -> xcore net
+smoltcp -> xnet -> xkernel net
 
 ## 1.2 TCP套接字
 

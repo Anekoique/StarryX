@@ -11,7 +11,7 @@ else
   ifneq ($(V),)
     $(info APP: "$(APP)")
     $(info FEATURES: "$(FEATURES)")
-    $(info arceos features: "$(AX_FEAT)")
+    $(info XCore features: "$(XCORE_FEATURES)")
   endif
   RUSTFLAGS += $(RUSTFLAGS_LINK_ARGS)
   $(if $(V), $(info RUSTFLAGS: "$(RUSTFLAGS)"))
@@ -20,7 +20,7 @@ export RUSTFLAGS
 
 _cargo_build: oldconfig
 	@printf "    $(GREEN_C)Building$(END_C) App: $(APP_NAME), Arch: $(ARCH), Platform: $(PLAT_NAME)\n"
-	$(call cargo_build,$(APP),$(AX_FEAT))
+	$(call cargo_build,$(APP),$(XCORE_FEATURES))
 	@cp $(rust_elf) $(OUT_ELF)
 
 $(OUT_DIR):

@@ -145,26 +145,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "axalloc"
-version = "0.1.0"
-dependencies = [
- "allocator",
- "axerrno",
- "cfg-if",
- "crate_interface 0.3.0",
- "kspin",
- "log",
- "memory_addr",
-]
-
-[[package]]
-name = "axconfig"
-version = "0.1.0"
-dependencies = [
- "axconfig-macros",
-]
-
-[[package]]
 name = "axconfig-gen"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -184,316 +164,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "axdisplay"
-version = "0.1.0"
-dependencies = [
- "axdriver",
- "axdriver_display",
- "axsync",
- "lazyinit",
- "log",
-]
-
-[[package]]
-name = "axdma"
-version = "0.1.0"
-dependencies = [
- "allocator",
- "axalloc",
- "axconfig",
- "axerrno",
- "axhal",
- "axmm",
- "kspin",
- "log",
- "memory_addr",
-]
-
-[[package]]
-name = "axdriver"
-version = "0.1.0"
-dependencies = [
- "axalloc",
- "axconfig",
- "axdma",
- "axdriver_base",
- "axdriver_block",
- "axdriver_display",
- "axdriver_net",
- "axdriver_pci",
- "axdriver_virtio",
- "axhal",
- "cfg-if",
- "crate_interface 0.3.0",
- "log",
-]
-
-[[package]]
-name = "axdriver_base"
-version = "0.1.2"
-
-[[package]]
-name = "axdriver_block"
-version = "0.1.2"
-dependencies = [
- "axdriver_base",
- "bcm2835-sdhci",
- "log",
- "riscv 0.14.0",
- "visionfive2-sd",
-]
-
-[[package]]
-name = "axdriver_display"
-version = "0.1.2"
-dependencies = [
- "axdriver_base",
-]
-
-[[package]]
-name = "axdriver_net"
-version = "0.1.2"
-dependencies = [
- "axdriver_base",
- "fxmac_rs",
- "ixgbe-driver",
- "log",
- "spin 0.9.8",
-]
-
-[[package]]
-name = "axdriver_pci"
-version = "0.1.2"
-dependencies = [
- "virtio-drivers",
-]
-
-[[package]]
-name = "axdriver_virtio"
-version = "0.1.2"
-dependencies = [
- "axdriver_base",
- "axdriver_block",
- "axdriver_display",
- "axdriver_net",
- "virtio-drivers",
-]
-
-[[package]]
-name = "axerrno"
-version = "0.1.0"
-dependencies = [
- "log",
-]
-
-[[package]]
-name = "axfeat"
-version = "0.1.0"
-dependencies = [
- "axalloc",
- "axdisplay",
- "axdriver",
- "axfs",
- "axhal",
- "axlog",
- "axnet",
- "axruntime",
- "axsync",
- "axtask",
- "kspin",
-]
-
-[[package]]
-name = "axfs"
-version = "0.1.0"
-dependencies = [
- "axdriver",
- "axdriver_block",
- "axerrno",
- "axfs-vfs",
- "axio",
- "axns",
- "axsync",
- "bitflags 2.11.1",
- "cfg-if",
- "chrono",
- "env_logger",
- "fatfs",
- "lock_api",
- "log",
- "lwext4_rust",
- "slab",
- "spin 0.10.0",
-]
-
-[[package]]
-name = "axfs-vfs"
-version = "0.1.0"
-dependencies = [
- "axerrno",
- "bitflags 2.11.1",
- "inherit-methods-macro",
- "lock_api",
- "log",
-]
-
-[[package]]
-name = "axhal"
-version = "0.1.0"
-dependencies = [
- "axalloc",
- "axconfig",
- "axlog",
- "bitflags 2.11.1",
- "cfg-if",
- "chrono",
- "handler_table",
- "int_ratio",
- "kernel_guard",
- "kspin",
- "lazyinit",
- "linkme",
- "log",
- "loongArch64",
- "memory_addr",
- "ns16550a",
- "page_table_entry",
- "page_table_multiarch",
- "percpu",
- "riscv 0.12.1",
- "riscv_goldfish",
- "sbi-rt",
- "spin 0.10.0",
- "static_assertions",
-]
-
-[[package]]
-name = "axio"
-version = "0.1.1"
-dependencies = [
- "axerrno",
-]
-
-[[package]]
-name = "axlog"
-version = "0.1.0"
-dependencies = [
- "axlog",
- "cfg-if",
- "chrono",
- "crate_interface 0.3.0",
- "kspin",
- "log",
-]
-
-[[package]]
-name = "axmm"
-version = "0.1.0"
-dependencies = [
- "axalloc",
- "axconfig",
- "axerrno",
- "axhal",
- "kspin",
- "lazy_static",
- "lazyinit",
- "log",
- "memory_addr",
- "memory_set",
- "page_table_multiarch",
-]
-
-[[package]]
-name = "axnet"
-version = "0.1.0"
-dependencies = [
- "axdriver",
- "axdriver_net",
- "axerrno",
- "axhal",
- "axio",
- "axsync",
- "axtask",
- "cfg-if",
- "lazyinit",
- "log",
- "smoltcp 0.12.0",
- "spin 0.10.0",
-]
-
-[[package]]
-name = "axns"
-version = "0.1.0"
-dependencies = [
- "axns",
- "crate_interface 0.3.0",
- "lazyinit",
-]
-
-[[package]]
-name = "axruntime"
-version = "0.1.0"
-dependencies = [
- "axalloc",
- "axconfig",
- "axdisplay",
- "axdriver",
- "axfs",
- "axfs-vfs",
- "axhal",
- "axlog",
- "axmm",
- "axnet",
- "axsync",
- "axtask",
- "chrono",
- "crate_interface 0.3.0",
- "ctor_bare",
- "kernel_guard",
- "percpu",
-]
-
-[[package]]
-name = "axsched"
-version = "0.3.1"
-dependencies = [
- "intrusive-collections",
-]
-
-[[package]]
-name = "axsync"
-version = "0.1.0"
-dependencies = [
- "axsync",
- "axtask",
- "kspin",
- "lock_api",
- "rand 0.10.1",
-]
-
-[[package]]
-name = "axtask"
-version = "0.1.0"
-dependencies = [
- "axconfig",
- "axhal",
- "axsched",
- "axtask",
- "cfg-if",
- "cpumask",
- "crate_interface 0.3.0",
- "kernel_guard",
- "kspin",
- "lazyinit",
- "log",
- "memory_addr",
- "percpu",
- "rand 0.10.1",
- "timer_list",
- "weak-map",
 ]
 
 [[package]]
@@ -1402,11 +1072,11 @@ dependencies = [
 name = "kernel-elf-parser"
 version = "0.3.3"
 dependencies = [
- "axerrno",
  "cfg-if",
  "log",
  "memory_addr",
  "page_table_entry",
+ "xerrno",
  "xmas-elf",
 ]
 
@@ -2187,29 +1857,27 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 name = "starry"
 version = "0.1.0"
 dependencies = [
- "axconfig",
- "axdriver",
- "axerrno",
- "axfeat",
- "axfs",
- "axhal",
- "axio",
- "axlog",
- "axmm",
- "axruntime",
- "axsync",
- "axtask",
  "inherit-methods-macro",
  "linkme",
  "linux-raw-sys",
  "shlex",
  "spin 0.10.0",
- "syscalls",
- "xapi",
  "xcache",
- "xcore",
+ "xconfig",
+ "xdriver",
+ "xerrno",
+ "xfeat",
+ "xfs",
+ "xhal",
+ "xio",
+ "xkernel",
+ "xlog",
+ "xmm",
  "xprocess",
+ "xruntime",
  "xsignal",
+ "xsync",
+ "xtask",
  "xuspace",
  "xutils",
  "xvma",
@@ -2784,71 +2452,222 @@ dependencies = [
 ]
 
 [[package]]
-name = "xapi"
+name = "xalloc"
 version = "0.1.0"
 dependencies = [
- "axconfig",
- "axerrno",
- "axfeat",
- "axfs",
- "axfs-vfs",
- "axhal",
- "axio",
- "axlog",
- "axmm",
- "axnet",
- "axns",
- "axsync",
- "axtask",
- "bitflags 2.11.1",
+ "allocator",
  "cfg-if",
- "linkme",
- "linux-raw-sys",
+ "crate_interface 0.3.0",
+ "kspin",
+ "log",
  "memory_addr",
- "num_enum",
- "page_table_entry",
- "page_table_multiarch",
- "rand 0.10.1",
- "spin 0.10.0",
- "x86",
- "xcore",
- "xprocess",
- "xsignal",
- "xuspace",
- "xutils",
- "xvma",
+ "xerrno",
 ]
 
 [[package]]
 name = "xcache"
 version = "0.1.0"
 dependencies = [
- "axerrno",
- "axhal",
  "log",
  "lru",
  "memory_addr",
  "spin 0.10.0",
+ "xerrno",
+ "xhal",
 ]
 
 [[package]]
-name = "xcore"
+name = "xconfig"
 version = "0.1.0"
 dependencies = [
- "axalloc",
- "axconfig",
- "axerrno",
- "axfs",
- "axfs-vfs",
- "axhal",
- "axio",
- "axlog",
- "axmm",
- "axnet",
- "axns",
- "axruntime",
- "axsync",
- "axtask",
+ "axconfig-macros",
+]
+
+[[package]]
+name = "xdisplay"
+version = "0.1.0"
+dependencies = [
+ "lazyinit",
+ "log",
+ "xdriver",
+ "xdriver_display",
+ "xsync",
+]
+
+[[package]]
+name = "xdma"
+version = "0.1.0"
+dependencies = [
+ "allocator",
+ "kspin",
+ "log",
+ "memory_addr",
+ "xalloc",
+ "xconfig",
+ "xerrno",
+ "xhal",
+ "xmm",
+]
+
+[[package]]
+name = "xdriver"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "crate_interface 0.3.0",
+ "log",
+ "xalloc",
+ "xconfig",
+ "xdma",
+ "xdriver_base",
+ "xdriver_block",
+ "xdriver_display",
+ "xdriver_net",
+ "xdriver_pci",
+ "xdriver_virtio",
+ "xhal",
+]
+
+[[package]]
+name = "xdriver_base"
+version = "0.1.2"
+
+[[package]]
+name = "xdriver_block"
+version = "0.1.2"
+dependencies = [
+ "bcm2835-sdhci",
+ "log",
+ "riscv 0.14.0",
+ "visionfive2-sd",
+ "xdriver_base",
+]
+
+[[package]]
+name = "xdriver_display"
+version = "0.1.2"
+dependencies = [
+ "xdriver_base",
+]
+
+[[package]]
+name = "xdriver_net"
+version = "0.1.2"
+dependencies = [
+ "fxmac_rs",
+ "ixgbe-driver",
+ "log",
+ "spin 0.9.8",
+ "xdriver_base",
+]
+
+[[package]]
+name = "xdriver_pci"
+version = "0.1.2"
+dependencies = [
+ "virtio-drivers",
+]
+
+[[package]]
+name = "xdriver_virtio"
+version = "0.1.2"
+dependencies = [
+ "virtio-drivers",
+ "xdriver_base",
+ "xdriver_block",
+ "xdriver_display",
+ "xdriver_net",
+]
+
+[[package]]
+name = "xerrno"
+version = "0.1.0"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "xfeat"
+version = "0.1.0"
+dependencies = [
+ "kspin",
+ "xalloc",
+ "xdisplay",
+ "xdriver",
+ "xfs",
+ "xhal",
+ "xlog",
+ "xnet",
+ "xruntime",
+ "xsync",
+ "xtask",
+]
+
+[[package]]
+name = "xfs"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "cfg-if",
+ "chrono",
+ "env_logger",
+ "fatfs",
+ "lock_api",
+ "log",
+ "lwext4_rust",
+ "slab",
+ "spin 0.10.0",
+ "xdriver",
+ "xdriver_block",
+ "xerrno",
+ "xio",
+ "xns",
+ "xsync",
+ "xvfs",
+]
+
+[[package]]
+name = "xhal"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "cfg-if",
+ "chrono",
+ "handler_table",
+ "int_ratio",
+ "kernel_guard",
+ "kspin",
+ "lazyinit",
+ "linkme",
+ "log",
+ "loongArch64",
+ "memory_addr",
+ "ns16550a",
+ "page_table_entry",
+ "page_table_multiarch",
+ "percpu",
+ "riscv 0.12.1",
+ "riscv_goldfish",
+ "sbi-rt",
+ "spin 0.10.0",
+ "static_assertions",
+ "xalloc",
+ "xconfig",
+ "xlog",
+]
+
+[[package]]
+name = "xio"
+version = "0.1.1"
+dependencies = [
+ "xerrno",
+]
+
+[[package]]
+name = "xkernel"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
  "cfg-if",
  "chrono",
  "crate_interface 0.3.0",
@@ -2860,18 +2679,48 @@ dependencies = [
  "linux-raw-sys",
  "lock_api",
  "memory_addr",
+ "num_enum",
  "numeric-enum-macro",
  "page_table_entry",
  "page_table_multiarch",
  "rand 0.10.1",
  "spin 0.10.0",
+ "syscalls",
+ "x86",
+ "xalloc",
  "xcache",
+ "xconfig",
+ "xerrno",
+ "xfeat",
+ "xfs",
+ "xhal",
+ "xio",
+ "xlog",
  "xmas-elf",
+ "xmm",
+ "xnet",
+ "xns",
  "xprocess",
+ "xruntime",
  "xsignal",
+ "xsync",
+ "xtask",
  "xuspace",
  "xutils",
+ "xvfs",
  "xvma",
+]
+
+[[package]]
+name = "xlog"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "chrono",
+ "crate_interface 0.3.0",
+ "kspin",
+ "log",
+ "xlog",
 ]
 
 [[package]]
@@ -2881,6 +2730,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18245fcbb8b3de8dd198ce7944fdd4096986fd6cd306b0fcfa27df817bd545d6"
 dependencies = [
  "zero",
+]
+
+[[package]]
+name = "xmm"
+version = "0.1.0"
+dependencies = [
+ "kspin",
+ "lazy_static",
+ "lazyinit",
+ "log",
+ "memory_addr",
+ "memory_set",
+ "page_table_multiarch",
+ "xalloc",
+ "xconfig",
+ "xerrno",
+ "xhal",
+]
+
+[[package]]
+name = "xnet"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "lazyinit",
+ "log",
+ "smoltcp 0.12.0",
+ "spin 0.10.0",
+ "xdriver",
+ "xdriver_net",
+ "xerrno",
+ "xhal",
+ "xio",
+ "xsync",
+ "xtask",
+]
+
+[[package]]
+name = "xns"
+version = "0.1.0"
+dependencies = [
+ "crate_interface 0.3.0",
+ "lazyinit",
+ "xns",
 ]
 
 [[package]]
@@ -2894,13 +2787,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "xruntime"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "crate_interface 0.3.0",
+ "ctor_bare",
+ "kernel_guard",
+ "percpu",
+ "xalloc",
+ "xconfig",
+ "xdisplay",
+ "xdriver",
+ "xfs",
+ "xhal",
+ "xlog",
+ "xmm",
+ "xnet",
+ "xsync",
+ "xtask",
+ "xvfs",
+]
+
+[[package]]
+name = "xsched"
+version = "0.3.1"
+dependencies = [
+ "intrusive-collections",
+]
+
+[[package]]
 name = "xsignal"
 version = "0.1.0"
 dependencies = [
- "axconfig",
- "axerrno",
- "axhal",
- "axtask",
  "bitflags 2.11.1",
  "cfg-if",
  "derive_more",
@@ -2909,30 +2828,62 @@ dependencies = [
  "log",
  "page_table_multiarch",
  "strum_macros",
+ "xconfig",
+ "xerrno",
+ "xhal",
  "xprocess",
+ "xtask",
  "xuspace",
+]
+
+[[package]]
+name = "xsync"
+version = "0.1.0"
+dependencies = [
+ "kspin",
+ "lock_api",
+ "rand 0.10.1",
+ "xsync",
+ "xtask",
+]
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "cpumask",
+ "crate_interface 0.3.0",
+ "kernel_guard",
+ "kspin",
+ "lazyinit",
+ "log",
+ "memory_addr",
+ "percpu",
+ "rand 0.10.1",
+ "timer_list",
+ "weak-map",
+ "xconfig",
+ "xhal",
+ "xsched",
+ "xtask",
 ]
 
 [[package]]
 name = "xuspace"
 version = "0.1.0"
 dependencies = [
- "axerrno",
  "log",
  "memory_addr",
  "page_table_multiarch",
  "percpu",
+ "xerrno",
 ]
 
 [[package]]
 name = "xutils"
 version = "0.1.0"
 dependencies = [
- "axerrno",
- "axfs",
- "axfs-vfs",
- "axhal",
- "axlog",
  "bitflags 2.11.1",
  "bitmaps",
  "flatten_objects",
@@ -2940,16 +2891,32 @@ dependencies = [
  "slab",
  "strum",
  "weak-map",
+ "xerrno",
+ "xfs",
+ "xhal",
+ "xlog",
+ "xvfs",
+]
+
+[[package]]
+name = "xvfs"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "inherit-methods-macro",
+ "lock_api",
+ "log",
+ "xerrno",
 ]
 
 [[package]]
 name = "xvma"
 version = "0.1.0"
 dependencies = [
- "axerrno",
  "memory_addr",
  "page_table_multiarch",
  "spin 0.10.0",
+ "xerrno",
 ]
 
 [[package]]

@@ -1,8 +1,8 @@
 use core::{alloc::Layout, ffi::c_char, mem::transmute, ptr, slice, str};
 
-use axerrno::{LinuxError, LinuxResult};
 use memory_addr::VirtAddr;
 use page_table_multiarch::MappingFlags;
+use xerrno::{LinuxError, LinuxResult};
 
 use crate::{UserSpaceAccess, check_null_terminated, check_region};
 

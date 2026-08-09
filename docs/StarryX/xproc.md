@@ -9,7 +9,7 @@
 *   **调度：** `xproc` 中的调度器决定在任何给定时间运行哪个进程，确保CPU的公平和高效使用。
 *   **信号处理：** `xproc` 实现信号处理机制，允许进程响应异步事件。
 
-`xproc` 模块位于 `xmodules/xprocess` 目录中。
+`xprocess` 组件位于 `xmodules/xprocess` 目录中。
 
 ## 关键组件
 

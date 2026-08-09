@@ -1,5 +1,5 @@
-use axerrno::{LinuxError, LinuxResult};
-pub use axhal::time::{
+use xerrno::{LinuxError, LinuxResult};
+pub use xhal::time::{
     NANOS_PER_MICROS, NANOS_PER_MILLIS, NANOS_PER_SEC, TimeValue, monotonic_time,
     monotonic_time_nanos, nanos_to_ticks, wall_time, wall_time_nanos,
 };

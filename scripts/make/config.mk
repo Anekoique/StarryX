@@ -1,7 +1,7 @@
 # Config generation
 
 config_args := \
-  arceos/configs/defconfig.toml $(PLAT_CONFIG) $(EXTRA_CONFIG) \
+  configs/defconfig.toml $(PLAT_CONFIG) $(EXTRA_CONFIG) \
   -w 'smp=$(SMP)' \
   -w 'arch="$(ARCH)"' \
   -w 'platform="$(PLAT_NAME)"' \
@@ -23,9 +23,9 @@ else
   endef
 endif
 
-_axconfig-gen:
+_xconfig-gen:
 ifeq ($(shell axconfig-gen --version 2>/dev/null),)
 	$(call run_cmd,RUSTFLAGS="" cargo,install axconfig-gen)
 endif
 
-.PHONY: _axconfig-gen
+.PHONY: _xconfig-gen

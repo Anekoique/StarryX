@@ -1,5 +1,5 @@
-use axhal::paging::MappingFlags;
 use strum::FromRepr;
+use xhal::paging::MappingFlags;
 
 use super::{
     MAP_ANONYMOUS, MAP_FIXED, MAP_FIXED_NOREPLACE, MAP_HUGE_1GB, MAP_HUGETLB, MAP_NORESERVE,

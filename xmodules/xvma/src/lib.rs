@@ -5,10 +5,10 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeSet, vec, vec::Vec};
-use axerrno::{LinuxError, LinuxResult};
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 use page_table_multiarch::PageSize;
 use spin::Mutex;
+use xerrno::{LinuxError, LinuxResult};
 
 /// Trait for file operations required by VMA management
 /// The implementor is responsible for thread safety and sharing semantics

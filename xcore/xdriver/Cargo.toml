@@ -1,0 +1,49 @@
+[package]
+name = "xdriver"
+version.workspace = true
+edition.workspace = true
+authors = ["Yuekai Jia <equation618@gmail.com>", "ChengXiang Qi <kuangjux@outlook.com>"]
+description = "ArceOS device drivers"
+license.workspace = true
+homepage.workspace = true
+repository = "https://github.com/arceos-org/arceos/tree/main/modules/axdriver"
+documentation = "https://arceos-org.github.io/arceos/axdriver/index.html"
+
+[features]
+dyn = []
+bus-mmio = []
+bus-pci = ["dep:xdriver_pci", "dep:xhal", "dep:xconfig"]
+net = ["xdriver_net"]
+block = ["xdriver_block"]
+display = ["xdriver_display"]
+
+# Enabled by features `virtio-*`
+virtio = ["xdriver_virtio", "dep:xalloc", "dep:xhal", "dep:xconfig"]
+
+# various types of drivers
+virtio-blk = ["block", "virtio", "xdriver_virtio/block"]
+virtio-net = ["net", "virtio", "xdriver_virtio/net"]
+virtio-gpu = ["display", "virtio", "xdriver_virtio/gpu"]
+ramdisk = ["block", "xdriver_block/ramdisk"]
+bcm2835-sdhci = ["block", "xdriver_block/bcm2835-sdhci"]
+visionfive2-sd = ["block", "xdriver_block/visionfive2-sd"]
+ixgbe = ["net", "xdriver_net/ixgbe", "dep:xalloc", "dep:xhal", "dep:xdma"]
+fxmac = ["net", "xdriver_net/fxmac", "dep:xalloc", "dep:xhal", "dep:xdma"]
+# more devices example: e1000 = ["net", "xdriver_net/e1000"]
+
+default = ["bus-pci"]
+
+[dependencies]
+log             = { workspace = true }
+cfg-if          = { workspace = true }
+crate_interface = { workspace = true }
+xdriver_base    = { workspace = true }
+xdriver_block   = { workspace = true, optional = true }
+xdriver_net     = { workspace = true, optional = true }
+xdriver_display = { workspace = true, optional = true }
+xdriver_pci     = { workspace = true, optional = true }
+xdriver_virtio  = { workspace = true, optional = true }
+xalloc          = { workspace = true, optional = true }
+xhal            = { workspace = true, optional = true }
+xconfig         = { workspace = true, optional = true }
+xdma            = { workspace = true, optional = true }

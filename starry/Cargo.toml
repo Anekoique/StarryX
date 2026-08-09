@@ -1,0 +1,44 @@
+[package]
+name = "starry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[features]
+lwext4_rs = ["xfeat/lwext4_rs"]
+# When set, src/main.rs embeds src/test.sh instead of src/init.sh.
+# Driven by the top-level ROOT_FEATURES Make variable (see scripts/make/cargo.mk).
+init-test = []
+
+[dependencies]
+xfeat.workspace = true
+
+xconfig.workspace  = true
+xdriver.workspace  = true
+xfs.workspace      = true
+xhal.workspace     = true
+xlog.workspace     = true
+xruntime.workspace = true
+xsync.workspace    = true
+xtask.workspace    = true
+xmm.workspace      = true
+xio.workspace      = true
+
+xprocess.workspace = true
+xsignal.workspace  = true
+xuspace.workspace  = true
+xvma.workspace     = true
+xcache.workspace   = true
+
+xerrno.workspace                = true
+inherit-methods-macro.workspace = true
+linkme.workspace                = true
+linux-raw-sys.workspace         = true
+
+xkernel.workspace = true
+xutils.workspace  = true
+
+spin.workspace = true
+shlex = { version = "1.3.0", default-features = false }

@@ -1,0 +1,83 @@
+[package]
+name = "xfeat"
+version.workspace = true
+edition.workspace = true
+authors = ["Yuekai Jia <equation618@gmail.com>"]
+description = "Top-level feature selection for ArceOS"
+license.workspace = true
+homepage.workspace = true
+repository = "https://github.com/arceos-org/arceos/tree/main/modules/axfeat"
+documentation = "https://arceos-org.github.io/arceos/axfeat/index.html"
+
+[features]
+default = []
+
+# Multicore
+smp = ["xhal/smp", "xruntime/smp", "xtask?/smp", "kspin/smp"]
+
+# Floating point/SIMD
+fp_simd = ["xhal/fp_simd"]
+
+# Interrupts
+irq = ["xhal/irq", "xruntime/irq", "xtask?/irq"]
+
+# Memory
+alloc = ["xalloc", "xruntime/alloc"]
+alloc-tlsf = ["xalloc/tlsf"]
+alloc-slab = ["xalloc/slab"]
+alloc-buddy = ["xalloc/buddy"]
+page-alloc-64g = ["xalloc/page-alloc-64g"] # up to 64G memory capacity
+page-alloc-4g = ["xalloc/page-alloc-4g"] # up to 4G memory capacity
+paging = ["alloc", "xhal/paging", "xruntime/paging"]
+tls = ["alloc", "xhal/tls", "xruntime/tls", "xtask?/tls"]
+dma = ["alloc", "paging"]
+
+# Multi-threading and scheduler
+multitask = ["alloc", "xtask/multitask", "xsync/multitask", "xruntime/multitask"]
+sched_fifo = ["xtask/sched_fifo"]
+sched_rr = ["xtask/sched_rr", "irq"]
+sched_cfs = ["xtask/sched_cfs", "irq"]
+
+# File system
+fs = ["alloc", "paging", "dep:xfs", "xruntime/fs"] # TODO: try to remove "paging"
+lwext4_rs = ["xfs/ext4"]
+
+# Networking
+net = ["alloc", "paging", "xdriver/virtio-net", "dep:xnet", "xruntime/net"]
+
+# Display
+display = ["alloc", "paging", "xdriver/virtio-gpu", "dep:xdisplay", "xruntime/display"]
+
+# Real Time Clock (RTC) Driver.
+rtc = ["xhal/rtc", "xruntime/rtc"]
+
+# Device drivers
+bus-mmio = ["xdriver?/bus-mmio"]
+bus-pci = ["xdriver?/bus-pci"]
+driver-ramdisk = ["xdriver?/ramdisk"]
+driver-ixgbe = ["xdriver?/ixgbe"]
+driver-fxmac = ["xdriver?/fxmac"] # fxmac ethernet driver for PhytiumPi
+driver-bcm2835-sdhci = ["xdriver?/bcm2835-sdhci"]
+driver-virtio-blk = ["xdriver?/virtio-blk"]
+driver-visionfive2-sd = ["xdriver?/visionfive2-sd"]
+
+# Logging
+log-level-off = ["xlog/log-level-off"]
+log-level-error = ["xlog/log-level-error"]
+log-level-warn = ["xlog/log-level-warn"]
+log-level-info = ["xlog/log-level-info"]
+log-level-debug = ["xlog/log-level-debug"]
+log-level-trace = ["xlog/log-level-trace"]
+
+[dependencies]
+xruntime = { workspace = true }
+xhal = { workspace = true }
+xlog = { workspace = true }
+xalloc = { workspace = true, optional = true }
+xdriver = { workspace = true, optional = true }
+xfs = { workspace = true, optional = true }
+xnet = { workspace = true, optional = true }
+xdisplay = { workspace = true, optional = true }
+xsync = { workspace = true, optional = true }
+xtask = { workspace = true, optional = true }
+kspin = { workspace = true, optional = true }

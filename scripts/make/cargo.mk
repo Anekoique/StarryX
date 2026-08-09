@@ -27,5 +27,5 @@ endef
 clippy_args := -A clippy::new_without_default -A unsafe_op_in_unsafe_fn
 
 define cargo_clippy_root
-  $(call run_cmd,cargo clippy,$(build_args) --manifest-path "$(APP)/Cargo.toml" --features "$(strip $(AX_FEAT))" -- $(clippy_args))
+  $(call run_cmd,cargo clippy,$(build_args) --manifest-path "$(APP)/Cargo.toml" --features "$(strip $(XCORE_FEATURES))" -- $(clippy_args))
 endef

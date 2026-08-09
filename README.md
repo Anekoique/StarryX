@@ -1,14 +1,14 @@
 #  StarryX
 
-A macrokernel based on arceos unikernel.
+A component-oriented macrokernel derived from ArceOS.
 
 First prize in CSCC OS Competition 2025.
 
 ## Architecture
 
-<div style="text-align: center;">
-  <img src="./docs/StarryX/images/structure.png" alt="structure" width="60%">
-</div>
+```text
+user ABI -> xkernel::syscall -> xkernel services -> xmodules / xcore
+```
 
 ```shell
 .
@@ -17,11 +17,14 @@ First prize in CSCC OS Competition 2025.
 ├── Makefile                 // Build scripts
 ├── Cargo.toml               // Rust workspace configuration and dependencies
 ├── scripts                  // Build and QEMU helper scripts
-├── arceos                   // Vendored ArceOS component crates/workspace
-├── src                      // Entry OS
-├── xapi                     // Posix API
-├── xcore                    // OS Core
-├── xmodules                 // Macrokernel modules 
+├── configs                  // Build and platform configurations
+├── crates                   // Lower-level and general-purpose crates
+├── drivers                  // Driver interfaces and implementations
+├── xcore                    // ArceOS-derived low-level modules
+├── starry                   // Thin runtime and image integration crate
+├── xkernel                  // Kernel services and syscall ABI
+│   └── src/syscall          // Linux syscall translation and dispatch
+├── xmodules                 // Flat collection of reusable x* components
 └── xtest                    // Linux APP for tets
 ```
 
@@ -42,7 +45,7 @@ make vf2
 
 ## Description
 
-StarryX操作系统是基于组件化操作系统ArceOS的宏内核扩展实现，完整实现了进程管理，内存管理，文件系统，信号系统等模块。[学习/开发日志](./docs/record.md);[决赛文档](./docs/StarryX.pdf);[决赛PPT](./docs/StarryX.pptx)
+StarryX 是从组件化操作系统 ArceOS 演进而来的宏内核实现。当前代码由底层 `xcore` 组件集、扁平组织的可复用 `xmodules` 和承载 Linux ABI 的 `xkernel` 组成。`xmodules` 既包含内核机制组件，也包含 StarryX 自有的基础接口组件；它是代码归属边界，不代表单一的宏内核层级。[学习/开发日志](./docs/record.md);[决赛文档](./docs/StarryX.pdf);[决赛PPT](./docs/StarryX.pptx)
 
 截至目前，StarryX共实现约200项系统调用，包括进程管理、文件系统、内存管理、网络等各个模块的系统调用，能够运行大量LTP测例，并能够运行Redis、Git、Gcc等Linux应用。
 

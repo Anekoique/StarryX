@@ -1,46 +1,55 @@
 # Agent Guide
 
-Orientation for AI agents contributing to **StarryX** — a monolithic kernel
-built on ArceOS (`arceos/starry` lineage). Read this before touching code.
+Orientation for AI agents contributing to **StarryX** — a component-oriented
+macrokernel derived from ArceOS. Read this before touching code.
 
 ## Project Snapshot
 
 - `no_std` Rust kernel, edition 2024, toolchain pinned to `nightly-2026-03-15`
   via `rust-toolchain.toml` / `Makefile` (`TOOLCHAIN`).
 - Supports `riscv64` and `loongarch64` QEMU targets plus the
-  `riscv64-visionfive2` board. `aarch64` / `x86_64` trees in `arceos/` have
+  `riscv64-visionfive2` board. `aarch64` / `x86_64` trees in `xcore/` have
   been pruned from the root build.
 - Root license trio: GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0.
 - Full context lives in `docs/` — `README.md`, `docs/record.md`,
-  `docs/StarryX/intro.md`, `structure.md`, `xcore.md`, `xmodules.md`,
+  `docs/StarryX/intro.md`, `structure.md`, `xkernel.md`, `xmodules.md`,
   `xuspace.md`, `xprocess.md`, `xsignal.md`, `xcache.md`, `xvma.md`,
-  `fs.md`, `mm.md`, `task.md`, `axmm.md`, `board.md`, `boot.md`.
+  `fs.md`, `mm.md`, `task.md`, `xmm.md`, `board.md`, `boot.md`.
 
 ## Repo Layout
 
 ```
-src/                  Entry OS (main.rs, entry.rs, syscall.rs, mm.rs, init.sh)
-xcore/                Macrokernel core (fs, ipc, mm, net, sys, task)
-xapi/                 POSIX surface (fs, iomux, ipc, mm, net, sys, task)
-xmodules/             Reusable macrokernel components
+starry/               Thin runtime and final image integration crate
+xkernel/              Macrokernel services and Linux syscall ABI
+  src/syscall/         Syscall translation, implementation, and dispatch
+xmodules/             Flat collection of StarryX-owned x* components
+  xerrno/             Shared kernel error vocabulary
+  xio/                no_std I/O traits and helpers
+  xsched/             Reusable scheduling policies
+  xvfs/               Filesystem-neutral VFS contracts
   xuspace/            Safe user-space memory access (UserPtr / UserSpaceAccess)
   xprocess/           Process/thread/group/session lifecycle
   xsignal/            UNIX signal machinery (standard + realtime)
   xcache/             Page cache (LRU, Buffered I/O)
   xvma/               File-backed mmap region manager
-  xutils/             Macrokernel shared utilities
-arceos/               Vendored ArceOS workspace (modules + crates + configs)
+  xutils/             Kernel shared utilities
+  xvdso/              User-space vDSO image source
+xcore/                ArceOS-derived low-level modules only
+crates/               Lower-level and general-purpose support crates
+drivers/              Driver interfaces and implementations
+configs/              Build and platform configurations
 scripts/make/         Makefile includes: features, platform, config, build, qemu
 docs/StarryX/         Design docs, diagrams, images
 ```
 
-The Cargo workspace (`Cargo.toml`) includes `xapi`, `xcore`, `xmodules/*`,
-`arceos/modules/*`, `arceos/crates/*` and excludes display/dma/pci/smoltcp
-drivers plus the `page_table_multiarch` and `lwext4_rust` subtrees.
+The Cargo workspace (`Cargo.toml`) includes `starry`, `xkernel`,
+`xmodules/*`, `xcore/*`, and `crates/*`. It excludes the standalone driver
+workspace, display/dma modules, and the `page_table_multiarch`, `smoltcp`,
+`lwext4_rust`, and vDSO subtrees from default workspace-wide commands.
 
 ## Build & Run
 
-Prefer the Makefile — it exports `AX_*` env vars that `axconfig` and build
+Prefer the Makefile — it exports `XCORE_*` env vars that `xconfig` and build
 scripts rely on.
 
 ```sh
@@ -53,7 +62,7 @@ make run
 make debug        # runs QEMU + GDB on localhost:1234
 make clippy       # oldconfig + workspace clippy
 make fmt          # cargo fmt --all
-make clean        # drop built *.bin/*.elf and axconfig
+make clean        # drop built *.bin/*.elf and xconfig
 make docker       # enter contest docker image
 ```
 
@@ -71,16 +80,17 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 
 ### While writing code
 - Respect module decoupling: component crates in `xmodules/*` must stay
-  reusable — do not pull `xcore`/`xapi` into them. Exchange behaviour through
+  reusable — do not pull `xkernel` into them. Exchange behaviour through
   traits (`UserSpaceAccess`, `InodeOps`/`PageOps`, `WaitQueue`, `VmFile`, …).
-- ArceOS modules (`axhal`, `axmm`, `axfs`, `axtask`, `axnet`, …) must stay
-  OS-agnostic. If macrokernel logic creeps in, move it up to `xmodules`.
-- `xapi` wraps POSIX syscalls; `xcore` owns macrokernel state; `xmodules`
-  holds reusable algorithms. Pick the smallest layer that fits.
+- XCore modules (`xhal`, `xmm`, `xfs`, `xtask`, `xnet`, …) must stay
+  OS-agnostic. If higher-level reusable logic creeps in, move it to `xmodules`.
+- `xkernel::syscall` owns Linux ABI translation and depends on the service
+  modules in `xkernel`; those service modules must not depend back on
+  `xkernel::syscall`. `xmodules` holds reusable contracts and algorithms.
 - Kernel code is `no_std` + `alloc`. No `std`, no blocking on host I/O.
 - Rust style: `rustfmt` is authoritative; `&str`/`&[T]` in params, return
   owned on transfer; propagate errors with `?`; never `.unwrap()` in prod.
-  `LinuxResult<T>` (via `axerrno`) is the default result type.
+  `LinuxResult<T>` (via `xerrno`) is the default result type.
 - Immutability by default — only `let mut` when mutation is required; never
   mutate inputs in place when a new value can be returned.
 - `unsafe` needs a `// SAFETY:` comment spelling out every invariant. User
@@ -89,8 +99,8 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 - Keep files focused (200–400 lines typical, 800 hard cap); extract helpers
   before they grow.
 - Comments only explain non-obvious *why*. No narrated changelogs in source.
-- Avoid hardcoded platform constants — use `axconfig` / platform tomls under
-  `arceos/configs/platforms/` and the `AX_*` env vars.
+- Avoid hardcoded platform constants — use `xconfig` / platform tomls under
+  `configs/platforms/` and the `XCORE_*` env vars.
 
 ### After writing code
 - `make fmt` and `make clippy` both targets you touched (`ARCH=riscv64`
@@ -114,7 +124,7 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   `tests-rootfs-$ARCH.img` (under `xtest/build/`) by baking first-party C
   tests and the vendored OS-COMP suites into a copy of the upstream rootfs.
   `make run-tests ARCH=...` builds the kernel with `ROOT_FEATURES=init-test`
-  (which embeds `src/test.sh` instead of `src/init.sh` via the `init-test`
+  (which embeds `starry/src/test.sh` instead of `starry/src/init.sh` via the `init-test`
   cargo feature on the root crate) and boots it against that image. Both
   targets require Docker — the cross-build runs inside
   `docker.educg.net/cg/os-contest@sha256:742479b…`. See `xtest/README.md`.
@@ -130,7 +140,7 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   Provenance, per-suite patches, run results, and known-fails are in
   `xtest/testsuites/UPSTREAM.md`. To add a suite: see `xtest/README.md`.
 - **vDSO** — the kernel maps `linux-vdso.so.1` into every user address
-  space. Pre-built blobs live under `xcore/src/vdso/blobs/`, embedded
+  space. Pre-built blobs live under `xkernel/src/vdso/blobs/`, embedded
   via `.incbin`. Source under `xmodules/xvdso/` (workspace-excluded).
   Run `make regenerate-vdso-blobs` after touching the source and commit
   the updated `.so`. See `docs/StarryX/vdso.md`. Tests under
@@ -140,7 +150,7 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 ## Git & PR Workflow
 
 - Conventional commits: `feat|fix|refactor|docs|test|chore|perf|ci: subject`.
-- Never commit generated artifacts (`*.bin`, `*.elf`, `.axconfig.*.toml`,
+- Never commit generated artifacts (`*.bin`, `*.elf`, `.xconfig.*.toml`,
   `target/`, downloaded rootfs). They are already built locally and should
   stay untracked.
 - PR body: summary bullets + test plan + ARCH coverage (at minimum one of
@@ -151,10 +161,10 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 
 ## Common Pitfalls
 
-- Touching `arceos/modules/axhal/linker.lds.S` or per-arch asm without
+- Touching `xcore/xhal/linker.lds.S` or per-arch asm without
   rebuilding all supported targets — always run both `rv` and `la`.
-- Adding direct dependencies between `xcore` and `xmodules` crates — breaks
-  the reuse contract. Route through traits.
+- Adding a dependency from `xmodules` to `xkernel` — breaks the reuse
+  contract. Route behaviour through traits.
 - Using `VecDeque`/`alloc` types in interrupt context or inside spinlocks;
   see `xsignal` / `xprocess` for the correct mutex + queue layering.
 - Forgetting to re-run `make oldconfig` / `make defconfig` after adding a

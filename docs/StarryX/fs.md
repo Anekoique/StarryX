@@ -2,7 +2,7 @@
 
 ## 整体架构
 
-StarryX的文件系统架构可分为三层，最底层为arceos中支撑axfs运行的虚拟文件系统axfs-vfs，在其之上是axfs，其实现了axfs-vfs的具体文件系统实例，如ext4、vfat，最上层为X Core，其对磁盘文件和宏内核的抽象文件进行封装，通过统一的trait进行文件操作抽象。
+StarryX的文件系统架构可分为三层，最底层为arceos中支撑xfs运行的虚拟文件系统xvfs，在其之上是xfs，其实现了xvfs的具体文件系统实例，如ext4、vfat，最上层为X Core，其对磁盘文件和宏内核的抽象文件进行封装，通过统一的trait进行文件操作抽象。
 
 ## 虚拟文件系统
 
@@ -127,8 +127,8 @@ impl XFile {
 ```rust
 // 文件描述符表
 pub struct FdTable {
-    inner: RwLock<FlattenObjects<Arc<XFile>, AX_FILE_LIMIT>>,
-    flags: RwLock<Bitmap<AX_FILE_LIMIT>>,
+    inner: RwLock<FlattenObjects<Arc<XFile>, FD_LIMIT>>,
+    flags: RwLock<Bitmap<FD_LIMIT>>,
 }
 ```
 
@@ -170,7 +170,7 @@ pub fn sys_pread64(
 3. **增强灵活性**
     支持诸如进程管理、设备管理、调试监控等高级功能，而不依赖具体的硬件存储。
 
-StarryX实现了较为完善的伪文件系统，包括/dev、/dev、/tmp等，它们通过统一的Virt_file和Virt_fs抽象实现了axfs-vfs的接口（FileNode等），成为名义上的”文件系统实体“。
+StarryX实现了较为完善的伪文件系统，包括 `/dev`、`/tmp`、`/proc` 和 `/etc`。相关实现位于 `xkernel::fs::pseudofs`，它们通过统一的Virt_file和Virt_fs抽象实现了xvfs的接口（FileNode等），成为名义上的”文件系统实体“。
 
 对于伪文件系统的具体实现，我们首先实现了结构体VirtFs，其将inode通过Slab进行管理，并实现了具体的FilesystemOps与磁盘文件系统实例相对应：
 
@@ -286,4 +286,3 @@ impl FileNodeOps<RawMutex> for VirtFile {
 }
 
 ```
-

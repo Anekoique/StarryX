@@ -8,9 +8,9 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use axerrno::{LinuxError, LinuxResult};
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
+use xerrno::{LinuxError, LinuxResult};
 
 use crate::{UserConstPtr, UserPtr, UserReadable};
 

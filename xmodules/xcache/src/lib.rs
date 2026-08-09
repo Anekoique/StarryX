@@ -4,12 +4,12 @@ extern crate alloc;
 #[macro_use]
 extern crate log;
 
-use axerrno::{LinuxError, LinuxResult};
-use axhal::mem::phys_to_virt;
 use core::sync::atomic::{AtomicU64, Ordering};
 use lru::LruCache;
 use memory_addr::{PAGE_SIZE_4K, PhysAddr, VirtAddr};
 use spin::Mutex;
+use xerrno::{LinuxError, LinuxResult};
+use xhal::mem::phys_to_virt;
 
 pub const PAGE_SHIFT: usize = 12;
 
