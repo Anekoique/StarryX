@@ -111,6 +111,13 @@ Published a safe Rust/QEMU test framework and made StarryX consume it as one pin
 
 ## Session 5: Decouple xcache and establish an ext4 baseline
 
+**Date**: 2026-08-10
+**Slug**: remove-xcache
+**Branch**: `main`
+**Base Branch**: `main`
+**Start Head**: `b76f4d7`
+**Closing Commit**: `2cfb6ea`
+
 ### Summary
 
 Removed the legacy kernel page-cache path and recorded a reproducible ext4-backed iozone baseline.
@@ -123,3 +130,9 @@ Removed the legacy kernel page-cache path and recorded a reproducible ext4-backe
 | xcache boundary | Retained the component unchanged while removing all runtime dependencies. |
 | Storage benchmark | Moved iozone scratch to ext4 and recorded three-run medians. |
 | xtest pin | Published xtest `59faed8` and updated the StarryX submodule. |
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2cfb6ea` | refactor(fs): decouple xcache |
