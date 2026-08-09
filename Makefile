@@ -15,9 +15,27 @@ TARGET_DIR ?= $(ROOT_DIR)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?=
 FEATURES   ?= fp_simd,lwext4_rs
-# Root-crate cargo features (NOT xfeat/-prefixed; threaded straight to cargo).
-# Set to `init-test` by `make tests` / `make run-tests`; empty otherwise.
-ROOT_FEATURES ?=
+
+# System-test selection. The kernel is unchanged; a copied rootfs carries the
+# generated /xtest bundle.
+PROFILE       ?= smoke
+CASE          ?=
+INTERACTIVE   ?= 0
+XTEST_TIMEOUT ?=
+XTEST_DISK_IMG ?=
+
+# Export user-selected xtest values without interpolating them into a shell
+# recipe. The host runner validates each value before use.
+export XTEST_ARCH := $(ARCH)
+export XTEST_PROFILE := $(PROFILE)
+export XTEST_CASE := $(CASE)
+export XTEST_INTERACTIVE := $(INTERACTIVE)
+export XTEST_DISK_IMG
+export XTEST_HOST_TARGET_DIR := $(TARGET_DIR)/xtest-host
+
+ifneq ($(strip $(XTEST_TIMEOUT)),)
+export XTEST_RUN_TIMEOUT := $(XTEST_TIMEOUT)
+endif
 
 # ----- QEMU / runtime --------------------------------------------------------
 BLK        ?= n
@@ -37,7 +55,6 @@ GW         ?= 10.0.2.2
 
 ROOTFS_URL   := https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG   := rootfs-$(ARCH).img
-TESTS_ROOTFS_IMG := $(ROOT_DIR)/xtest/build/$(ARCH)/tests-rootfs-$(ARCH).img
 DOCKER_IMAGE := docker.educg.net/cg/os-contest:20250714
 
 export RUSTUP_TOOLCHAIN := $(TOOLCHAIN)
@@ -57,6 +74,7 @@ include scripts/make/platform.mk
 FEATURES_CLI  := $(subst $(space),$(comma),$(FEATURES))
 QEMU_FEATURES := $(FEATURES_CLI),driver-virtio-blk
 VF2_FEATURES  := $(FEATURES_CLI),driver-visionfive2-sd
+export XTEST_KERNEL_FEATURES := $(QEMU_FEATURES)
 
 OUT_CONFIG := $(abspath $(if $(strip $(OUT_CONFIG)),$(OUT_CONFIG),$(ROOT_DIR)/.xconfig.$(PLAT_NAME).toml))
 
@@ -101,8 +119,8 @@ include scripts/make/qemu.mk
 .DEFAULT_GOAL := rv
 
 .PHONY: all defconfig oldconfig build disasm run justrun debug clippy fmt \
-        qemu_rootfs qemu_run rv la vf2 disk_img clean docker \
-        tests run-tests
+        rootfs qemu_rootfs qemu_run rv la vf2 disk_img clean docker test \
+        _xtest_run
 
 all: rv
 
@@ -138,28 +156,31 @@ clippy: oldconfig
 fmt:
 	cargo fmt --all
 
-qemu_rootfs:
+rootfs:
 	@if [ ! -f $(ROOTFS_IMG) ]; then \
 		curl -f -L $(ROOTFS_URL)/$(ROOTFS_IMG).xz -O; \
 		xz -d $(ROOTFS_IMG).xz; \
 	fi
+
+qemu_rootfs: rootfs
 	cp $(ROOTFS_IMG) $(DISK_IMG)
 
 qemu_run: qemu_rootfs run
 
-# `make tests` (re)builds the test rootfs image; `make run-tests` boots a
-# kernel embedding starry/src/test.sh (via the `init-test` cargo feature) against
-# it. Mirrors the qemu_rootfs/run/qemu_run trio: split into a fetch/build
-# phase and a recursive phase that re-evaluates qemu.mk under BLK=y.
-tests: qemu_rootfs
-	@$(MAKE) -C xtest all ARCH=$(ARCH)
+test: rootfs
+	env -u RUSTFLAGS -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS \
+		CARGO_TARGET_DIR="$$XTEST_HOST_TARGET_DIR" \
+		cargo run --manifest-path xtest/Cargo.toml --release -- run
 
-run-tests: $(TESTS_ROOTFS_IMG)
-	@$(MAKE) ARCH=$(ARCH) BLK=y NET=y FEATURES=$(QEMU_FEATURES) \
-		ROOT_FEATURES=init-test DISK_IMG=$(TESTS_ROOTFS_IMG) run
-
-$(TESTS_ROOTFS_IMG):
-	@$(MAKE) ARCH=$(ARCH) tests
+# Private host-runner seam. Keep all kernel features, devices, and the copied
+# image in one recursive build/run invocation.
+_xtest_run:
+	@test -n "$$XTEST_DISK_IMG" || { echo "error: XTEST_DISK_IMG is required" >&2; exit 2; }
+	@case "$$XTEST_DISK_IMG" in /*) ;; *) echo "error: XTEST_DISK_IMG must be absolute" >&2; exit 2;; esac
+	@case "$$XTEST_DISK_IMG" in *[!A-Za-z0-9_./-]*) echo "error: XTEST_DISK_IMG contains unsupported characters" >&2; exit 2;; esac
+	@case "$$XTEST_KERNEL_FEATURES" in *[!A-Za-z0-9_,-]*) echo "error: kernel feature list contains unsupported characters" >&2; exit 2;; esac
+	@$(MAKE) ARCH="$$XTEST_ARCH" BLK=y NET=y \
+		FEATURES="$$XTEST_KERNEL_FEATURES" DISK_IMG="$$XTEST_DISK_IMG" run
 
 rv:
 	@$(MAKE) ARCH=riscv64 BLK=y NET=y FEATURES=$(QEMU_FEATURES) qemu_run

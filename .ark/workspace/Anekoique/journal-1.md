@@ -80,3 +80,18 @@ Vendored 11 OS-COMP suites into `xtest/testsuites/` with a generic build/run pip
 | Build pipeline | `build-suites.sh` dispatches each `BUILD.sh` in Docker via a shared `scripts/build/lib/suite.sh` (suite_init/enter/stage/need/retry); `stage.sh` adds a busybox shim + `.arch` marker per suite; `bake-image.sh` symlinks the la64 musl loader the contest binaries request. |
 | Run pipeline | `run-suite.sh` drives each suite under a process-group-aware `lib/timeout.sh` and maps native results to `[PASS]/[FAIL]` via per-suite adapters in `lib/suite-adapters.sh` (GROUP markers stripped, never scored); `run-all.sh` iterates and arch-skips iperf on rv64. |
 | Results | rv64 + la64 run all 11 end-to-end: libctest 217/217 both; iperf 6/6 la64; netperf 4/5. cyclictest/unixbench/lmbench quarantined (uniprocessor scheduling); rv64 iperf3 server hang documented. No kernel `src/` changes. |
+
+## Session 4: Redesign xtest as a standalone framework
+
+### Summary
+
+Published a safe Rust/QEMU test framework and made StarryX consume it as one pinned submodule.
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Framework | Added typed plans, ext4 injection, QEMU ownership, and JSON/TAP reports. |
+| Guest runtime | Added monotonic timeouts, process groups, and descendant reaping. |
+| Testsuits | Moved 11 packages behind manifests in the standalone xtest repo. |
+| StarryX seam | Added one gitlink, normal-init dispatch, and a private QEMU target. |

@@ -35,11 +35,11 @@ impl Default for ThreadGroup {
 pub struct Process {
     pid: Pid,
     is_zombie: AtomicBool,
+    is_child_subreaper: AtomicBool,
     pub(crate) tg: SpinNoIrq<ThreadGroup>,
 
     pub(crate) data: Box<dyn Any + Send + Sync>,
 
-    // TODO: child subreaper
     children: SpinNoIrq<StrongMap<Pid, Arc<Process>>>,
     parent: SpinNoIrq<Weak<Process>>,
 
@@ -64,6 +64,16 @@ impl Process {
     /// calling [`init_proc`] or testing if [`Process::parent`] is `None`.
     pub fn is_init(self: &Arc<Self>) -> bool {
         Arc::ptr_eq(self, INIT_PROC.get().unwrap())
+    }
+
+    /// Returns whether orphaned descendants should be reparented here.
+    pub fn is_child_subreaper(&self) -> bool {
+        self.is_child_subreaper.load(Ordering::Acquire)
+    }
+
+    /// Controls whether this process acts as a child subreaper.
+    pub fn set_child_subreaper(&self, enabled: bool) {
+        self.is_child_subreaper.store(enabled, Ordering::Release);
     }
 }
 
@@ -209,18 +219,28 @@ impl Process {
             panic!("init process cannot exit");
         }
 
-        // TODO: child subreaper
-        let reaper = INIT_PROC.get().unwrap();
-
         let mut children = self.children.lock(); // Acquire the lock first
         self.is_zombie.store(true, Ordering::Release);
 
-        let mut reaper_children = reaper.children.lock();
-        let reaper = Arc::downgrade(reaper);
-
-        for (pid, child) in core::mem::take(&mut *children) {
-            *child.parent.lock() = reaper.clone();
-            reaper_children.insert(pid, child);
+        let mut ancestor = self.parent();
+        loop {
+            let candidate = ancestor
+                .clone()
+                .unwrap_or_else(|| INIT_PROC.get().unwrap().clone());
+            let mut candidate_children = candidate.children.lock();
+            if candidate.is_init() || (candidate.is_child_subreaper() && !candidate.is_zombie()) {
+                // Holding `candidate.children` prevents the candidate from
+                // becoming a zombie and draining its children until every
+                // orphan is attached to it.
+                let reaper = Arc::downgrade(&candidate);
+                for (pid, child) in core::mem::take(&mut *children) {
+                    *child.parent.lock() = reaper.clone();
+                    candidate_children.insert(pid, child);
+                }
+                break;
+            }
+            drop(candidate_children);
+            ancestor = candidate.parent();
         }
     }
 
@@ -312,6 +332,7 @@ impl ProcessBuilder {
         let process = Arc::new(Process {
             pid,
             is_zombie: AtomicBool::new(false),
+            is_child_subreaper: AtomicBool::new(false),
             tg: SpinNoIrq::new(ThreadGroup::default()),
             data,
             children: SpinNoIrq::new(StrongMap::new()),

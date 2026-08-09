@@ -95,7 +95,7 @@ Asterinas's image-specific hard-coded `0x5b0` offset.
 
 ## Tests
 
-Tests live under `xtest/c/time/`:
+Tests live under `xtest/cases/time/`:
 
 - `vdso_clock_monotonic.c`
 - `vdso_gettimeofday.c`
@@ -106,6 +106,5 @@ Run them through the normal build. Set `XVDSO_SOURCE_DIR` only when an offline
 checkout or a non-default provider is required:
 
 ```sh
-make tests ARCH=riscv64
-make run-tests ARCH=riscv64
+make test ARCH=riscv64 PROFILE=full CASE=time/vdso_gettimeofday
 ```

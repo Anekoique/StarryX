@@ -9,6 +9,7 @@
 apps/*/build/
 **/target/
 **/Cargo.lock
+!/xtest/Cargo.lock
 /.axconfig.*
 /.xconfig.*
 *.img

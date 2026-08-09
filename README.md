@@ -25,7 +25,7 @@ user ABI -> xkernel::syscall -> xkernel services -> xmodules / xcore
 ├── xkernel                  // Kernel services and syscall ABI
 │   └── src/syscall          // Linux syscall translation and dispatch
 ├── xmodules                 // Flat collection of reusable x* components
-└── xtest                    // Linux APP for tets
+└── xtest                    // Host/guest system-test framework
 ```
 
 ## Build and run
