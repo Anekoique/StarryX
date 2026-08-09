@@ -131,7 +131,18 @@ fn make_siginfo(signo: u32, code: i32) -> LinuxResult<Option<SignalInfo>> {
 pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
     let Some(sig) = make_siginfo(signo, SI_USER as _)? else {
         // TODO: should also check permissions
-        return Ok(0);
+        return match pid {
+            1.. => get_process(pid as Pid).map(|_| 0),
+            0 => Ok(0),
+            -1 => {
+                if processes().into_iter().any(|process| !process.is_init()) {
+                    Ok(0)
+                } else {
+                    Err(LinuxError::ESRCH)
+                }
+            }
+            ..-1 => get_process_group(pid.unsigned_abs() as Pid).map(|_| 0),
+        };
     };
 
     match pid {
@@ -142,7 +153,11 @@ pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
         }
         0 => with_process(|process| {
             let pg = process.group();
-            Ok(send_signal_process_group(&pg, sig) as _)
+            if send_signal_process_group(&pg, sig) == 0 {
+                Err(LinuxError::ESRCH)
+            } else {
+                Ok(0)
+            }
         }),
         -1 => {
             let mut count = 0;
@@ -154,11 +169,19 @@ pub fn sys_kill(pid: i32, signo: u32) -> LinuxResult<isize> {
                 send_signal_process(&proc, sig.clone())?;
                 count += 1;
             }
-            Ok(count)
+            if count == 0 {
+                Err(LinuxError::ESRCH)
+            } else {
+                Ok(0)
+            }
         }
         ..-1 => {
-            let pg = get_process_group((-pid) as Pid)?;
-            Ok(send_signal_process_group(&pg, sig) as _)
+            let pg = get_process_group(pid.unsigned_abs() as Pid)?;
+            if send_signal_process_group(&pg, sig) == 0 {
+                Err(LinuxError::ESRCH)
+            } else {
+                Ok(0)
+            }
         }
     }
 }

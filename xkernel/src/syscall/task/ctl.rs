@@ -6,7 +6,10 @@ use xutils::ctypes::{
     _LINUX_CAPABILITY_VERSION_2, _LINUX_CAPABILITY_VERSION_3,
 };
 
-use crate::task::{get_process, with_uspace};
+use crate::task::{get_process, with_process, with_uspace};
+
+const PR_SET_CHILD_SUBREAPER: u32 = 36;
+const PR_GET_CHILD_SUBREAPER: u32 = 37;
 
 fn validate_cap_header(header: &mut __user_cap_header_struct) -> LinuxResult<()> {
     match header.version {
@@ -48,4 +51,33 @@ pub fn sys_capset(
             .inspect_err(|_| header.version = _LINUX_CAPABILITY_VERSION_3)
             .map(|_| 0)
     })
+}
+
+pub fn sys_prctl(
+    option: u32,
+    arg2: usize,
+    arg3: usize,
+    arg4: usize,
+    arg5: usize,
+) -> LinuxResult<isize> {
+    match option {
+        PR_SET_CHILD_SUBREAPER => {
+            if arg2 > 1 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            with_process(|process| process.set_child_subreaper(arg2 != 0));
+            Ok(0)
+        }
+        PR_GET_CHILD_SUBREAPER => {
+            if arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(LinuxError::EINVAL);
+            }
+            let enabled = with_process(|process| process.is_child_subreaper()) as i32;
+            with_uspace(|uspace| {
+                uspace.write(UserPtr::<i32>::from(arg2), enabled)?;
+                Ok(0)
+            })
+        }
+        _ => Ok(0),
+    }
 }

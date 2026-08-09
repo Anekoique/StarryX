@@ -389,7 +389,7 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         ),
         Sysno::capget => sys_capget(tf.arg0().into(), tf.arg1().into()),
         Sysno::capset => sys_capset(tf.arg0().into(), tf.arg1().into()),
-        Sysno::prctl => Ok(0),
+        Sysno::prctl => sys_prctl(tf.arg0() as _, tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4()),
 
         // task management
         Sysno::clone => sys_clone(

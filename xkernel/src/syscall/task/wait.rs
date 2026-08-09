@@ -82,7 +82,12 @@ pub fn sys_wait4(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> LinuxRe
         } else if options.contains(WaitOptions::WNOHANG) {
             return Ok(0);
         } else {
-            xprocess.child_exit_wq.wait();
+            // Check the condition while holding the wait-queue lock. A plain
+            // `wait()` here loses a child-exit notification when the child
+            // becomes a zombie between the scan above and queue insertion.
+            xprocess
+                .child_exit_wq
+                .wait_until(|| children.iter().any(|child| child.is_zombie()));
         }
     }
 }

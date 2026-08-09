@@ -1,0 +1,6 @@
+[submodule "crates/lwext4_rust/c/lwext4"]
+	path = crates/lwext4_rust/c/lwext4
+	url = https://github.com/Mivik/lwext4.git
+[submodule "xtest"]
+	path = xtest
+	url = https://github.com/Anekoique/xtest.git

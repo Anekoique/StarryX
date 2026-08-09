@@ -126,30 +126,31 @@ does not yet contain the required LoongArch image.
   against trait fakes rather than booting the whole kernel.
 - End-to-end validation uses the upstream Alpine rootfs: `make qemu_rootfs`
   fetches `rootfs-$(ARCH).img`; `make rv` / `make la` runs it.
-- **xtest pipeline** — `make tests ARCH=...` builds a separate
-  `tests-rootfs-$ARCH.img` (under `xtest/build/`) by baking first-party C
-  tests and the vendored OS-COMP suites into a copy of the upstream rootfs.
-  `make run-tests ARCH=...` builds the kernel with `ROOT_FEATURES=init-test`
-  (which embeds `starry/src/test.sh` instead of `starry/src/init.sh` via the `init-test`
-  cargo feature on the root crate) and boots it against that image. Both
-  targets require Docker — the cross-build runs inside
-  `docker.educg.net/cg/os-contest@sha256:742479b…`. See `xtest/README.md`.
-- **OS-COMP testsuites** — `xtest/testsuites/<suite>/` vendors the suites
-  (basic, busybox, libctest, lua, unixbench, lmbench, libcbench, iperf,
-  netperf, cyclictest, iozone; LTP excluded). Each ships a `BUILD.sh` (cross-
-  builds it in Docker, sourcing the shared `scripts/build/lib/suite.sh`
-  helpers) and the upstream `<suite>_testcode.sh`; `build-suites.sh` dispatches
-  the builds, `run-suite.sh` drives each in-guest and maps native results to
-  `[PASS]/[FAIL]` via `scripts/lib/suite-adapters.sh`. User ELFs link plain
-  `-static` — the contest musl toolchain makes that a loadable static-PIE the
-  loader runs (the loader rejects fixed-address `EXEC` and `-static-pie`).
-  Provenance, per-suite patches, run results, and known-fails are in
-  `xtest/testsuites/UPSTREAM.md`. To add a suite: see `xtest/README.md`.
+- **xtest framework** — `make test ARCH=... [PROFILE=cases|oscomp]
+  [CASE=<selector>]`
+  runs the standalone Rust host runner. It builds `xtest/cases/`, injects one
+  `/xtest` bundle into a copied rootfs with non-privileged e2fsprogs, owns the
+  Make/QEMU process group, and writes serial/JSON/TAP output below
+  `target/xtest/<arch>/<profile>/<run-id>/`. Test selection is a rootfs
+  property; ordinary init falls through when `/xtest` is absent. After cloning
+  StarryX, initialize it with `git submodule update --init --recursive`.
+  `cases` is the default first-party profile and `oscomp` runs every packaged
+  testsuit supported by the architecture. `CASE=syscall`,
+  `CASE=syscall/getpid`, and `CASE=testsuit/basic` are global hierarchical
+  selectors and do not require changing `PROFILE`. Successful testsuit builds
+  are content-keyed under `target/xtest-cache/`; `make clean` removes the cache.
+  Ctrl-C must terminate both the owned process group and any Docker container
+  recorded by the build cidfile.
+- **Packaged testsuits** — the standalone xtest repository owns
+  `testsuits/<name>/`, including each package's `xtest.toml`, build recipe,
+  sources/assets, and architecture restrictions. Keep suite
+  names, patches, adapters, and output parsing out of generic `xtest/src` and
+  `xtest/guest` code. See `xtest/README.md`.
 - **vDSO** — `xmodules/xvdso` owns the pinned external provider, embedded
   image, Linux-compatible data page, and timer updates. `xkernel/src/vdso.rs`
   is only the address-space installation adapter. There is no Docker or local
   blob regeneration flow. See `docs/StarryX/vdso.md`. Tests live under
-  `xtest/c/time/vdso_*.c`.
+  `xtest/cases/time/vdso_*.c`.
 - Use the **tdd-guide** agent when starting a new feature or bug fix.
 
 ## Git & PR Workflow

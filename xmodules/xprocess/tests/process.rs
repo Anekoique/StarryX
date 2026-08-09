@@ -53,3 +53,15 @@ fn reap() {
     parent.exit();
     assert!(Arc::ptr_eq(&init, &child.parent().unwrap()));
 }
+
+#[test]
+fn reap_to_nearest_child_subreaper() {
+    let init = init_proc();
+    let subreaper = init.new_child();
+    subreaper.set_child_subreaper(true);
+    let parent = subreaper.new_child();
+    let child = parent.new_child();
+
+    parent.exit();
+    assert!(Arc::ptr_eq(&subreaper, &child.parent().unwrap()));
+}

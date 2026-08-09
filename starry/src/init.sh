@@ -1,4 +1,13 @@
 # id: starry-init
+
+# A test run is selected by the copied rootfs, not by a kernel build feature.
+# Require the complete typed bundle guard so an unrelated /xtest path cannot
+# divert an ordinary boot.
+if [ -f /xtest/runner.sh ] && [ -x /xtest/runner.sh ] && \
+   [ -d /xtest/plan ] && [ -f /xtest/run-id ]; then
+  exec /bin/busybox sh /xtest/runner.sh
+fi
+
 # ================== LTP Run Scripts ==================
 
 run_ltp() {
