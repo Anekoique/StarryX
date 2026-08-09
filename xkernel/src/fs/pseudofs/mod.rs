@@ -45,11 +45,3 @@ pub fn init_root() -> LinuxResult<()> {
     )?;
     Ok(())
 }
-
-pub fn is_virtual_fs(path: &str) -> bool {
-    path.starts_with("/dev")
-        || path.starts_with("/tmp")
-        || path.starts_with("/proc")
-        || path.starts_with("/etc")
-        || path.starts_with("/sys")
-}

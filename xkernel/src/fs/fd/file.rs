@@ -9,10 +9,7 @@ use xvfs::Location;
 
 use xutils::ctypes::fs::{Kstat, metadata_to_kstat};
 
-use crate::{
-    fs::{fd::get_file_like, file::FileLike},
-    mm::PAGE_CACHE_MANAGER,
-};
+use crate::fs::{fd::get_file_like, file::FileLike};
 
 /// File wrapper for `xfs::fops::File`.
 pub struct File {
@@ -43,40 +40,20 @@ impl File {
 
     /// Read a number of bytes starting from a given offset.
     pub fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
-        let inner = self.inner();
-        if !inner.get_flags().contains(FileFlags::DIRECT)
-            && let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?)
-        {
-            cache.read_at(buf, offset)
-        } else {
-            inner.read_at(buf, offset)
-        }
+        self.inner().read_at(buf, offset)
     }
 
     /// Write a number of bytes starting from a given offset.
     pub fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
-        let mut inner = self.inner();
-        PAGE_CACHE_MANAGER
-            .get_cache(inner.inode()?)
-            .map(|cache| cache.write_at(buf, offset))
-            .unwrap_or_else(|| inner.write_at(buf, offset))
+        self.inner().write_at(buf, offset)
     }
 
     pub fn set_len(&self, len: u64) -> LinuxResult<()> {
-        let inner = self.inner();
-        PAGE_CACHE_MANAGER
-            .get_cache(inner.inode()?)
-            .map(|cache| cache.evict_from_pos(len as _))
-            .unwrap_or(inner.set_len(len))
+        self.inner().set_len(len)
     }
 
     pub fn sync(&self, data_only: bool) -> LinuxResult<()> {
-        let inner = self.inner();
-        PAGE_CACHE_MANAGER
-            .get_cache(inner.inode()?)
-            .map(|cache| cache.sync())
-            .unwrap_or(Ok(()))
-            .and_then(|_| inner.sync(data_only))
+        self.inner().sync(data_only)
     }
 
     pub fn is_empty(&self) -> LinuxResult<bool> {
@@ -86,29 +63,11 @@ impl File {
 
 impl FileLike for File {
     fn read(&self, buf: &mut [u8]) -> LinuxResult<usize> {
-        let mut inner = self.inner();
-        if let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?) {
-            let position = inner.position;
-            cache
-                .read_at(buf, position)
-                .inspect(|n| inner.set_position(position + *n as u64))
-        } else {
-            Ok(inner.read(buf)?)
-        }
+        Ok(self.inner().read(buf)?)
     }
 
     fn write(&self, buf: &[u8]) -> LinuxResult<usize> {
-        let mut inner = self.inner();
-        if !inner.get_flags().contains(FileFlags::APPEND)
-            && let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?)
-        {
-            let position = inner.position;
-            cache
-                .write_at(buf, position)
-                .inspect(|n| inner.set_position(position + *n as u64))
-        } else {
-            inner.write(buf)
-        }
+        self.inner().write(buf)
     }
 
     fn stat(&self) -> LinuxResult<Kstat> {
@@ -148,11 +107,7 @@ impl FileLike for File {
     }
 
     fn len(&self) -> LinuxResult<u64> {
-        let inner = self.inner();
-        Ok(PAGE_CACHE_MANAGER
-            .get_cache(inner.inode()?)
-            .map(|cache| cache.get_size())
-            .unwrap_or(inner.len()?))
+        self.inner().len()
     }
 }
 

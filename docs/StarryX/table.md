@@ -88,7 +88,7 @@ block cache
 
 direntry cache
 
-page cache(xcache)
+page cache（`xcache` 原型保留，当前未接入运行时）
 
 ## 1.5 抽象文件
 

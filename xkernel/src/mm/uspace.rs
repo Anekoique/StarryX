@@ -1,20 +1,15 @@
 use alloc::{sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
-use page_table_multiarch::{MappingFlags, PageSize};
+use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
+use page_table_multiarch::MappingFlags;
 use spin::RwLock;
 use xerrno::{LinuxError, LinuxResult};
-use xfs::FileFlags;
 use xmm::{AddrSpace, PageIter4K};
 use xsync::{Mutex, RawMutex};
-use xvfs::FileNodeOps;
 
-use xcache::{InodeOps, PageOps};
 use xuspace::UserSpaceAccess;
 use xvma::{MmapRegion, VmFile, VmaManager};
-
-use super::PAGE_CACHE_MANAGER;
 
 pub struct XUserSpace {
     pub aspace: Arc<Mutex<AddrSpace>>,
@@ -121,74 +116,14 @@ impl UserSpaceAccess for &XUserSpace {
     }
 }
 
-impl PageOps for XUserSpace {
-    fn alloc_page() -> Option<PhysAddr> {
-        xmm::alloc_frame(true, PageSize::Size4K)
-    }
-
-    fn dealloc_page(addr: PhysAddr) {
-        xmm::dealloc_frame(addr, PageSize::Size4K)
-    }
-
-    fn read_page(addr: VirtAddr, buf: &mut [u8]) -> LinuxResult {
-        unsafe {
-            core::ptr::copy_nonoverlapping(addr.as_ptr(), buf.as_mut_ptr(), buf.len());
-        }
-        Ok(())
-    }
-
-    fn write_page(addr: VirtAddr, buf: &[u8]) -> LinuxResult {
-        unsafe {
-            core::ptr::copy_nonoverlapping(buf.as_ptr(), addr.as_mut_ptr(), buf.len());
-        }
-        Ok(())
-    }
-}
-
 #[derive(Clone)]
 pub struct FileWrapper(pub Arc<Mutex<xfs::FsFile<RawMutex>>>);
 impl VmFile for FileWrapper {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
-        let inner = self.0.lock();
-        if !inner.get_flags().contains(FileFlags::DIRECT)
-            && let Some(cache) = PAGE_CACHE_MANAGER.get_cache(inner.inode()?)
-        {
-            cache.read_at(buf, offset)
-        } else {
-            inner.read_at(buf, offset)
-        }
-    }
-
-    fn len(&self) -> LinuxResult<u64> {
-        let inner = self.0.lock();
-        Ok(PAGE_CACHE_MANAGER
-            .get_cache(inner.inode()?)
-            .map(|cache| cache.get_size())
-            .unwrap_or(inner.len()?))
-    }
-}
-
-pub struct InodeWrapper(pub Mutex<Arc<dyn FileNodeOps<RawMutex>>>);
-impl InodeOps for InodeWrapper {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
         self.0.lock().read_at(buf, offset)
     }
-    fn write_at(&self, buf: &[u8], offset: u64) -> LinuxResult<usize> {
-        self.0.lock().write_at(buf, offset)
-    }
+
     fn len(&self) -> LinuxResult<u64> {
         self.0.lock().len()
-    }
-    fn set_len(&self, len: u64) -> LinuxResult {
-        self.0.lock().set_len(len)
-    }
-}
-impl InodeWrapper {
-    pub fn inode(&self) -> u64 {
-        self.0.lock().inode()
-    }
-
-    pub fn is_stale(&self) -> bool {
-        Arc::strong_count(&*self.0.lock()) == 1
     }
 }

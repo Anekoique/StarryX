@@ -11,7 +11,6 @@ use crate::{
         file::FileLike,
         with_file, with_fs,
     },
-    mm::PAGE_CACHE_MANAGER,
     resources::FILE_SIZE_LIMIT,
     task::with_uspace,
 };
@@ -165,10 +164,9 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> Linux
     let path = with_uspace(|uspace| uspace.read_str(path))?;
     trace!("sys_truncate <= {} {}", path, length);
     with_fs(AT_FDCWD, path, |fs| {
-        PAGE_CACHE_MANAGER
-            .get_cache(fs.write_file(path)?.access(FileFlags::WRITE)?.inode())
-            .map(|inode| inode.evict_from_pos(length as _))
-            .unwrap_or(Ok(()))
+        fs.write_file(path)?
+            .access(FileFlags::WRITE)?
+            .set_len(length as _)
     })?;
     Ok(0)
 }

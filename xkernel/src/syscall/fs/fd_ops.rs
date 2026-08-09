@@ -2,17 +2,15 @@ use core::ffi::{c_char, c_int};
 
 use xerrno::{LinuxError, LinuxResult};
 use xfs::{FileFlags, OpenResult};
-use xsync::{Mutex, RawMutex};
+use xsync::RawMutex;
 use xvfs::NodePermission;
 
 use crate::{
     fs::{
         fd::{Directory, DummyFd, FD_TABLE, File, add_file_like, close_file_like, get_file_like},
         file::FileLike,
-        pseudofs::is_virtual_fs,
         with_fs,
     },
-    mm::{InodeWrapper, PAGE_CACHE_MANAGER},
     task::with_uspace,
 };
 use xuspace::{UserConstPtr, UserSpaceAccess};
@@ -23,19 +21,9 @@ use xutils::ctypes::{
 
 use crate::syscall::task::{sys_getegid, sys_geteuid};
 
-fn add_to_fd(
-    path: &str,
-    flags: FileFlags,
-    result: OpenResult<RawMutex>,
-    cloexec: bool,
-) -> LinuxResult<i32> {
+fn add_to_fd(flags: FileFlags, result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
     match result {
-        OpenResult::File(file) => {
-            if !is_virtual_fs(path) {
-                PAGE_CACHE_MANAGER.get_or_create(InodeWrapper(Mutex::new(file.get_file_node())));
-            }
-            File::new(file).add_to_fd_table(flags, cloexec)
-        }
+        OpenResult::File(file) => File::new(file).add_to_fd_table(flags, cloexec),
         OpenResult::Dir(dir) => Directory::new(dir).add_to_fd_table(flags, cloexec),
     }
 }
@@ -59,17 +47,9 @@ pub fn sys_openat(
         dirfd, path, flags, mode
     );
 
-    PAGE_CACHE_MANAGER.clear_stale_cache();
     let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
     with_fs(dirfd, path, |fs| fs.open(&options, path))
-        .and_then(|result| {
-            add_to_fd(
-                path,
-                options.to_flags()?,
-                result,
-                flags as u32 & O_CLOEXEC != 0,
-            )
-        })
+        .and_then(|result| add_to_fd(options.to_flags()?, result, flags as u32 & O_CLOEXEC != 0))
         .map(|fd| fd as isize)
 }
 
@@ -94,7 +74,6 @@ pub fn sys_open(
 pub fn sys_close(fd: c_int) -> LinuxResult<isize> {
     debug!("sys_close <= {}", fd);
     close_file_like(fd)?;
-    PAGE_CACHE_MANAGER.clear_stale_cache();
     Ok(0)
 }
 

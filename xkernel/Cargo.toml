@@ -22,7 +22,6 @@ xtask.workspace = true
 xio.workspace = true
 xalloc.workspace = true
 
-xcache.workspace = true
 xprocess.workspace = true
 xsignal.workspace = true
 xuspace.workspace = true

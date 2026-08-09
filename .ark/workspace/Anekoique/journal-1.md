@@ -108,3 +108,18 @@ Published a safe Rust/QEMU test framework and made StarryX consume it as one pin
 | Hash | Message |
 |------|---------|
 | `6a69433` | feat(xtest): publish standalone test framework |
+
+## Session 5: Decouple xcache and establish an ext4 baseline
+
+### Summary
+
+Removed the legacy kernel page-cache path and recorded a reproducible ext4-backed iozone baseline.
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Kernel I/O | Routed file, mmap, truncate, sync, and stat operations directly to VFS. |
+| xcache boundary | Retained the component unchanged while removing all runtime dependencies. |
+| Storage benchmark | Moved iozone scratch to ext4 and recorded three-run medians. |
+| xtest pin | Published xtest `59faed8` and updated the StarryX submodule. |

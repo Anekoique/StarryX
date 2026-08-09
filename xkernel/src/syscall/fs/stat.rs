@@ -7,7 +7,6 @@ use xvfs::{Location, NodePermission};
 
 use crate::{
     fs::{fd::get_file_like, with_file, with_location},
-    mm::PAGE_CACHE_MANAGER,
     task::{with_uspace, with_xprocess},
 };
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
@@ -68,7 +67,6 @@ pub fn sys_fstatat(
         uspace.write(
             statbuf,
             with_location(dirfd, path, flags, |location| {
-                PAGE_CACHE_MANAGER.sync_file(location.inode())?;
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))
@@ -112,7 +110,6 @@ pub fn sys_statx(
         uspace.write(
             statxbuf,
             with_location(dirfd, path, flags, |location| {
-                PAGE_CACHE_MANAGER.sync_file(location.inode())?;
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))

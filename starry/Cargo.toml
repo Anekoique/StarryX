@@ -27,7 +27,6 @@ xprocess.workspace = true
 xsignal.workspace  = true
 xuspace.workspace  = true
 xvma.workspace     = true
-xcache.workspace   = true
 
 xerrno.workspace                = true
 inherit-methods-macro.workspace = true
