@@ -83,6 +83,13 @@ Vendored 11 OS-COMP suites into `xtest/testsuites/` with a generic build/run pip
 
 ## Session 4: Redesign xtest as a standalone framework
 
+**Date**: 2026-08-09
+**Slug**: redesign-xtest-framework
+**Branch**: `feat/redesign-xtest-framework`
+**Base Branch**: `main`
+**Start Head**: `914a979`
+**Closing Commit**: `6a69433`
+
 ### Summary
 
 Published a safe Rust/QEMU test framework and made StarryX consume it as one pinned submodule.
@@ -95,3 +102,9 @@ Published a safe Rust/QEMU test framework and made StarryX consume it as one pin
 | Guest runtime | Added monotonic timeouts, process groups, and descendant reaping. |
 | Testsuits | Moved 11 packages behind manifests in the standalone xtest repo. |
 | StarryX seam | Added one gitlink, normal-init dispatch, and a private QEMU target. |
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a69433` | feat(xtest): publish standalone test framework |
