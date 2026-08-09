@@ -34,13 +34,16 @@ pub const USER_HEAP_SIZE: usize = 0x1_0000;
 /// Per-thread kernel stack size.
 pub const KERNEL_STACK_SIZE: usize = 0x40000;
 
-/// vDSO code-page base virtual address (R-X to user, alloc-backed,
-/// per-process copy of the embedded ELF blob).
+/// Lowest virtual address of the Linux vDSO data (vvar) mapping.
 ///
-/// Reuses the slot freed by removing the legacy `SIGNAL_TRAMPOLINE` page;
-/// `__vdso_rt_sigreturn` lives inside the same image now.
-pub const USER_VDSO_BASE: usize = 0x4001_0000;
+/// The Linux image reaches this page with a negative PC-relative offset.
+pub const USER_VDSO_DATA: usize = 0x4001_0000;
 
-/// vDSO data-page virtual address (R-only to user, single shared phys
-/// page across all processes; see `xkernel::vdso::data::VDSO_DATA`).
-pub const USER_VDSO_DATA: usize = 0x4001_2000;
+/// vDSO ELF base published as `AT_SYSINFO_EHDR`.
+///
+/// Linux 6.8 reserves two vvar pages on RISC-V. LoongArch additionally
+/// reserves one architecture-data page for the supported external image.
+#[cfg(target_arch = "riscv64")]
+pub const USER_VDSO_BASE: usize = USER_VDSO_DATA + 0x2000;
+#[cfg(target_arch = "loongarch64")]
+pub const USER_VDSO_BASE: usize = USER_VDSO_DATA + 0x3000;

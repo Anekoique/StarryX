@@ -33,7 +33,7 @@ xmodules/             Flat collection of StarryX-owned x* components
   xcache/             Page cache (LRU, Buffered I/O)
   xvma/               File-backed mmap region manager
   xutils/             Kernel shared utilities
-  xvdso/              User-space vDSO image source
+  xvdso/              Linux vDSO provider, image, data ABI, and time updates
 xcore/                ArceOS-derived low-level modules only
 crates/               Lower-level and general-purpose support crates
 drivers/              Driver interfaces and implementations
@@ -45,7 +45,7 @@ docs/StarryX/         Design docs, diagrams, images
 The Cargo workspace (`Cargo.toml`) includes `starry`, `xkernel`,
 `xmodules/*`, `xcore/*`, and `crates/*`. It excludes the standalone driver
 workspace, display/dma modules, and the `page_table_multiarch`, `smoltcp`,
-`lwext4_rust`, and vDSO subtrees from default workspace-wide commands.
+and `lwext4_rust` subtrees from default workspace-wide commands.
 
 ## Build & Run
 
@@ -69,6 +69,12 @@ make docker       # enter contest docker image
 Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
 `LOG={off,error,warn,info,debug,trace}`, `FEATURES`, `BLK`, `NET`, `MEM`,
 `DISK_IMG`, `NET_DEV`, `ACCEL`. Never change `TOOLCHAIN` without coordinating.
+
+`xmodules/xvdso/build.rs` obtains the external Linux vDSO provider at a pinned
+revision and caches it under Cargo's build output. No Docker setup or committed
+blob regeneration is required. `XVDSO_SOURCE_DIR` can select an existing local
+checkout for offline builds; see `docs/StarryX/vdso.md`. The default provider
+does not yet contain the required LoongArch image.
 
 ## Agent Playbook
 
@@ -139,11 +145,10 @@ Useful overrides: `ARCH`, `PLATFORM`, `SMP`, `MODE={release,debug}`,
   loader runs (the loader rejects fixed-address `EXEC` and `-static-pie`).
   Provenance, per-suite patches, run results, and known-fails are in
   `xtest/testsuites/UPSTREAM.md`. To add a suite: see `xtest/README.md`.
-- **vDSO** — the kernel maps `linux-vdso.so.1` into every user address
-  space. Pre-built blobs live under `xkernel/src/vdso/blobs/`, embedded
-  via `.incbin`. Source under `xmodules/xvdso/` (workspace-excluded).
-  Run `make regenerate-vdso-blobs` after touching the source and commit
-  the updated `.so`. See `docs/StarryX/vdso.md`. Tests under
+- **vDSO** — `xmodules/xvdso` owns the pinned external provider, embedded
+  image, Linux-compatible data page, and timer updates. `xkernel/src/vdso.rs`
+  is only the address-space installation adapter. There is no Docker or local
+  blob regeneration flow. See `docs/StarryX/vdso.md`. Tests live under
   `xtest/c/time/vdso_*.c`.
 - Use the **tdd-guide** agent when starting a new feature or bug fix.
 

@@ -28,6 +28,7 @@ xsignal.workspace = true
 xuspace.workspace = true
 xvma.workspace = true
 xutils.workspace = true
+xvdso.workspace = true
 
 xerrno.workspace = true
 bitflags.workspace = true

@@ -2707,6 +2707,7 @@ dependencies = [
  "xtask",
  "xuspace",
  "xutils",
+ "xvdso",
  "xvfs",
  "xvma",
 ]
@@ -2896,6 +2897,19 @@ dependencies = [
  "xhal",
  "xlog",
  "xvfs",
+]
+
+[[package]]
+name = "xvdso"
+version = "0.1.0"
+dependencies = [
+ "crate_interface 0.3.0",
+ "memory_addr",
+ "spin 0.10.0",
+ "xhal",
+ "xmas-elf",
+ "xruntime",
+ "xsync",
 ]
 
 [[package]]

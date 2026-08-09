@@ -17,12 +17,6 @@ exclude = [
     "crates/page_table_multiarch/*",
     "crates/lwext4_rust",
     "crates/smoltcp",
-    # vDSO source crate targets *-unknown-none with a custom linker script
-    # and `dynamic-linking = true` to produce `cdylib`. Built out-of-band
-    # by `make regenerate-vdso-blobs`; the resulting `.so` is committed
-    # under `xkernel/src/vdso/blobs/` and embedded into the kernel via
-    # `.incbin`.
-    "xmodules/xvdso",
 ]
 
 [workspace.package]
@@ -75,6 +69,7 @@ xsched   = { path = "xmodules/xsched" }
 xsignal  = { path = "xmodules/xsignal" }
 xuspace  = { path = "xmodules/xuspace" }
 xutils   = { path = "xmodules/xutils" }
+xvdso    = { path = "xmodules/xvdso" }
 xvfs     = { path = "xmodules/xvfs" }
 xvma     = { path = "xmodules/xvma" }
 

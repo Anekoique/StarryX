@@ -1,194 +1,299 @@
-//! StarryX vDSO image source.
+// SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0
+
+//! Linux-compatible virtual dynamic shared object component.
 //!
-//! Built as a `cdylib` for `*-unknown-none` with a per-arch linker script.
-//! Time entries serve `CLOCK_REALTIME` and `CLOCK_MONOTONIC[_RAW]` from
-//! the kernel-published shared data page; unsupported clocks fall through
-//! to the syscall trap.
+//! The build script obtains a pinned prebuilt Linux vDSO. This crate embeds
+//! that image, owns the Linux-compatible vvar data pages, and publishes safe
+//! accessors for a kernel profile to map them into user address spaces.
 
 #![no_std]
 
-use core::ffi::c_void;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::{
+    arch::global_asm,
+    cell::UnsafeCell,
+    sync::atomic::{AtomicU32, Ordering, fence},
+};
 
-mod arch;
+use memory_addr::PAGE_SIZE_4K;
+use spin::Once;
+use xhal::{cpu::this_cpu_is_bsp, time};
+use xmas_elf::{ElfFile, sections::SectionData, symbol_table::Entry};
 
-/// Mirror of the kernel-side `xkernel::vdso::data::VdsoData`. The kernel
-/// patches `arch::VDSO_DATA_ADDR` at install time so the body below can
-/// locate this struct position-independently.
-#[repr(C, align(4096))]
+macro_rules! embed_linux_vdso {
+    () => {
+        concat!(
+            ".section .rodata.vdso, \"a\"\n",
+            ".balign 4096\n",
+            ".global xvdso_image_start, xvdso_image_end\n",
+            "xvdso_image_start:\n",
+            ".incbin \"",
+            env!("XVDSO_IMAGE_PATH"),
+            "\"\n",
+            ".balign 4096\n",
+            "xvdso_image_end:\n",
+            ".previous\n",
+        )
+    };
+}
+
+global_asm!(embed_linux_vdso!());
+
+// `.incbin` is invisible to Cargo's dependency tracking. Referencing the same
+// file here makes a provider image change invalidate this crate.
+const _VDSO_BUILD_DEPENDENCY: &[u8] = include_bytes!(env!("XVDSO_IMAGE_PATH"));
+
+unsafe extern "C" {
+    static xvdso_image_start: u8;
+    static xvdso_image_end: u8;
+}
+
+const CLOCK_REALTIME: usize = 0;
+const CLOCK_MONOTONIC: usize = 1;
+const CLOCK_MONOTONIC_RAW: usize = 4;
+const CLOCK_REALTIME_COARSE: usize = 5;
+const CLOCK_MONOTONIC_COARSE: usize = 6;
+const CLOCK_BOOTTIME: usize = 7;
+const CLOCK_TAI: usize = 11;
+const VDSO_BASES: usize = CLOCK_TAI + 1;
+
+const CS_HRES_COARSE: usize = 0;
+const CS_RAW: usize = 1;
+const CS_BASES: usize = CS_RAW + 1;
+
+const VDSO_CLOCKMODE_NONE: i32 = 0;
+const VDSO_CLOCKMODE_ARCHTIMER: i32 = 1;
+const SHIFT: u32 = 24;
+const MULT: u32 = {
+    let frequency = time::timer_frequency();
+    match (time::NANOS_PER_SEC << SHIFT).checked_div(frequency) {
+        Some(value) if value <= u32::MAX as u64 => value as u32,
+        _ => 0,
+    }
+};
+
+#[cfg(target_arch = "riscv64")]
+pub const VVAR_PAGES: usize = 2;
+// Linux 6.8 LoongArch uses the generic, time-namespace, and one
+// architecture-data page when NR_CPUS fits in a single page.
+#[cfg(target_arch = "loongarch64")]
+pub const VVAR_PAGES: usize = 3;
+
+/// Linux `struct vdso_timestamp` from `include/vdso/datapage.h`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct VdsoTimestamp {
+    sec: u64,
+    nsec: u64,
+}
+
+impl VdsoTimestamp {
+    const ZERO: Self = Self { sec: 0, nsec: 0 };
+
+    fn from_nanos(nanos: u64, shifted: bool) -> Self {
+        let subsec = nanos % time::NANOS_PER_SEC;
+        Self {
+            sec: nanos / time::NANOS_PER_SEC,
+            nsec: if shifted { subsec << SHIFT } else { subsec },
+        }
+    }
+}
+
+/// Linux 6.8 `struct vdso_data`.
+///
+/// The external image reads this layout directly, so its field order and
+/// sizes are part of the userspace ABI.
+#[repr(C)]
 struct VdsoData {
     seq: AtomicU32,
-    cpu: u32,
-    wall_sec: u64,
-    wall_nsec: u32,
-    _reserved0: u32,
-    mono_ns: u64,
-    mono_cycles_at_capture: u64,
+    clock_mode: i32,
+    cycle_last: u64,
+    mask: u64,
     mult: u32,
     shift: u32,
+    basetime: [VdsoTimestamp; VDSO_BASES],
+    tz_minuteswest: i32,
+    tz_dsttime: i32,
+    hrtimer_res: u32,
+    __unused: u32,
 }
 
-#[repr(C)]
-pub struct Timespec {
-    pub tv_sec: i64,
-    pub tv_nsec: i64,
-}
-
-#[repr(C)]
-pub struct Timeval {
-    pub tv_sec: i64,
-    pub tv_usec: i64,
-}
-
-const CLOCK_REALTIME: i32 = 0;
-const CLOCK_MONOTONIC: i32 = 1;
-const CLOCK_MONOTONIC_RAW: i32 = 4;
-const NANOS_PER_SEC: u64 = 1_000_000_000;
-
-const NR_CLOCK_GETTIME: usize = 113;
-const NR_GETTIMEOFDAY: usize = 169;
-const NR_CLOCK_GETRES: usize = 114;
-const NR_GETCPU: usize = 168;
-
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {
-        core::hint::spin_loop();
-    }
-}
-
-struct Snapshot {
-    wall_sec: u64,
-    wall_nsec: u32,
-    mono_ns: u64,
-    mono_cycles_at_capture: u64,
-    mult: u32,
-    shift: u32,
-}
-
-/// Read `VdsoData` under the seqlock. Returns `None` if too many writers
-/// passed through (very unlikely — single-writer in practice).
-#[inline(always)]
-unsafe fn read_data() -> Option<Snapshot> {
-    let data = arch::vdso_data_addr() as *const VdsoData;
-    let seq = unsafe { &(*data).seq };
-    for _ in 0..1024 {
-        let s1 = seq.load(Ordering::Acquire);
-        if s1 & 1 != 0 {
-            core::hint::spin_loop();
-            continue;
-        }
-        let snap = Snapshot {
-            wall_sec: unsafe { (*data).wall_sec },
-            wall_nsec: unsafe { (*data).wall_nsec },
-            mono_ns: unsafe { (*data).mono_ns },
-            mono_cycles_at_capture: unsafe { (*data).mono_cycles_at_capture },
-            mult: unsafe { (*data).mult },
-            shift: unsafe { (*data).shift },
-        };
-        if seq.load(Ordering::Acquire) == s1 {
-            return Some(snap);
+impl VdsoData {
+    const fn empty() -> Self {
+        Self {
+            seq: AtomicU32::new(0),
+            clock_mode: VDSO_CLOCKMODE_NONE,
+            cycle_last: 0,
+            mask: u64::MAX,
+            mult: 0,
+            shift: 0,
+            basetime: [VdsoTimestamp::ZERO; VDSO_BASES],
+            tz_minuteswest: 0,
+            tz_dsttime: 0,
+            hrtimer_res: 1,
+            __unused: 0,
         }
     }
-    None
 }
 
-#[inline(always)]
-fn monotonic_ns(s: &Snapshot) -> u64 {
-    let delta = unsafe { arch::rdtime() }.wrapping_sub(s.mono_cycles_at_capture);
-    let delta_ns = (delta as u128 * s.mult as u128) >> s.shift;
-    s.mono_ns.wrapping_add(delta_ns as u64)
+const _: () = assert!(core::mem::size_of::<VdsoData>() == 240);
+
+#[repr(C, align(4096))]
+struct VdsoDataPage {
+    clocks: UnsafeCell<[VdsoData; CS_BASES]>,
 }
 
-#[inline(always)]
-fn realtime_ns(s: &Snapshot) -> u64 {
-    let mono = monotonic_ns(s);
-    let wall_ns = s.wall_sec.wrapping_mul(NANOS_PER_SEC) + s.wall_nsec as u64;
-    wall_ns.wrapping_add(mono.wrapping_sub(s.mono_ns))
+// SAFETY: kernel writes are serialized by `VDSO_UPDATE_LOCK` with local
+// interrupts disabled. Userspace receives read-only mappings and synchronizes
+// through the sequence counters used by the Linux vDSO implementation.
+unsafe impl Sync for VdsoDataPage {}
+
+#[unsafe(link_section = ".data.vdso")]
+static VDSO_DATA_PAGE: VdsoDataPage = VdsoDataPage {
+    clocks: UnsafeCell::new([VdsoData::empty(), VdsoData::empty()]),
+};
+
+const _: () = assert!(core::mem::size_of::<VdsoDataPage>() == PAGE_SIZE_4K);
+
+#[cfg(target_arch = "loongarch64")]
+#[repr(C, align(4096))]
+struct VdsoArchDataPage([u8; PAGE_SIZE_4K]);
+
+#[cfg(target_arch = "loongarch64")]
+static VDSO_ARCH_DATA_PAGE: VdsoArchDataPage = VdsoArchDataPage([0; PAGE_SIZE_4K]);
+
+static VDSO_UPDATE_LOCK: xsync::spin::SpinNoIrq<()> = xsync::spin::SpinNoIrq::new(());
+static RT_SIGRETURN_OFFSET: Once<usize> = Once::new();
+
+/// Returns the embedded, immutable, page-aligned Linux vDSO image.
+pub fn image() -> &'static [u8] {
+    let start = core::ptr::addr_of!(xvdso_image_start) as usize;
+    let end = core::ptr::addr_of!(xvdso_image_end) as usize;
+    let len = end
+        .checked_sub(start)
+        .expect("external vDSO linker symbols are reversed");
+    // SAFETY: the assembly block defines `start..end` as one immutable,
+    // page-aligned region that remains live for the kernel's lifetime.
+    unsafe { core::slice::from_raw_parts(start as *const u8, len) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __vdso_clock_gettime(clock_id: i32, ts: *mut Timespec) -> i32 {
-    if ts.is_null() {
-        return -14; // -EFAULT
-    }
-    if matches!(
-        clock_id,
-        CLOCK_REALTIME | CLOCK_MONOTONIC | CLOCK_MONOTONIC_RAW
-    ) {
-        if let Some(snap) = unsafe { read_data() }
-            && snap.mult != 0
-        {
-            let ns = if clock_id == CLOCK_REALTIME {
-                realtime_ns(&snap)
-            } else {
-                monotonic_ns(&snap)
-            };
-            unsafe {
-                (*ts).tv_sec = (ns / NANOS_PER_SEC) as i64;
-                (*ts).tv_nsec = (ns % NANOS_PER_SEC) as i64;
-            }
-            return 0;
-        }
-    }
-    unsafe { arch::syscall2(NR_CLOCK_GETTIME, clock_id as usize, ts as usize) as i32 }
+/// Returns the symbol offset of Linux's signal-return trampoline.
+pub fn rt_sigreturn_offset() -> usize {
+    *RT_SIGRETURN_OFFSET.call_once(|| {
+        let elf = ElfFile::new(image()).expect("external vDSO is not a valid ELF");
+        elf.section_iter()
+            .find_map(|section| {
+                let SectionData::DynSymbolTable64(entries) = section.get_data(&elf).ok()? else {
+                    return None;
+                };
+                entries.iter().find_map(|symbol| {
+                    (symbol.get_name(&elf).ok()? == "__vdso_rt_sigreturn")
+                        .then_some(symbol.value() as usize)
+                })
+            })
+            .expect("external vDSO is missing __vdso_rt_sigreturn")
+    })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __vdso_gettimeofday(tv: *mut Timeval, tz: *mut c_void) -> i32 {
-    if !tv.is_null()
-        && let Some(snap) = unsafe { read_data() }
-        && snap.mult != 0
-    {
-        let ns = realtime_ns(&snap);
-        unsafe {
-            (*tv).tv_sec = (ns / NANOS_PER_SEC) as i64;
-            (*tv).tv_usec = ((ns % NANOS_PER_SEC) / 1_000) as i64;
-        }
-        return 0;
-    }
-    unsafe { arch::syscall2(NR_GETTIMEOFDAY, tv as usize, tz as usize) as i32 }
+/// Returns the kernel virtual address of the shared Linux vvar data page.
+pub fn data_page_kernel_address() -> usize {
+    core::ptr::addr_of!(VDSO_DATA_PAGE) as usize
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __vdso_clock_getres(clock_id: i32, res: *mut Timespec) -> i32 {
-    if matches!(
-        clock_id,
-        CLOCK_REALTIME | CLOCK_MONOTONIC | CLOCK_MONOTONIC_RAW
-    ) {
-        if !res.is_null() {
-            unsafe {
-                (*res).tv_sec = 0;
-                (*res).tv_nsec = 1;
-            }
-        }
-        return 0;
-    }
-    unsafe { arch::syscall2(NR_CLOCK_GETRES, clock_id as usize, res as usize) as i32 }
+/// Returns the kernel virtual address of the LoongArch architecture data page.
+#[cfg(target_arch = "loongarch64")]
+pub fn arch_data_page_kernel_address() -> usize {
+    core::ptr::addr_of!(VDSO_ARCH_DATA_PAGE) as usize
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __vdso_time(tloc: *mut i64) -> i64 {
-    let mut ts = Timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
+unsafe fn begin_update(data: *mut VdsoData) -> u32 {
+    // SAFETY: `data` points into `VDSO_DATA_PAGE` and the caller holds the
+    // update lock. Atomic access is required by the Linux reader protocol.
+    let seq = unsafe { &*core::ptr::addr_of!((*data).seq) };
+    let value = seq.load(Ordering::Relaxed);
+    debug_assert_eq!(value & 1, 0, "vDSO update started with an odd sequence");
+    seq.store(value.wrapping_add(1), Ordering::Relaxed);
+    fence(Ordering::SeqCst);
+    value
+}
+
+unsafe fn finish_update(data: *mut VdsoData, previous: u32) {
+    fence(Ordering::SeqCst);
+    // SAFETY: see `begin_update`; this release store publishes all field
+    // updates to Linux vDSO readers.
+    unsafe { &*core::ptr::addr_of!((*data).seq) }
+        .store(previous.wrapping_add(2), Ordering::Release);
+}
+
+unsafe fn write_common_fields(data: *mut VdsoData, cycles: u64) {
+    let clock_mode = if MULT == 0 {
+        VDSO_CLOCKMODE_NONE
+    } else {
+        VDSO_CLOCKMODE_ARCHTIMER
     };
-    if unsafe { __vdso_clock_gettime(CLOCK_REALTIME, &mut ts) } != 0 {
-        return -1;
+    // SAFETY: the caller holds `VDSO_UPDATE_LOCK`; every pointer targets a
+    // naturally aligned field in the shared data page.
+    unsafe {
+        core::ptr::addr_of_mut!((*data).clock_mode).write_volatile(clock_mode);
+        core::ptr::addr_of_mut!((*data).cycle_last).write_volatile(cycles);
+        core::ptr::addr_of_mut!((*data).mask).write_volatile(u64::MAX);
+        core::ptr::addr_of_mut!((*data).mult).write_volatile(MULT);
+        core::ptr::addr_of_mut!((*data).shift).write_volatile(SHIFT);
+        core::ptr::addr_of_mut!((*data).hrtimer_res).write_volatile(1);
     }
-    if !tloc.is_null() {
-        unsafe { *tloc = ts.tv_sec };
-    }
-    ts.tv_sec
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __vdso_getcpu(
-    cpu: *mut u32,
-    node: *mut u32,
-    _tcache: *mut c_void,
-) -> i32 {
-    unsafe { arch::syscall3(NR_GETCPU, cpu as usize, node as usize, 0) as i32 }
+unsafe fn write_timestamp(data: *mut VdsoData, clock_id: usize, nanos: u64, shifted: bool) {
+    debug_assert!(clock_id < VDSO_BASES);
+    let timestamp = VdsoTimestamp::from_nanos(nanos, shifted);
+    // SAFETY: the caller holds `VDSO_UPDATE_LOCK`, the index is within
+    // `basetime`, and the destination is naturally aligned.
+    unsafe {
+        core::ptr::addr_of_mut!((*data).basetime)
+            .cast::<VdsoTimestamp>()
+            .add(clock_id)
+            .write_volatile(timestamp);
+    }
 }
 
-pub use arch::__vdso_rt_sigreturn;
+/// Refreshes the shared Linux vvar data from the current clock source.
+pub fn refresh_data() {
+    if !this_cpu_is_bsp() {
+        return;
+    }
+
+    let _guard = VDSO_UPDATE_LOCK.lock();
+    let cycles = time::current_ticks();
+    let monotonic = time::ticks_to_nanos(cycles);
+    let realtime = monotonic + time::epochoffset_nanos();
+
+    // SAFETY: the lock serializes all writers and disables local interrupts;
+    // both pointers refer to the two Linux clocksource records in the page.
+    unsafe {
+        let clocks = (*VDSO_DATA_PAGE.clocks.get()).as_mut_ptr();
+
+        let hres = clocks.add(CS_HRES_COARSE);
+        let sequence = begin_update(hres);
+        write_common_fields(hres, cycles);
+        write_timestamp(hres, CLOCK_REALTIME, realtime, true);
+        write_timestamp(hres, CLOCK_MONOTONIC, monotonic, true);
+        write_timestamp(hres, CLOCK_BOOTTIME, monotonic, true);
+        write_timestamp(hres, CLOCK_REALTIME_COARSE, realtime, false);
+        write_timestamp(hres, CLOCK_MONOTONIC_COARSE, monotonic, false);
+        finish_update(hres, sequence);
+
+        let raw = clocks.add(CS_RAW);
+        let sequence = begin_update(raw);
+        write_common_fields(raw, cycles);
+        write_timestamp(raw, CLOCK_MONOTONIC_RAW, monotonic, true);
+        finish_update(raw, sequence);
+    }
+}
+
+struct VdsoTickImpl;
+
+#[crate_interface::impl_interface]
+impl xruntime::VdsoTickIf for VdsoTickImpl {
+    fn on_timer_tick() {
+        refresh_data();
+    }
+}

@@ -16,7 +16,7 @@
 | 存储机制 | `xcache` | 提供文件页缓存、脏页状态、回写和回收机制。 |
 | 内存机制 | `xvma` | 管理文件支持的虚拟内存映射区域及按需填充。 |
 | 共享支持 | `xutils` | 收纳多个高层内核组件共同使用的数据结构、C 类型和时间工具。 |
-| 用户接口 | `xvdso` | 构建映射进用户空间的 vDSO 镜像，减少部分时间类调用的陷入开销。 |
+| 用户接口 | `xvdso` | 获取并嵌入固定版本的 Linux vDSO，维护共享 vvar 数据与时间更新。 |
 
 `xmodules` 与其他目录的区别是：`xcore/` 只保留由 ArceOS modules 演进来的底层系统组件；`xkernel/` 拥有 StarryX 宏内核状态和 Linux syscall 实现；`crates/` 保留命名中立、可脱离 StarryX 复用的底层或通用库；`drivers/` 单独维护设备接口和实现。
 
@@ -26,7 +26,7 @@
 
 ArceOS 的设计强调组件化与模块化，StarryX 也沿用这一理念，将跨内核形态可复用的契约、算法和机制抽象为独立组件，同时避免不必要的反向依赖，降低耦合度并提升可维护性。
 
-其中较高层的内核机制包括用户地址访问 `xuspace`、内存映射管理 `xvma`、页缓存 `xcache`、信号系统 `xsignal`、进程管理 `xprocess` 和共享工具 `xutils`；基础契约与机制则由 `xerrno`、`xio`、`xsched` 和 `xvfs` 提供。`xtest` 是独立的应用测试体系，不属于 `xmodules/`。
+其中较高层的内核机制包括用户地址访问 `xuspace`、内存映射管理 `xvma`、页缓存 `xcache`、信号系统 `xsignal`、进程管理 `xprocess`、vDSO 支持 `xvdso` 和共享工具 `xutils`；基础契约与机制则由 `xerrno`、`xio`、`xsched` 和 `xvfs` 提供。`xvdso` 不依赖 `xkernel`，具体进程地址空间的映射仍由内核适配层完成。`xtest` 是独立的应用测试体系，不属于 `xmodules/`。
 
 ## 用户地址访问
 

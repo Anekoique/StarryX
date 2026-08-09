@@ -46,8 +46,8 @@ unsafe extern "C" {
 
 /// Hook called from the timer IRQ to refresh the vDSO data page.
 ///
-/// The kernel's `xkernel::vdso` module provides the impl. If a downstream
-/// build doesn't include xkernel (e.g. an embedded ArceOS app), it must
+/// The `xvdso` component provides the impl. If a downstream build doesn't
+/// include that component (e.g. an embedded ArceOS app), it must
 /// supply its own no-op `impl VdsoTickIf for ...`.
 #[crate_interface::def_interface]
 pub trait VdsoTickIf {

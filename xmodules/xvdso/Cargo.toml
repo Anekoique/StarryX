@@ -1,21 +1,18 @@
 [package]
 name = "xvdso"
-version = "0.1.0"
-edition = "2024"
-license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
-description = "StarryX vDSO image (linux-vdso.so.1)."
-
-[lib]
-crate-type = ["cdylib"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Linux-compatible vDSO component for StarryX"
 
 [dependencies]
-
-[profile.release]
-panic = "abort"
-opt-level = 3
-lto = true
-codegen-units = 1
-strip = true
-debug = false
-
-[workspace]
+crate_interface.workspace = true
+memory_addr.workspace = true
+spin.workspace = true
+xhal.workspace = true
+xruntime.workspace = true
+xsync.workspace = true
+xmas-elf = "0.10"
