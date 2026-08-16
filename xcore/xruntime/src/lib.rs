@@ -44,13 +44,11 @@ unsafe extern "C" {
     fn main();
 }
 
-/// Hook called from the timer IRQ to refresh the vDSO data page.
+/// Higher-level profile hook called after core timer accounting.
 ///
-/// The `xvdso` component provides the impl. If a downstream build doesn't
-/// include that component (e.g. an embedded ArceOS app), it must
-/// supply its own no-op `impl VdsoTickIf for ...`.
+/// A runtime profile supplies the implementation, which may be a no-op.
 #[crate_interface::def_interface]
-pub trait VdsoTickIf {
+pub trait RuntimeTimerIf {
     fn on_timer_tick();
 }
 
@@ -244,8 +242,15 @@ fn init_allocator() {
     }
     for r in memory_regions() {
         if r.flags.contains(MemRegionFlags::FREE) && r.paddr == max_region_paddr {
-            let start_vaddr = phys_to_virt(r.paddr).as_usize();
-            xalloc::global_init(start_vaddr, r.size);
+            let storage_start = phys_to_virt(r.paddr);
+            #[cfg(feature = "paging")]
+            let metadata_size = xmm::init_frame_database(storage_start, r.size);
+            #[cfg(not(feature = "paging"))]
+            let metadata_size = 0;
+            xalloc::global_init(
+                storage_start.as_usize() + metadata_size,
+                r.size - metadata_size,
+            );
             break;
         }
     }
@@ -282,9 +287,7 @@ fn init_interrupt() {
         update_timer();
         #[cfg(feature = "multitask")]
         xtask::on_timer_tick();
-        // Refresh the vDSO data page (no-op on non-boot CPUs and if the
-        // kernel did not register a vdso tick handler).
-        crate_interface::call_interface!(VdsoTickIf::on_timer_tick);
+        crate_interface::call_interface!(RuntimeTimerIf::on_timer_tick);
     });
 
     // Enable IRQs before starting app

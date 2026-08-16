@@ -194,15 +194,15 @@ pub fn rt_sigreturn_offset() -> usize {
     })
 }
 
-/// Returns the kernel virtual address of the shared Linux vvar data page.
-pub fn data_page_kernel_address() -> usize {
-    core::ptr::addr_of!(VDSO_DATA_PAGE) as usize
+/// Returns the kernel-owned Linux vvar data page.
+pub fn data_page() -> &'static impl Sync {
+    &VDSO_DATA_PAGE
 }
 
-/// Returns the kernel virtual address of the LoongArch architecture data page.
+/// Returns the kernel-owned LoongArch architecture data page.
 #[cfg(target_arch = "loongarch64")]
-pub fn arch_data_page_kernel_address() -> usize {
-    core::ptr::addr_of!(VDSO_ARCH_DATA_PAGE) as usize
+pub fn arch_data_page() -> &'static impl Sync {
+    &VDSO_ARCH_DATA_PAGE
 }
 
 unsafe fn begin_update(data: *mut VdsoData) -> u32 {
@@ -286,14 +286,5 @@ pub fn refresh_data() {
         write_common_fields(raw, cycles);
         write_timestamp(raw, CLOCK_MONOTONIC_RAW, monotonic, true);
         finish_update(raw, sequence);
-    }
-}
-
-struct VdsoTickImpl;
-
-#[crate_interface::impl_interface]
-impl xruntime::VdsoTickIf for VdsoTickImpl {
-    fn on_timer_tick() {
-        refresh_data();
     }
 }

@@ -58,8 +58,8 @@ pub fn sys_chdir(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
     let path = with_uspace(|uspace| uspace.read_str(path))?;
 
     trace!("sys_chdir <= path: {}", path);
-    with_fs(AT_FDCWD, path, |fs| {
-        let entry = fs.resolve(path)?;
+    with_fs(AT_FDCWD, &path, |fs| {
+        let entry = fs.resolve(&path)?;
         fs.set_current_dir(entry)
     })?;
     Ok(0)
@@ -101,7 +101,7 @@ pub fn sys_mkdirat(dirfd: i32, path: UserConstPtr<c_char>, mode: u32) -> LinuxRe
         "sys_mkdirat <= dirfd: {}, path: {}, mode: {:?}",
         dirfd, path, mode
     );
-    with_fs(dirfd, path, |fs| fs.create_dir(path, mode))?;
+    with_fs(dirfd, &path, |fs| fs.create_dir(&path, mode))?;
     Ok(0)
 }
 
@@ -156,15 +156,15 @@ impl<'a> DirBuffer<'a> {
 /// * `buf` - Buffer to store directory entries
 /// * `len` - Buffer length
 pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
-    let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
+    let mut kernel_buf = alloc::vec![0_u8; len];
     trace!(
         "sys_getdents64 <= fd: {}, buf: {:p}, len: {}",
         fd,
-        buf.as_ptr(),
-        buf.len()
+        kernel_buf.as_ptr(),
+        kernel_buf.len()
     );
 
-    let mut buffer = DirBuffer::new(buf);
+    let mut buffer = DirBuffer::new(&mut kernel_buf);
 
     let dir = Directory::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
     let mut dir_offset = dir.offset.lock();
@@ -177,10 +177,12 @@ pub fn sys_getdents64(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isiz
             *dir_offset = offset;
             true
         })?;
-    if buffer.offset == 0 {
+    let written = buffer.offset;
+    if written == 0 {
         return Err(LinuxError::EINVAL);
     }
-    Ok(buffer.offset as _)
+    with_uspace(|uspace| uspace.write_slice(buf, &kernel_buf[..written]))?;
+    Ok(written as _)
 }
 
 /// Create a hard link relative to directory file descriptors.
@@ -207,11 +209,11 @@ pub fn sys_linkat(
         "sys_linkat <= old_dirfd: {}, old_path: {:?}, new_dirfd: {}, new_path: {}, flags: {}",
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
-    let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
-        fs.resolve_nonexistent(new_path.into())
+    let (new_dir, new_name) = with_fs(new_dirfd, &new_path, |fs| {
+        fs.resolve_nonexistent(new_path.as_str().into())
     })?;
 
-    with_location(old_dirfd, old_path, flags, |location| {
+    with_location(old_dirfd, old_path.as_deref(), flags, |location| {
         if flags != 0 {
             warn!("Unsupported flags: {flags}");
         }
@@ -248,11 +250,11 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
         dirfd, path, flags
     );
 
-    with_fs(dirfd, path, |fs| {
+    with_fs(dirfd, &path, |fs| {
         if flags == AT_REMOVEDIR as _ {
-            fs.remove_dir(path)
+            fs.remove_dir(&path)
         } else {
-            fs.remove_file(path)
+            fs.remove_file(&path)
         }
     })?;
     Ok(0)
@@ -281,25 +283,26 @@ pub fn sys_unlink(path: UserConstPtr<c_char>) -> LinuxResult<isize> {
 /// * `size` - Size of the buffer
 pub fn sys_getcwd(buf: UserPtr<u8>, size: isize) -> LinuxResult<isize> {
     let size: usize = size.try_into().map_err(|_| LinuxError::EFAULT)?;
-    let buf = with_uspace(|uspace| nullable!(uspace.raw_slice(buf, size)))?;
-
-    let Some(buf) = buf else {
+    if buf.is_null() {
         return Ok(0);
-    };
+    }
+    let mut kernel_buf = alloc::vec![0_u8; size];
 
-    with_fs(AT_FDCWD, ".", |fs| {
+    let written = with_fs(AT_FDCWD, ".", |fs| {
         let cwd = fs.current_dir().absolute_path()?;
 
         let cwd = CString::new(cwd.as_str()).map_err(|_| LinuxError::EINVAL)?;
         let cwd = cwd.as_bytes_with_nul();
 
-        if cwd.len() <= buf.len() {
-            buf[..cwd.len()].copy_from_slice(cwd);
-            Ok(buf.as_ptr() as isize)
+        if cwd.len() <= kernel_buf.len() {
+            kernel_buf[..cwd.len()].copy_from_slice(cwd);
+            Ok(cwd.len())
         } else {
             Err(LinuxError::ERANGE)
         }
-    })
+    })?;
+    with_uspace(|uspace| uspace.write_slice(buf, &kernel_buf[..written]))?;
+    Ok(buf.address().as_usize() as isize)
 }
 
 /// Create a symbolic link.
@@ -335,7 +338,7 @@ pub fn sys_symlinkat(
         "sys_symlinkat <= target: {}, new_dirfd: {}, linkpath: {}",
         target, new_dirfd, linkpath
     );
-    with_fs(new_dirfd, linkpath, |fs| fs.symlink(target, linkpath))?;
+    with_fs(new_dirfd, &linkpath, |fs| fs.symlink(&target, &linkpath))?;
     Ok(0)
 }
 
@@ -366,20 +369,19 @@ pub fn sys_readlinkat(
     buf: UserPtr<u8>,
     size: usize,
 ) -> LinuxResult<isize> {
-    let (path, buf) = with_uspace(|uspace| -> LinuxResult<_> {
-        let path = uspace.read_str(path)?;
-        let buf = uspace.raw_slice(buf, size)?;
-        Ok((path, buf))
-    })?;
+    let path = with_uspace(|uspace| uspace.read_str(path))?;
+    let mut kernel_buf = alloc::vec![0_u8; size];
 
-    with_fs(dirfd, path, |fs| {
-        let entry = fs.resolve_no_follow(path)?;
+    let read = with_fs(dirfd, &path, |fs| {
+        let entry = fs.resolve_no_follow(&path)?;
         let link = entry.read_link()?;
         trace!("sys_readlinkat => link: {}", link);
         let read = size.min(link.len());
-        buf[..read].copy_from_slice(&link.as_bytes()[..read]);
-        Ok(read as isize)
-    })
+        kernel_buf[..read].copy_from_slice(&link.as_bytes()[..read]);
+        Ok(read)
+    })?;
+    with_uspace(|uspace| uspace.write_slice(buf, &kernel_buf[..read]))?;
+    Ok(read as isize)
 }
 
 /// Change ownership of a file.
@@ -431,7 +433,7 @@ pub fn sys_fchownat(
     let uid = if uid < 0 { 0 } else { uid as u32 };
     let gid = if gid < 0 { 0 } else { gid as u32 };
 
-    with_location(dirfd, path, flags, |location| {
+    with_location(dirfd, path.as_deref(), flags, |location| {
         location.update_metadata(MetadataUpdate {
             owner: Some((uid, gid)),
             ..Default::default()
@@ -472,7 +474,7 @@ pub fn sys_fchmodat(
     flags: u32,
 ) -> LinuxResult<isize> {
     let path = with_uspace(|uspace| nullable!(uspace.read_str(path)))?;
-    with_location(dirfd, path, flags, |location| {
+    with_location(dirfd, path.as_deref(), flags, |location| {
         location.update_metadata(MetadataUpdate {
             mode: Some(NodePermission::from_bits(mode as u16).ok_or(LinuxError::EINVAL)?),
             ..Default::default()
@@ -489,7 +491,7 @@ fn update_times(
     flags: u32,
 ) -> LinuxResult<()> {
     let path = with_uspace(|uspace| nullable!(uspace.read_str(path)))?;
-    with_location(dirfd, path, flags, |location| {
+    with_location(dirfd, path.as_deref(), flags, |location| {
         location.update_metadata(MetadataUpdate {
             atime,
             mtime,
@@ -554,7 +556,7 @@ pub fn sys_utimensat(
         }
     }
     let times = with_uspace(|uspace| nullable!(uspace.read_slice(times, 2)))?;
-    let (atime, mtime) = match times {
+    let (atime, mtime) = match times.as_deref() {
         Some([atime, mtime]) => (utime_to_duration(atime)?, utime_to_duration(mtime)?),
         None => (Some(wall_time()), Some(wall_time())),
         _ => unreachable!(),
@@ -619,11 +621,11 @@ pub fn sys_renameat2(
         old_dirfd, old_path, new_dirfd, new_path, flags
     );
 
-    let (old_dir, old_name) = with_fs(old_dirfd, old_path, |fs| {
-        fs.resolve_parent(Path::new(old_path))
+    let (old_dir, old_name) = with_fs(old_dirfd, &old_path, |fs| {
+        fs.resolve_parent(Path::new(&old_path))
     })?;
-    let (new_dir, new_name) = with_fs(new_dirfd, new_path, |fs| {
-        fs.resolve_nonexistent(new_path.into())
+    let (new_dir, new_name) = with_fs(new_dirfd, &new_path, |fs| {
+        fs.resolve_nonexistent(new_path.as_str().into())
     })?;
 
     old_dir.rename(&old_name, &new_dir, new_name)?;

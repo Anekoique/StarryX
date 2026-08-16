@@ -42,7 +42,7 @@ crate_interface    = { workspace = true }
 numeric-enum-macro = "0.2"
 xmas-elf           = "0.10"
 cfg-if             = { workspace = true }
-lazy_static        = "1.5"
+lazy_static        = { version = "1.5", features = ["spin_no_std"] }
 page_table_entry   = { workspace = true }
 ctor_bare          = "0.2.1"
 num_enum           = { version = "0.7", default-features = false }

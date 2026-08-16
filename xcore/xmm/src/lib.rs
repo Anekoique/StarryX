@@ -1,4 +1,8 @@
-//! [ArceOS](https://github.com/arceos-org/arceos) memory management module.
+//! Trusted physical-frame and page-table mechanisms for StarryX.
+//!
+//! Process-visible mapping policy belongs to `xvma`. This crate retains the
+//! low-level operations that construct page tables, map static kernel/device
+//! ranges, allocate frames, and perform architecture-facing PTE changes.
 
 #![no_std]
 
@@ -7,55 +11,47 @@ extern crate log;
 extern crate alloc;
 
 mod aspace;
-mod backend;
-#[cfg(feature = "cow")]
 mod frame;
 mod utils;
 
-pub use self::aspace::AddrSpace;
-pub use self::backend::{Backend, shared::SharedPages};
-pub use self::frame::{alloc_frame, dealloc_frame};
-pub use self::utils::*;
+pub use self::aspace::{AddressSpace, ProtectionTransaction};
+pub use self::frame::{Frame, StaticFrameRange, init_frame_database};
+pub use self::utils::{MappingFlags, PAGE_SIZE_4K, PageIter, PageIter4K, PageSize};
 
 use kspin::SpinNoIrq;
 use lazyinit::LazyInit;
 use memory_addr::{PhysAddr, va};
-use memory_set::MappingError;
-use xerrno::{XError, XResult};
+use xerrno::XResult;
 use xhal::mem::phys_to_virt;
 
-static KERNEL_ASPACE: LazyInit<SpinNoIrq<AddrSpace>> = LazyInit::new();
-
-fn mapping_err_to_x_err(err: MappingError) -> XError {
-    warn!("Mapping error: {:?}", err);
-    match err {
-        MappingError::InvalidParam => XError::InvalidInput,
-        MappingError::AlreadyExists => XError::AlreadyExists,
-        MappingError::BadState => XError::BadState,
-    }
-}
+static KERNEL_ASPACE: LazyInit<SpinNoIrq<AddressSpace>> = LazyInit::new();
 
 /// Creates a new address space for kernel itself.
-pub fn new_kernel_aspace() -> XResult<AddrSpace> {
-    let mut aspace = AddrSpace::new_empty(
+pub fn new_kernel_aspace() -> XResult<AddressSpace> {
+    let mut aspace = AddressSpace::new_empty(
         va!(xconfig::plat::KERNEL_ASPACE_BASE),
         xconfig::plat::KERNEL_ASPACE_SIZE,
     )?;
     for r in xhal::mem::memory_regions() {
-        aspace.map_linear(
-            phys_to_virt(r.paddr),
-            r.paddr,
-            r.size,
-            r.flags.into(),
-            PageSize::Size4K,
-        )?;
+        let flags = r.flags.into();
+        // SAFETY: xhal describes platform and kernel-image ranges whose
+        // physical storage remains present for the complete kernel lifetime.
+        let frames = unsafe { StaticFrameRange::new(r.paddr, r.size, flags) }
+            .expect("xhal returned an invalid static frame range");
+        aspace.map_static_range(phys_to_virt(r.paddr), frames, flags, PageSize::Size4K)?;
     }
     Ok(aspace)
 }
 
 /// Returns the globally unique kernel address space.
-pub fn kernel_aspace() -> &'static SpinNoIrq<AddrSpace> {
+pub fn kernel_aspace() -> &'static SpinNoIrq<AddressSpace> {
     &KERNEL_ASPACE
+}
+
+/// Imports the immortal kernel page-table hierarchy into a user address space.
+#[cfg(feature = "copy-from")]
+pub fn copy_kernel_mappings(destination: &mut AddressSpace) -> XResult {
+    destination.copy_static_mappings_from(&KERNEL_ASPACE.lock())
 }
 
 /// Returns the root physical address of the kernel page table.

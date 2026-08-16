@@ -10,28 +10,25 @@ use kernel_elf_parser::{AUXV_LEN, AuxvEntry, AuxvType, ELFParser, app_stack_regi
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use xerrno::{LinuxError, LinuxResult, XError, XResult};
 use xfs::FS_CONTEXT;
-use xhal::paging::{MappingFlags, PageSize};
+use xhal::paging::MappingFlags;
 use xmas_elf::{ElfFile, program::SegmentData};
-use xmm::{AddrSpace, kernel_aspace};
+use xvma::{Backend, VmSpace};
 
-pub fn new_aspace() -> XResult<AddrSpace> {
-    AddrSpace::new_empty(
+pub fn new_aspace() -> XResult<VmSpace> {
+    VmSpace::new_empty(
         VirtAddr::from_usize(crate::config::USER_SPACE_BASE),
         crate::config::USER_SPACE_SIZE,
     )
 }
 
-pub fn copy_from_kernel(aspace: &mut AddrSpace) -> XResult {
+pub fn copy_from_kernel(aspace: &mut VmSpace) -> XResult {
     if !cfg!(target_arch = "aarch64") && !cfg!(target_arch = "loongarch64") {
-        aspace.copy_mappings_from(&kernel_aspace().lock())?;
+        aspace.copy_kernel_mappings()?;
     }
     Ok(())
 }
 
-pub fn map_elf(
-    uspace: &mut AddrSpace,
-    elf: &ElfFile,
-) -> XResult<(VirtAddr, [AuxvEntry; AUXV_LEN])> {
+pub fn map_elf(uspace: &mut VmSpace, elf: &ElfFile) -> XResult<(VirtAddr, [AuxvEntry; AUXV_LEN])> {
     let uspace_base = uspace.base().as_usize();
     let elf_parser = ELFParser::new(
         elf,
@@ -41,31 +38,34 @@ pub fn map_elf(
     )
     .map_err(|_| XError::InvalidData)?;
 
-    for segement in elf_parser.ph_load() {
+    for segment in elf_parser.ph_load() {
         debug!(
             "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
-            segement.vaddr,
-            segement.vaddr + segement.memsz as usize,
-            segement.flags
+            segment.vaddr,
+            segment.vaddr + segment.memsz as usize,
+            segment.flags
         );
-        let seg_pad = segement.vaddr.align_offset_4k();
-        assert_eq!(seg_pad, segement.offset % PAGE_SIZE_4K);
+        let seg_pad = segment.vaddr.align_offset_4k();
+        assert_eq!(seg_pad, segment.offset % PAGE_SIZE_4K);
 
         let seg_align_size =
-            (segement.memsz as usize + seg_pad + PAGE_SIZE_4K - 1) & !(PAGE_SIZE_4K - 1);
-        uspace.map_alloc(
-            segement.vaddr.align_down_4k(),
+            (segment.memsz as usize + seg_pad + PAGE_SIZE_4K - 1) & !(PAGE_SIZE_4K - 1);
+        let load_flags = segment.flags | MappingFlags::READ | MappingFlags::WRITE;
+        uspace.map(
+            segment.vaddr.align_down_4k(),
             seg_align_size,
-            segement.flags,
-            true,
-            PageSize::Size4K,
+            load_flags,
+            Backend::anonymous(true),
         )?;
         let seg_data = elf
             .input
-            .get(segement.offset..segement.offset + segement.filesz as usize)
+            .get(segment.offset..segment.offset + segment.filesz as usize)
             .ok_or(XError::InvalidData)?;
-        uspace.write(segement.vaddr, seg_data, PageSize::Size4K)?;
-        // TDOO: flush the I-cache
+        uspace.write_bytes(segment.vaddr, seg_data)?;
+        if load_flags != segment.flags {
+            uspace.protect(segment.vaddr.align_down_4k(), seg_align_size, segment.flags)?;
+        }
+        // TODO: flush the I-cache.
     }
     Ok((
         elf_parser.entry().into(),
@@ -79,7 +79,7 @@ pub fn load_file(path: Option<&str>, args: &[String]) -> LinuxResult<(Vec<u8>, V
         .ok_or(LinuxError::EINVAL)?;
 
     if path.ends_with(".sh") {
-        let mut new_args = vec!["/musl/busybox".to_string(), "sh".to_string()];
+        let mut new_args = vec!["/bin/busybox".to_string(), "sh".to_string()];
         new_args.extend_from_slice(args);
         return load_file(None, &new_args);
     }
@@ -114,7 +114,7 @@ pub struct LoadedApp {
 }
 
 pub fn load_app(
-    uspace: &mut AddrSpace,
+    uspace: &mut VmSpace,
     file_data: Vec<u8>,
     args: &[String],
     envs: &[String],
@@ -174,25 +174,23 @@ pub fn load_app(
     );
 
     let stack_data = app_stack_region(args, envs, &mut auxv, ustack_start, ustack_size);
-    uspace.map_alloc(
+    uspace.map(
         ustack_start,
         ustack_size,
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
-        true,
-        PageSize::Size4K,
+        Backend::anonymous(true),
     )?;
 
     let user_sp = ustack_end - stack_data.len();
-    uspace.write(user_sp, stack_data.as_slice(), PageSize::Size4K)?;
+    uspace.write_bytes(user_sp, stack_data.as_slice())?;
 
     let heap_start = VirtAddr::from_usize(crate::config::USER_HEAP_BASE);
     let heap_size = crate::config::USER_HEAP_SIZE;
-    uspace.map_alloc(
+    uspace.map(
         heap_start,
         heap_size,
         MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
-        true,
-        PageSize::Size4K,
+        Backend::anonymous(true),
     )?;
 
     Ok(LoadedApp {

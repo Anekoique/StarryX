@@ -2,7 +2,7 @@
 use xerrno::{LinuxError, LinuxResult};
 
 use crate::task::with_xprocess;
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess};
+use xuspace::{UserConstPtr, UserPtr};
 
 /// Get real user ID of the calling process.
 ///

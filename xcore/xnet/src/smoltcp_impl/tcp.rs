@@ -229,31 +229,33 @@ impl TcpSocket {
     /// [`accept`](Self::accept).
     pub fn bind(&self, mut local_addr: SocketAddr) -> NetResult {
         self.update_state(STATE_CLOSED, STATE_CLOSED, || {
-            // TODO: check addr is available
             if local_addr.port() == 0 {
                 local_addr.set_port(get_ephemeral_port()?);
             }
-            // SAFETY: no other threads can read or write `self.local_addr` as we
-            // have changed the state to `BUSY`.
             let local_endpoint: IpEndpoint = local_addr.into();
+            let bound_endpoint = IpListenEndpoint {
+                addr: (!local_endpoint.addr.is_unspecified()).then_some(local_endpoint.addr),
+                port: local_endpoint.port,
+            };
+
+            // SAFETY: `update_state` changed the state to `BUSY`, so no other
+            // thread can read or write the endpoint or handle.
+            if unsafe { self.local_addr.get().read() } != UNSPECIFIED_ENDPOINT {
+                return Err(NetError::EINVAL);
+            }
             if !self.is_reuse_addr() {
                 SOCKET_SET.bind_check(local_endpoint.addr, local_endpoint.port)?;
             }
 
-            let bound_endpoint = self.bound_endpoint()?;
             let handle = unsafe { self.handle.get().read() }
                 .unwrap_or_else(|| SOCKET_SET.add(SocketSetWrapper::new_tcp_socket()));
-            unsafe {
-                let old = self.local_addr.get().read();
-                if old != UNSPECIFIED_ENDPOINT {
-                    return Err(NetError::EINVAL);
-                }
-                self.local_addr.get().write(local_addr.into());
-            }
-
             SOCKET_SET.with_socket_mut::<tcp::Socket, _, _>(handle, |socket| {
                 socket.set_bound_endpoint(bound_endpoint);
             });
+            unsafe {
+                self.local_addr.get().write(local_endpoint);
+                self.handle.get().write(Some(handle));
+            }
             Ok(())
         })
         .unwrap_or(Err(NetError::EINVAL))
@@ -699,7 +701,17 @@ impl Drop for TcpSocket {
         self.shutdown().ok();
         // Safe because we have mut reference to `self`.
         if let Some(handle) = unsafe { self.handle.get().read() } {
-            SOCKET_SET.remove(handle);
+            let closed = SOCKET_SET
+                .with_socket::<tcp::Socket, _, _>(handle, |socket| socket.state() == State::Closed);
+            if closed {
+                SOCKET_SET.remove(handle);
+            } else {
+                // Keep the protocol control block alive until queued data and
+                // FIN complete. Removing it here drops the final response of
+                // short-lived request/response connections.
+                SOCKET_SET.defer_tcp_close(handle);
+                SOCKET_SET.poll_interfaces();
+            }
         }
     }
 }

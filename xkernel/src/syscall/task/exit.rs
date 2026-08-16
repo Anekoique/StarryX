@@ -4,12 +4,12 @@ use xtask::{TaskExtRef, current};
 
 use xprocess::Pid;
 use xsignal::{SignalInfo, Signo};
-use xuspace::{UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserPtr, nullable};
 use xutils::ctypes::{SI_KERNEL, robust_list_head};
 
 use crate::{
     fs::fd::FD_TABLE,
-    ipc::IPC_MANAGER,
+    ipc::clear_proc_shm,
     task::{FutexKey, XProcess, XThread, send_signal_process, send_signal_thread},
 };
 
@@ -26,10 +26,8 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
     info!("{:?} exit with code: {}", thread, exit_code);
 
     let clear_child_tid = UserPtr::<Pid>::from(xthread.clear_child_tid());
-    if let Ok(clear_tid) = uspace.raw_ptr(clear_child_tid) {
-        *clear_tid = 0;
-
-        let key = FutexKey::new(clear_tid as *const _ as usize);
+    if uspace.write(clear_child_tid, 0).is_ok() {
+        let key = FutexKey::new(xthread.clear_child_tid());
         let guard = xprocess.futex_table_for(&key).get(&key);
         if let Some(futex) = guard {
             futex.wq.notify_one(false);
@@ -37,8 +35,8 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
         xtask::yield_now();
     }
     let head: UserPtr<robust_list_head> = xthread.robust_list_head.load(Ordering::SeqCst).into();
-    if let Ok(Some(head)) = nullable!(uspace.raw_ptr(head))
-        && let Err(err) = exit_robust_list(head)
+    if let Ok(Some(mut head_value)) = nullable!(uspace.read(head))
+        && let Err(err) = exit_robust_list(&mut head_value)
     {
         warn!("exit robust list failed: {:?}", err);
     }
@@ -58,7 +56,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
         // TODO: clear namespace resources
         // FIXME: xns should drop all the resources
         FD_TABLE.clear();
-        IPC_MANAGER.clear();
+        clear_proc_shm(process.pid());
     }
     if group_exit && !process.is_group_exited() {
         process.group_exit();

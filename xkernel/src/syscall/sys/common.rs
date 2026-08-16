@@ -3,7 +3,7 @@ use core::ffi::c_char;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use xerrno::{LinuxError, LinuxResult};
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::{
     ctypes::{AT_FDCWD, GRND_NONBLOCK, GRND_RANDOM, new_utsname, sysinfo},
     time::wall_time_nanos,
@@ -48,19 +48,23 @@ pub fn sys_uname(name: UserPtr<new_utsname>) -> LinuxResult<isize> {
 /// * `info` - Buffer to store system information
 pub fn sys_sysinfo(info: UserPtr<sysinfo>) -> LinuxResult<isize> {
     with_uspace(|uspace| {
-        let info = uspace.raw_ptr(info)?;
-        info.uptime = 0;
-        info.loads = [0, 0, 0];
-        info.totalram = 0;
-        info.freeram = 0;
-        info.sharedram = 0;
-        info.bufferram = 0;
-        info.totalswap = 0;
-        info.freeswap = 0;
-        info.procs = processes().len() as _;
-        info.totalhigh = 0;
-        info.freehigh = 0;
-        info.mem_unit = 1;
+        let value = sysinfo {
+            uptime: 0,
+            loads: [0; 3],
+            totalram: 0,
+            freeram: 0,
+            sharedram: 0,
+            bufferram: 0,
+            totalswap: 0,
+            freeswap: 0,
+            procs: processes().len() as _,
+            pad: 0,
+            totalhigh: 0,
+            freehigh: 0,
+            mem_unit: 1,
+            _f: Default::default(),
+        };
+        uspace.write(info, value)?;
         Ok(0)
     })
 }
@@ -86,7 +90,7 @@ pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<is
         return Err(LinuxError::EINVAL);
     }
 
-    let buffer = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
+    let mut buffer = alloc::vec![0; len];
     let device_path = if flags & GRND_RANDOM != 0 {
         "/dev/random"
     } else {
@@ -94,12 +98,16 @@ pub fn sys_getrandom(buf: UserPtr<u8>, len: usize, flags: u32) -> LinuxResult<is
     };
 
     with_fs(AT_FDCWD, device_path, |fs| {
-        fs.read_file(device_path)?.read_at(buffer, 0)
+        fs.read_file(device_path)?.read_at(&mut buffer, 0)
     })
     .map(|bytes_read| bytes_read as isize)
     .or_else(|_| {
-        let seed = (buffer.as_ptr() as u64) + len as u64 + wall_time_nanos();
-        SmallRng::seed_from_u64(seed).fill_bytes(buffer);
+        let seed = buf.address().as_usize() as u64 + len as u64 + wall_time_nanos();
+        SmallRng::seed_from_u64(seed).fill_bytes(&mut buffer);
         Ok(len as isize)
+    })
+    .and_then(|read| {
+        with_uspace(|uspace| uspace.write_slice(buf, &buffer))?;
+        Ok(read)
     })
 }

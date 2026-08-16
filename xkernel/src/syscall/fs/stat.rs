@@ -66,7 +66,7 @@ pub fn sys_fstatat(
 
         uspace.write(
             statbuf,
-            with_location(dirfd, path, flags, |location| {
+            with_location(dirfd, path.as_deref(), flags, |location| {
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))
@@ -109,7 +109,7 @@ pub fn sys_statx(
 
         uspace.write(
             statxbuf,
-            with_location(dirfd, path, flags, |location| {
+            with_location(dirfd, path.as_deref(), flags, |location| {
                 location
                     .metadata()
                     .map(|metadata| metadata_to_kstat(&metadata))
@@ -169,7 +169,7 @@ pub fn sys_faccessat2(
     );
     let required_mode = required_mode.bits();
 
-    let file_mode = with_location(dirfd, path, flags, |location| {
+    let file_mode = with_location(dirfd, path.as_deref(), flags, |location| {
         location
             .metadata()
             .map(|metadata| metadata_to_kstat(&metadata))
@@ -195,21 +195,24 @@ pub fn sys_faccessat2(
 
 fn statfs(loc: &Location<RawMutex>, buf: UserPtr<statfs>) -> LinuxResult<()> {
     let stat = loc.filesystem().stat()?;
-    let dest = with_uspace(|uspace| uspace.raw_ptr(buf))?;
-    dest.f_type = stat.fs_type as _;
-    dest.f_bsize = stat.block_size as _;
-    dest.f_blocks = stat.blocks as _;
-    dest.f_bfree = stat.blocks_free as _;
-    dest.f_bavail = stat.blocks_available as _;
-    dest.f_files = stat.file_count as _;
-    dest.f_ffree = stat.free_file_count as _;
-    // TODO: fsid
-    dest.f_fsid = __kernel_fsid_t {
-        val: [0, loc.mountpoint().device() as _],
+    let dest = statfs {
+        f_type: stat.fs_type as _,
+        f_bsize: stat.block_size as _,
+        f_blocks: stat.blocks as _,
+        f_bfree: stat.blocks_free as _,
+        f_bavail: stat.blocks_available as _,
+        f_files: stat.file_count as _,
+        f_ffree: stat.free_file_count as _,
+        // TODO: provide a stable filesystem identifier.
+        f_fsid: __kernel_fsid_t {
+            val: [0, loc.mountpoint().device() as _],
+        },
+        f_namelen: stat.name_length as _,
+        f_frsize: stat.fragment_size as _,
+        f_flags: stat.mount_flags as _,
+        f_spare: [0; 4],
     };
-    dest.f_namelen = stat.name_length as _;
-    dest.f_frsize = stat.fragment_size as _;
-    dest.f_flags = stat.mount_flags as _;
+    with_uspace(|uspace| uspace.write(buf, dest))?;
     Ok(())
 }
 

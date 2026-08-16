@@ -9,10 +9,8 @@ repository.workspace = true
 description = "Linux-compatible vDSO component for StarryX"
 
 [dependencies]
-crate_interface.workspace = true
 memory_addr.workspace = true
 spin.workspace = true
 xhal.workspace = true
-xruntime.workspace = true
 xsync.workspace = true
 xmas-elf = "0.10"

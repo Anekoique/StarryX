@@ -95,7 +95,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
                         tf: *tf,
                     }
                 });
-                tf.set_ip(handler as usize);
+                tf.set_ip(handler);
                 tf.set_sp(aligned_sp);
                 tf.set_arg0(signo as _);
                 tf.set_arg1(&frame.siginfo as *const _ as _);
@@ -103,7 +103,7 @@ impl<M: RawMutex, WQ: WaitQueue> ThreadSignalManager<M, WQ> {
 
                 let restorer = action
                     .restorer
-                    .map_or(self.proc.default_restorer(), |f| f as _);
+                    .unwrap_or_else(|| self.proc.default_restorer());
                 #[cfg(target_arch = "x86_64")]
                 tf.push_ra(restorer);
                 #[cfg(not(target_arch = "x86_64"))]

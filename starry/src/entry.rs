@@ -1,6 +1,5 @@
 use alloc::{borrow::ToOwned, string::String, sync::Arc};
 
-use spin::RwLock;
 use xfs::FS_CONTEXT;
 use xhal::arch::UspaceContext;
 use xsync::Mutex;
@@ -14,7 +13,6 @@ use xkernel::{
 use xprocess::{Pid, init_proc};
 use xsignal::Signo;
 use xutils::ctypes::AT_FDCWD;
-use xvma::VmaManager;
 
 pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     let mut uspace = new_aspace()
@@ -49,7 +47,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
 
     let process_data = XProcess::new(
         exe_path.clone(),
-        XUserSpace::new(Arc::new(Mutex::new(uspace)), RwLock::new(VmaManager::new())),
+        XUserSpace::new(Arc::new(Mutex::new(uspace))),
         Arc::default(),
         Some(Signo::SIGCHLD),
         None,
@@ -63,7 +61,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
         .init_new(FS_CONTEXT.copy_inner());
     IPC_MANAGER
         .deref_from(&process_data.ns)
-        .init_new(IPC_MANAGER.copy_inner());
+        .init_new(IPC_MANAGER.new_inner());
 
     let tid = task.id().as_u64() as Pid;
     let process = init_proc().fork(tid).data(process_data).build();

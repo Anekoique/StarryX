@@ -9,7 +9,7 @@ use crate::{
     with_ipc_manager,
 };
 use xprocess::Pid;
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::{
     ctypes::{
         __kernel_time_t, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, SEMMSL, SEMOPM, ipc::SemOpFlags,

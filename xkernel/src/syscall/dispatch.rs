@@ -364,10 +364,8 @@ fn handle_syscall_impl(tf: &mut TrapFrame, sysno: Sysno) -> LinuxResult<isize> {
         Sysno::sched_getscheduler => sys_sched_getscheduler(tf.arg0() as _),
         Sysno::getpriority => sys_getpriority(tf.arg0() as _, tf.arg1() as _),
         Sysno::setpriority => sys_setpriority(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
-        // #[cfg(target_arch = "x86_64")]
-        // Sysno::sched_get_priority_max => sys_sched_getscheduler_max(tf.arg0() as _, tf.arg1() as _),
-        // #[cfg(target_arch = "x86_64")]
-        // Sysno::sched_get_priority_min => sys_sched_getscheduler_min(tf.arg0() as _, tf.arg1() as _),
+        Sysno::sched_get_priority_max => sys_sched_get_priority_max(tf.arg0()),
+        Sysno::sched_get_priority_min => sys_sched_get_priority_min(tf.arg0()),
         Sysno::nanosleep => sys_nanosleep(tf.arg0().into(), tf.arg1().into()),
         Sysno::clock_nanosleep => sys_clock_nanosleep(
             tf.arg0() as _,

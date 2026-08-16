@@ -4,7 +4,7 @@ use core::sync::atomic::Ordering;
 use xerrno::{LinuxError, LinuxResult};
 use xtask::{TaskExtRef, current};
 
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::{
     ctypes::{
         FUTEX_CMD_MASK, FUTEX_CMP_REQUEUE, FUTEX_REQUEUE, FUTEX_WAIT, FUTEX_WAIT_BITSET,

@@ -11,7 +11,6 @@ use core::{
 };
 
 use inherit_methods_macro::inherit_methods;
-use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Once, RwLock};
 use xerrno::{LinuxError, LinuxResult};
 use xhal::arch::UspaceContext;
@@ -24,12 +23,11 @@ use xsignal::{
     Signo,
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
-use xuspace::{UserPtr, UserSpaceAccess, nullable};
-use xutils::{collections::weak_map::WeakMap, ctypes::SCHED_RR};
-use xvma::MmapRegion;
+use xuspace::UserPtr;
+use xutils::collections::weak_map::WeakMap;
 
 use crate::{
-    mm::{FileWrapper, XUserSpace},
+    mm::XUserSpace,
     resources::Rlimits,
     task::{
         FutexKey, FutexTable, ProcessSignal, ThreadSignal, cred::ProcessCredentials, with_current,
@@ -37,21 +35,21 @@ use crate::{
     time::{TimeStat, time_stat_switch_from_old_task},
 };
 
-pub fn new_user_task(
-    name: &str,
-    uctx: UspaceContext,
-    tid_addr: Option<&'static mut Pid>,
-) -> TaskInner {
+pub fn new_user_task(name: &str, uctx: UspaceContext, tid_addr: Option<usize>) -> TaskInner {
     TaskInner::new(
         move || {
             with_current(|curr| {
-                if let Some(tid_addr) = tid_addr {
-                    nullable!(curr.task_ext().xprocess_ref().uspace().write(
-                        UserPtr::<u32>::from(tid_addr as *mut _),
-                        curr.id().as_u64() as Pid
-                    ))
-                    .map_err(|_| panic!("Failed to write tid to user space"))
-                    .ok();
+                if let Some(tid_addr) = tid_addr
+                    && let Err(error) = curr
+                        .task_ext()
+                        .xprocess_ref()
+                        .uspace()
+                        .write(UserPtr::<u32>::from(tid_addr), curr.id().as_u64() as Pid)
+                {
+                    // A CLONE_VM peer may unmap or protect the address after
+                    // clone-time validation. Do not turn that user race into
+                    // a kernel panic.
+                    warn!("failed to write child TID to user space: {error:?}");
                 }
                 let kstack_top = curr.kernel_stack_top().unwrap();
                 info!(
@@ -136,7 +134,7 @@ impl XThread {
             oom_score_adj: AtomicI32::new(200),
             futex_bitset: AtomicU32::new(0),
             priority: AtomicI32::new(0),
-            policy: AtomicU32::new(SCHED_RR as _),
+            policy: AtomicU32::new(0), // SCHED_OTHER
         }
     }
 
@@ -253,17 +251,10 @@ impl XProcess {
 
 #[inherit_methods(from = "self.uspace")]
 impl XProcess {
-    pub fn get_heap_bottom(&self) -> usize;
+    pub fn heap_bottom(&self) -> usize;
     pub fn set_heap_bottom(&self, bottom: usize);
-    pub fn get_heap_top(&self) -> usize;
+    pub fn heap_top(&self) -> usize;
     pub fn set_heap_top(&self, top: usize);
-    pub fn add_region(&self, region: MmapRegion<FileWrapper>) -> LinuxResult<()>;
-    pub fn remove_overlapping_regions(
-        &self,
-        vaddr_range: VirtAddrRange,
-    ) -> Vec<MmapRegion<FileWrapper>>;
-    pub fn clear_regions(&self);
-    pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()>;
 }
 
 #[inherit_methods(from = "self.credentials")]

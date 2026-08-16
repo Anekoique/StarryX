@@ -46,6 +46,10 @@ bitflags::bitflags! {
         const P = 1 << 7;
         /// Whether the page is writable.
         const W = 1 << 8;
+        /// Allocator-frame software marker.
+        const ALLOC_FRAME = 1 << 9;
+        /// Resident but inaccessible software marker.
+        const PROT_NONE = 1 << 10;
         /// Designates a global mapping when using huge page.
         const G = 1 << 12;
         /// Whether the page is not readable.
@@ -60,6 +64,13 @@ bitflags::bitflags! {
 
 impl From<PTEFlags> for MappingFlags {
     fn from(f: PTEFlags) -> Self {
+        if f.contains(PTEFlags::PROT_NONE) {
+            let mut flags = Self::PROT_NONE;
+            if f.contains(PTEFlags::ALLOC_FRAME) {
+                flags |= Self::ALLOC_FRAME;
+            }
+            return flags;
+        }
         if !f.contains(PTEFlags::V) {
             return Self::empty();
         }
@@ -83,12 +94,22 @@ impl From<PTEFlags> for MappingFlags {
                 ret |= Self::DEVICE;
             }
         }
+        if f.contains(PTEFlags::ALLOC_FRAME) {
+            ret |= Self::ALLOC_FRAME;
+        }
         ret
     }
 }
 
 impl From<MappingFlags> for PTEFlags {
     fn from(f: MappingFlags) -> Self {
+        if f.contains(MappingFlags::PROT_NONE) {
+            let mut flags = Self::PROT_NONE;
+            if f.contains(MappingFlags::ALLOC_FRAME) {
+                flags |= Self::ALLOC_FRAME;
+            }
+            return flags;
+        }
         if f.is_empty() {
             return Self::empty();
         }
@@ -113,6 +134,9 @@ impl From<MappingFlags> for PTEFlags {
                 // coherent cached,
                 ret |= Self::MATL;
             }
+        }
+        if f.contains(MappingFlags::ALLOC_FRAME) {
+            ret |= Self::ALLOC_FRAME;
         }
         ret
     }
@@ -166,7 +190,7 @@ impl GenericPTE for LA64PTE {
         self.0 == 0
     }
     fn is_present(&self) -> bool {
-        PTEFlags::from_bits_truncate(self.0).contains(PTEFlags::P)
+        !self.is_unused()
     }
     fn is_huge(&self) -> bool {
         PTEFlags::from_bits_truncate(self.0).contains(PTEFlags::GH)

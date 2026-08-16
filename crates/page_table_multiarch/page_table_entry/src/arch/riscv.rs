@@ -27,12 +27,23 @@ bitflags::bitflags! {
         /// Indicates the virtual page has been written since the last time the
         /// D bit was cleared.
         const D =   1 << 7;
+        /// Allocator-frame marker in the RSW software-reserved field.
+        const ALLOC_FRAME = 1 << 8;
+        /// Resident but inaccessible leaf in the RSW software-reserved field.
+        const PROT_NONE = 1 << 9;
     }
 }
 
 impl From<PTEFlags> for MappingFlags {
     fn from(f: PTEFlags) -> Self {
         let mut ret = Self::empty();
+        if f.contains(PTEFlags::PROT_NONE) {
+            ret |= Self::PROT_NONE;
+            if f.contains(PTEFlags::ALLOC_FRAME) {
+                ret |= Self::ALLOC_FRAME;
+            }
+            return ret;
+        }
         if !f.contains(PTEFlags::V) {
             return ret;
         }
@@ -48,12 +59,22 @@ impl From<PTEFlags> for MappingFlags {
         if f.contains(PTEFlags::U) {
             ret |= Self::USER;
         }
+        if f.contains(PTEFlags::ALLOC_FRAME) {
+            ret |= Self::ALLOC_FRAME;
+        }
         ret
     }
 }
 
 impl From<MappingFlags> for PTEFlags {
     fn from(f: MappingFlags) -> Self {
+        if f.contains(MappingFlags::PROT_NONE) {
+            let mut ret = Self::PROT_NONE;
+            if f.contains(MappingFlags::ALLOC_FRAME) {
+                ret |= Self::ALLOC_FRAME;
+            }
+            return ret;
+        }
         if f.is_empty() {
             return Self::empty();
         }
@@ -69,6 +90,9 @@ impl From<MappingFlags> for PTEFlags {
         }
         if f.contains(MappingFlags::USER) {
             ret |= Self::U;
+        }
+        if f.contains(MappingFlags::ALLOC_FRAME) {
+            ret |= Self::ALLOC_FRAME;
         }
         ret
     }
@@ -90,8 +114,14 @@ impl Rv64PTE {
 
 impl GenericPTE for Rv64PTE {
     fn new_page(paddr: PhysAddr, flags: MappingFlags, _is_huge: bool) -> Self {
-        let flags = PTEFlags::from(flags) | PTEFlags::A | PTEFlags::D;
-        debug_assert!(flags.intersects(PTEFlags::R | PTEFlags::X));
+        let mut flags = PTEFlags::from(flags);
+        if !flags.contains(PTEFlags::PROT_NONE) {
+            flags |= PTEFlags::A | PTEFlags::D;
+            assert!(
+                flags.intersects(PTEFlags::R | PTEFlags::X),
+                "RISC-V leaf PTE requires R or X"
+            );
+        }
         Self(flags.bits() as u64 | ((paddr.as_usize() >> 2) as u64 & Self::PHYS_ADDR_MASK))
     }
     fn new_table(paddr: PhysAddr) -> Self {
@@ -108,8 +138,14 @@ impl GenericPTE for Rv64PTE {
             | ((paddr.as_usize() as u64 >> 2) & Self::PHYS_ADDR_MASK);
     }
     fn set_flags(&mut self, flags: MappingFlags, _is_huge: bool) {
-        let flags = PTEFlags::from(flags) | PTEFlags::A | PTEFlags::D;
-        debug_assert!(flags.intersects(PTEFlags::R | PTEFlags::X));
+        let mut flags = PTEFlags::from(flags);
+        if !flags.contains(PTEFlags::PROT_NONE) {
+            flags |= PTEFlags::A | PTEFlags::D;
+            assert!(
+                flags.intersects(PTEFlags::R | PTEFlags::X),
+                "RISC-V leaf PTE requires R or X"
+            );
+        }
         self.0 = (self.0 & Self::PHYS_ADDR_MASK) | flags.bits() as u64;
     }
 
@@ -120,10 +156,11 @@ impl GenericPTE for Rv64PTE {
         self.0 == 0
     }
     fn is_present(&self) -> bool {
-        PTEFlags::from_bits_truncate(self.0 as usize).contains(PTEFlags::V)
+        PTEFlags::from_bits_truncate(self.0 as usize).intersects(PTEFlags::V | PTEFlags::PROT_NONE)
     }
     fn is_huge(&self) -> bool {
-        PTEFlags::from_bits_truncate(self.0 as usize).intersects(PTEFlags::R | PTEFlags::X)
+        PTEFlags::from_bits_truncate(self.0 as usize)
+            .intersects(PTEFlags::R | PTEFlags::X | PTEFlags::PROT_NONE)
     }
     fn clear(&mut self) {
         self.0 = 0

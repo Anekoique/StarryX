@@ -5,7 +5,7 @@ use crate::{
     fs::{fd::TimerFd, file::FileLike},
     task::with_uspace,
 };
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::ctypes::{__kernel_clockid_t, TFD_CLOEXEC, sys::itimerspec};
 
 /// Create a new timer file descriptor

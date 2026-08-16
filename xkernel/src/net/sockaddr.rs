@@ -1,15 +1,14 @@
 //! Wrapper for [`sockaddr`]. Using trait to convert between [`SocketAddr`] and [`sockaddr`] types.
 use core::{
-    mem::{MaybeUninit, size_of},
+    mem::{offset_of, size_of},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
 use xerrno::{LinuxError, LinuxResult};
 
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess};
+use xuspace::{UserConstPtr, UserPtr};
 use xutils::ctypes::{
-    __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
-    sockaddr_in6, socklen_t,
+    __kernel_sa_family_t, AF_INET, AF_INET6, sockaddr, sockaddr_in, sockaddr_in6, socklen_t,
 };
 
 use crate::task::with_uspace;
@@ -32,26 +31,10 @@ pub trait SocketAddrExt: Sized {
     fn addr_len(&self) -> socklen_t;
 }
 
-/// Copies a socket address from user space into a temporary kernel storage.
-///
-/// This function reads `addrlen` bytes from the user-space pointer `addr` and
-/// copies them into a `MaybeUninit<sockaddr>` in kernel memory.
-///
-#[inline]
-fn copy_sockaddr_from_user(
-    addr: UserConstPtr<sockaddr>,
-    addrlen: socklen_t,
-) -> LinuxResult<MaybeUninit<sockaddr>> {
-    let mut storage = MaybeUninit::<sockaddr>::uninit();
-
-    let storage_bytes = unsafe {
-        core::slice::from_raw_parts_mut(storage.as_mut_ptr() as *mut u8, addrlen as usize)
-    };
-
-    with_uspace(|uspace| {
-        uspace.read_slice_to(addr.cast::<u8>(), storage_bytes)?;
-        Ok(storage)
-    })
+fn read_bytes<const N: usize>(addr: UserConstPtr<sockaddr>) -> LinuxResult<[u8; N]> {
+    let mut bytes = [0; N];
+    with_uspace(|uspace| uspace.read_slice_to(addr.cast::<u8>(), &mut bytes))?;
+    Ok(bytes)
 }
 
 impl SocketAddrExt for SocketAddr {
@@ -68,14 +51,7 @@ impl SocketAddrExt for SocketAddr {
         {
             return Err(LinuxError::EINVAL);
         }
-        let src_addr = with_uspace(|uspace| uspace.read(addr))?;
-        let family = unsafe {
-            src_addr
-                .__storage
-                .__bindgen_anon_1
-                .__bindgen_anon_1
-                .ss_family as u32
-        };
+        let family = u16::from_ne_bytes(read_bytes::<2>(addr)?.into()) as u32;
         match family {
             AF_INET => SocketAddrV4::read_from_user(addr, addrlen).map(SocketAddr::V4),
             AF_INET6 => SocketAddrV6::read_from_user(addr, addrlen).map(SocketAddr::V6),
@@ -127,15 +103,21 @@ impl SocketAddrExt for SocketAddrV4 {
         if addrlen < size_of::<sockaddr_in>() as socklen_t {
             return Err(LinuxError::EINVAL);
         }
-        let storage = copy_sockaddr_from_user(addr, addrlen)?;
-        let addr_in = unsafe { &*(storage.as_ptr() as *const sockaddr_in) };
-        if addr_in.sin_family as u32 != AF_INET {
+        let bytes = read_bytes::<{ size_of::<sockaddr_in>() }>(addr)?;
+        let family_offset = offset_of!(sockaddr_in, sin_family);
+        let port_offset = offset_of!(sockaddr_in, sin_port);
+        let address_offset = offset_of!(sockaddr_in, sin_addr);
+        if u16::from_ne_bytes(bytes[family_offset..family_offset + 2].try_into().unwrap()) as u32
+            != AF_INET
+        {
             return Err(LinuxError::EAFNOSUPPORT);
         }
 
         Ok(SocketAddrV4::new(
-            Ipv4Addr::from_bits(u32::from_be(addr_in.sin_addr.s_addr)),
-            u16::from_be(addr_in.sin_port),
+            Ipv4Addr::from(
+                <[u8; 4]>::try_from(&bytes[address_offset..address_offset + 4]).unwrap(),
+            ),
+            u16::from_be_bytes(bytes[port_offset..port_offset + 2].try_into().unwrap()),
         ))
     }
 
@@ -144,23 +126,15 @@ impl SocketAddrExt for SocketAddrV4 {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
         }
-        let dst_addr = with_uspace(|uspace| uspace.raw_ptr(addr))?;
         let len = size_of::<sockaddr_in>() as socklen_t;
-        let sockin_addr = sockaddr_in {
-            sin_family: AF_INET as _,
-            sin_port: self.port().to_be(),
-            sin_addr: in_addr {
-                s_addr: u32::from_ne_bytes(self.ip().octets()),
-            },
-            __pad: [0_u8; 8],
-        };
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                &sockin_addr as *const sockaddr_in as *const u8,
-                dst_addr as *mut sockaddr as *mut u8,
-                len as usize,
-            )
-        };
+        let mut bytes = [0; size_of::<sockaddr_in>()];
+        let family_offset = offset_of!(sockaddr_in, sin_family);
+        let port_offset = offset_of!(sockaddr_in, sin_port);
+        let address_offset = offset_of!(sockaddr_in, sin_addr);
+        bytes[family_offset..family_offset + 2].copy_from_slice(&(AF_INET as u16).to_ne_bytes());
+        bytes[port_offset..port_offset + 2].copy_from_slice(&self.port().to_be_bytes());
+        bytes[address_offset..address_offset + 4].copy_from_slice(&self.ip().octets());
+        with_uspace(|uspace| uspace.write_slice(addr.cast::<u8>(), &bytes))?;
 
         Ok(len)
     }
@@ -182,17 +156,25 @@ impl SocketAddrExt for SocketAddrV6 {
         if addrlen < size_of::<sockaddr_in6>() as socklen_t {
             return Err(LinuxError::EINVAL);
         }
-        let storage = copy_sockaddr_from_user(addr, addrlen)?;
-        let addr_in6 = unsafe { &*(storage.as_ptr() as *const sockaddr_in6) };
-        if addr_in6.sin6_family as u32 != AF_INET6 {
+        let bytes = read_bytes::<{ size_of::<sockaddr_in6>() }>(addr)?;
+        let family_offset = offset_of!(sockaddr_in6, sin6_family);
+        let port_offset = offset_of!(sockaddr_in6, sin6_port);
+        let flow_offset = offset_of!(sockaddr_in6, sin6_flowinfo);
+        let address_offset = offset_of!(sockaddr_in6, sin6_addr);
+        let scope_offset = offset_of!(sockaddr_in6, sin6_scope_id);
+        if u16::from_ne_bytes(bytes[family_offset..family_offset + 2].try_into().unwrap()) as u32
+            != AF_INET6
+        {
             return Err(LinuxError::EAFNOSUPPORT);
         }
 
         Ok(SocketAddrV6::new(
-            Ipv6Addr::from(unsafe { addr_in6.sin6_addr.in6_u.u6_addr8 }),
-            u16::from_be(addr_in6.sin6_port),
-            u32::from_be(addr_in6.sin6_flowinfo),
-            addr_in6.sin6_scope_id,
+            Ipv6Addr::from(
+                <[u8; 16]>::try_from(&bytes[address_offset..address_offset + 16]).unwrap(),
+            ),
+            u16::from_be_bytes(bytes[port_offset..port_offset + 2].try_into().unwrap()),
+            u32::from_be_bytes(bytes[flow_offset..flow_offset + 4].try_into().unwrap()),
+            u32::from_ne_bytes(bytes[scope_offset..scope_offset + 4].try_into().unwrap()),
         ))
     }
     /// Writes the `SocketAddrV6` to user space.
@@ -200,27 +182,20 @@ impl SocketAddrExt for SocketAddrV6 {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
         }
-        let dst_addr = with_uspace(|uspace| uspace.raw_ptr(addr))?;
         let len = size_of::<sockaddr_in6>() as socklen_t;
-        let sockin_addr = sockaddr_in6 {
-            sin6_family: AF_INET6 as _,
-            sin6_port: self.port().to_be(),
-            sin6_flowinfo: self.flowinfo().to_be(),
-            sin6_addr: in6_addr {
-                in6_u: linux_raw_sys::net::in6_addr__bindgen_ty_1 {
-                    u6_addr8: self.ip().octets(),
-                },
-            },
-            sin6_scope_id: self.scope_id(),
-        };
+        let mut bytes = [0; size_of::<sockaddr_in6>()];
+        let family_offset = offset_of!(sockaddr_in6, sin6_family);
+        let port_offset = offset_of!(sockaddr_in6, sin6_port);
+        let flow_offset = offset_of!(sockaddr_in6, sin6_flowinfo);
+        let address_offset = offset_of!(sockaddr_in6, sin6_addr);
+        let scope_offset = offset_of!(sockaddr_in6, sin6_scope_id);
+        bytes[family_offset..family_offset + 2].copy_from_slice(&(AF_INET6 as u16).to_ne_bytes());
+        bytes[port_offset..port_offset + 2].copy_from_slice(&self.port().to_be_bytes());
+        bytes[flow_offset..flow_offset + 4].copy_from_slice(&self.flowinfo().to_be_bytes());
+        bytes[address_offset..address_offset + 16].copy_from_slice(&self.ip().octets());
+        bytes[scope_offset..scope_offset + 4].copy_from_slice(&self.scope_id().to_ne_bytes());
 
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                &sockin_addr as *const sockaddr_in6 as *const u8,
-                dst_addr as *mut sockaddr as *mut u8,
-                len as usize,
-            )
-        };
+        with_uspace(|uspace| uspace.write_slice(addr.cast::<u8>(), &bytes))?;
 
         Ok(len)
     }

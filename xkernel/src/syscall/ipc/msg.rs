@@ -4,7 +4,7 @@ use alloc::{sync::Arc, vec};
 use xerrno::{LinuxError, LinuxResult};
 use xsync::Mutex;
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::ctypes::{
     __kernel_mode_t, IPC_CREAT, IPC_EXCL, IPC_INFO, IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT,
     c_long,

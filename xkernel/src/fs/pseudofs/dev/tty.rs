@@ -6,7 +6,7 @@ use xio::{BufReader, Read};
 use xsync::Mutex;
 use xvfs::VfsResult;
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::ctypes::{
     ECHO, ICANON, TCGETS, TCSETS, TCSETSF, TCSETSW, TIOCGWINSZ, TIOCSWINSZ, termios, winsize,
 };

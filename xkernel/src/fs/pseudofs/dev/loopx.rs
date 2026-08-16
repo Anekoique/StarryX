@@ -10,7 +10,7 @@ use xfs::FsFile;
 use xsync::{Mutex, RawMutex};
 use xvfs::{DeviceId, VfsResult};
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::ctypes::{
     BLKGETSIZE, BLKGETSIZE64, BLKRAGET, BLKRASET, BLKROGET, BLKROSET, LOOP_CLR_FD, LOOP_GET_STATUS,
     LOOP_SET_FD, LOOP_SET_STATUS, loop_info,
@@ -104,10 +104,14 @@ impl VirtDeviceOps for LoopDevice {
                     *guard = None;
                 }
                 LOOP_GET_STATUS => {
-                    self.get_info(uspace.raw_ptr(argp.cast())?)?;
+                    let ptr = argp.cast();
+                    let mut info = uspace.read(ptr)?;
+                    self.get_info(&mut info)?;
+                    uspace.write(ptr, info)?;
                 }
                 LOOP_SET_STATUS => {
-                    self.set_info(uspace.raw_ptr(argp.cast())?)?;
+                    let info = uspace.read(argp.cast())?;
+                    self.set_info(&info)?;
                 }
                 BLKGETSIZE | BLKGETSIZE64 => {
                     let file = self.clone_file()?;

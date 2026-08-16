@@ -152,17 +152,6 @@ pub struct IpcManager {
     limits: IpcLimits,
 }
 
-impl Clone for IpcManager {
-    fn clone(&self) -> Self {
-        Self {
-            shm: Mutex::new(self.shm.lock().clone()),
-            msg: Mutex::new(self.msg.lock().clone()),
-            sem: Mutex::new(self.sem.lock().clone()),
-            limits: self.limits,
-        }
-    }
-}
-
 impl IpcManager {
     /// Create a new IPC manager with default limits
     pub fn new() -> Self {
@@ -271,9 +260,9 @@ def_resource! {
 }
 
 impl IPC_MANAGER {
-    /// Create a copy of the inner IPC manager
-    pub fn copy_inner(&self) -> Mutex<IpcManager> {
-        Mutex::new(self.lock().clone())
+    /// Create an empty IPC namespace.
+    pub fn new_inner(&self) -> Mutex<IpcManager> {
+        Mutex::new(IpcManager::new())
     }
 
     /// Clear the inner IPC manager

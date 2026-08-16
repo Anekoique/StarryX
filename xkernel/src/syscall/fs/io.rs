@@ -17,6 +17,44 @@ use crate::{
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::ctypes::{__kernel_off_t, AT_FDCWD, iovec};
 
+const SMALL_IO_BUFFER_SIZE: usize = 1024;
+const PAGE_IO_BUFFER_SIZE: usize = 4096;
+
+fn with_io_buffer<R>(len: usize, use_buffer: impl FnOnce(&mut [u8]) -> R) -> R {
+    if len <= SMALL_IO_BUFFER_SIZE {
+        let mut buffer = [0; SMALL_IO_BUFFER_SIZE];
+        return use_buffer(&mut buffer[..len]);
+    }
+    if len <= PAGE_IO_BUFFER_SIZE {
+        let mut buffer = [0; PAGE_IO_BUFFER_SIZE];
+        return use_buffer(&mut buffer[..len]);
+    }
+    use_buffer(&mut vec![0; len])
+}
+
+fn read_to_user(
+    user_buf: UserPtr<u8>,
+    len: usize,
+    read: impl FnOnce(&mut [u8]) -> LinuxResult<usize>,
+) -> LinuxResult<usize> {
+    with_io_buffer(len, |kernel_buf| {
+        let read = read(kernel_buf)?;
+        with_uspace(|uspace| uspace.copy_to_user(user_buf.address(), &kernel_buf[..read]))?;
+        Ok(read)
+    })
+}
+
+fn write_from_user(
+    user_buf: UserConstPtr<u8>,
+    len: usize,
+    write: impl FnOnce(&[u8]) -> LinuxResult<usize>,
+) -> LinuxResult<usize> {
+    with_io_buffer(len, |kernel_buf| {
+        with_uspace(|uspace| uspace.copy_from_user(user_buf.address(), kernel_buf))?;
+        write(kernel_buf)
+    })
+}
+
 /// Read data from the file indicated by `fd`.
 ///
 /// # Arguments
@@ -24,14 +62,9 @@ use xutils::ctypes::{__kernel_off_t, AT_FDCWD, iovec};
 /// * `buf` - Buffer to read data into
 /// * `len` - Length of data to read
 pub fn sys_read(fd: i32, buf: UserPtr<u8>, len: usize) -> LinuxResult<isize> {
-    let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
-    debug!(
-        "sys_read <= fd: {}, buf: {:p}, len: {}",
-        fd,
-        buf.as_ptr(),
-        buf.len()
-    );
-    Ok(get_file_like(fd)?.read(buf)? as _)
+    debug!("sys_read <= fd: {}, buf: {:?}, len: {}", fd, buf, len);
+    let file = get_file_like(fd)?;
+    read_to_user(buf, len, |kernel_buf| file.read(kernel_buf)).map(|read| read as _)
 }
 
 fn readv_impl(
@@ -43,24 +76,21 @@ fn readv_impl(
         return Err(LinuxError::EINVAL);
     }
 
-    with_uspace(|uspace| {
-        let iovs = uspace.raw_slice(iov, iocnt)?;
-        let mut total = 0;
+    let iovs = with_uspace(|uspace| uspace.read_slice(iov, iocnt))?;
+    let mut total = 0;
 
-        for iov in iovs.iter().filter(|iov| iov.iov_len > 0) {
-            let buf =
-                uspace.raw_slice(UserPtr::<u8>::from(iov.iov_base as usize), iov.iov_len as _)?;
+    for iov in iovs.iter().filter(|iov| iov.iov_len > 0) {
+        let user_buf = UserPtr::<u8>::from(iov.iov_base as usize);
+        let len = iov.iov_len as usize;
+        let read = read_to_user(user_buf, len, |kernel_buf| f(kernel_buf))?;
+        total += read;
 
-            let read = f(buf)?;
-            total += read;
-
-            if read < buf.len() {
-                break;
-            }
+        if read < len {
+            break;
         }
+    }
 
-        Ok(total as isize)
-    })
+    Ok(total as isize)
 }
 
 fn writev_impl(
@@ -72,26 +102,24 @@ fn writev_impl(
         return Err(LinuxError::EINVAL);
     }
 
-    with_uspace(|uspace| {
-        let iovs = uspace.read_slice(iov, iocnt)?;
-        let mut total = 0;
+    let iovs = with_uspace(|uspace| uspace.read_slice(iov, iocnt))?;
+    let mut total = 0;
 
-        for iov in iovs.iter().filter(|iov| iov.iov_len > 0) {
-            let buf = uspace.read_slice(
-                UserConstPtr::<u8>::from(iov.iov_base as usize),
-                iov.iov_len as _,
-            )?;
+    for iov in iovs.iter().filter(|iov| iov.iov_len > 0) {
+        let len = iov.iov_len as usize;
+        let written = write_from_user(
+            UserConstPtr::from(iov.iov_base as usize),
+            len,
+            |kernel_buf| f(kernel_buf),
+        )?;
+        total += written;
 
-            let written = f(buf)?;
-            total += written;
-
-            if written < buf.len() {
-                break;
-            }
+        if written < len {
+            break;
         }
+    }
 
-        Ok(total as isize)
-    })
+    Ok(total as isize)
 }
 
 /// Read data from multiple buffers from the file indicated by `fd`.
@@ -113,14 +141,9 @@ pub fn sys_readv(fd: i32, iov: UserPtr<iovec>, iocnt: usize) -> LinuxResult<isiz
 /// * `buf` - Buffer containing data to write
 /// * `len` - Length of data to write
 pub fn sys_write(fd: i32, buf: UserConstPtr<u8>, len: usize) -> LinuxResult<isize> {
-    let buf = with_uspace(|uspace| uspace.read_slice(buf, len))?;
-    debug!(
-        "sys_write <= fd: {}, buf: {:p}, len: {}",
-        fd,
-        buf.as_ptr(),
-        buf.len()
-    );
-    Ok(get_file_like(fd)?.write(buf)? as _)
+    debug!("sys_write <= fd: {}, buf: {:?}, len: {}", fd, buf, len);
+    let file = get_file_like(fd)?;
+    write_from_user(buf, len, |kernel_buf| file.write(kernel_buf)).map(|written| written as _)
 }
 
 /// Write data from multiple buffers to the file indicated by `fd`.
@@ -163,8 +186,8 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> Linux
     }
     let path = with_uspace(|uspace| uspace.read_str(path))?;
     trace!("sys_truncate <= {} {}", path, length);
-    with_fs(AT_FDCWD, path, |fs| {
-        fs.write_file(path)?
+    with_fs(AT_FDCWD, &path, |fs| {
+        fs.write_file(&path)?
             .access(FileFlags::WRITE)?
             .set_len(length as _)
     })?;
@@ -250,14 +273,12 @@ pub fn sys_pread64(
     len: usize,
     offset: __kernel_off_t,
 ) -> LinuxResult<isize> {
-    let buf = with_uspace(|uspace| uspace.raw_slice(buf, len))?;
     trace!("sys_pread64 <= {}", fd);
     if offset < 0 {
         return Err(LinuxError::EINVAL);
     }
-    File::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?
-        .read_at(buf, offset as _)
-        .map(|read| read as isize)
+    let file = File::from_fd(fd, FileFlags::empty(), FileFlags::PATH)?;
+    read_to_user(buf, len, |kernel_buf| file.read_at(kernel_buf, offset as _)).map(|read| read as _)
 }
 
 /// Write to a file descriptor at a given offset.
@@ -273,11 +294,12 @@ pub fn sys_pwrite64(
     len: usize,
     offset: __kernel_off_t,
 ) -> LinuxResult<isize> {
-    let buf = with_uspace(|uspace| uspace.read_slice(buf, len))?;
     trace!("sys_pwrite64 <= {}", fd);
-    File::from_fd(fd, FileFlags::WRITE, FileFlags::PATH)?
-        .write_at(buf, offset as _)
-        .map(|written| written as isize)
+    let file = File::from_fd(fd, FileFlags::WRITE, FileFlags::PATH)?;
+    write_from_user(buf, len, |kernel_buf| {
+        file.write_at(kernel_buf, offset as _)
+    })
+    .map(|written| written as _)
 }
 
 /// Read data into multiple buffers from a file descriptor at a given offset.
@@ -428,8 +450,8 @@ pub fn sys_sendfile(
     );
 
     with_uspace(|uspace| {
-        let off = nullable!(uspace.raw_ptr(offset))?;
-        let src = if let Some(off) = off {
+        let mut offset_value = nullable!(uspace.read(offset))?;
+        let src = if let Some(off) = offset_value.as_mut() {
             if *off < 0 {
                 return Err(LinuxError::EINVAL);
             }
@@ -439,7 +461,11 @@ pub fn sys_sendfile(
         };
 
         let dst = SendFile::Direct(get_file_like(out_fd)?.file.clone());
-        do_send(src, dst, len).map(|n| n as _)
+        let sent = do_send(src, dst, len)?;
+        if let Some(value) = offset_value {
+            uspace.write(offset, value)?;
+        }
+        Ok(sent as isize)
     })
 }
 
@@ -467,8 +493,8 @@ pub fn sys_splice(
         return Err(LinuxError::EINVAL);
     }
     with_uspace(|uspace| {
-        let off = nullable!(uspace.raw_ptr(off_in))?;
-        let src = if let Some(off) = off {
+        let mut input_offset = nullable!(uspace.read(off_in))?;
+        let src = if let Some(off) = input_offset.as_mut() {
             if *off < 0 {
                 return Err(LinuxError::EINVAL);
             }
@@ -486,8 +512,8 @@ pub fn sys_splice(
             SendFile::Direct(get_file_like(fd_in)?.file.clone())
         };
 
-        let off = nullable!(uspace.raw_ptr(off_out))?;
-        let dst = if let Some(off) = off {
+        let mut output_offset = nullable!(uspace.read(off_out))?;
+        let dst = if let Some(off) = output_offset.as_mut() {
             if *off < 0 {
                 return Err(LinuxError::EINVAL);
             }
@@ -504,7 +530,14 @@ pub fn sys_splice(
             SendFile::Direct(get_file_like(fd_out)?.file.clone())
         };
 
-        do_send(src, dst, len).map(|n| n as _)
+        let sent = do_send(src, dst, len)?;
+        if let Some(value) = input_offset {
+            uspace.write(off_in, value)?;
+        }
+        if let Some(value) = output_offset {
+            uspace.write(off_out, value)?;
+        }
+        Ok(sent as isize)
     })
 }
 

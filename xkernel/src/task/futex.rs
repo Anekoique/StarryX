@@ -7,9 +7,9 @@ use alloc::{
 use core::{ops::Deref, sync::atomic::AtomicBool};
 
 use memory_addr::VirtAddr;
-use xmm::{Backend, SharedPages};
 use xsync::Mutex;
 use xtask::WaitQueue;
+use xvma::SharedObject;
 
 use crate::task::api::with_uspace;
 
@@ -27,7 +27,7 @@ pub enum FutexKey {
         offset: usize,
         /// The shared memory region, represented as a weak reference to the
         /// shared pages.
-        region: Weak<SharedPages>,
+        region: Weak<SharedObject>,
     },
 }
 impl FutexKey {
@@ -35,22 +35,21 @@ impl FutexKey {
     pub fn new(address: usize) -> Self {
         with_uspace(|uspace| {
             let aspace = &uspace.aspace.lock();
-            if let Some(area) = aspace.find_area(VirtAddr::from_usize(address))
-                && let Backend::Shared { pages } = area.backend()
+            if let Some((offset, object)) = aspace.shared_mapping_at(VirtAddr::from_usize(address))
             {
                 return Self::Shared {
-                    offset: address - area.start().as_usize(),
-                    region: Arc::downgrade(pages),
+                    offset,
+                    region: Arc::downgrade(&object),
                 };
             }
             Self::Private { address }
         })
     }
 
-    fn as_usize(&self) -> usize {
+    fn table_key(&self) -> (usize, usize) {
         match self {
-            FutexKey::Private { address } => *address,
-            FutexKey::Shared { offset, .. } => *offset,
+            FutexKey::Private { address } => (0, *address),
+            FutexKey::Shared { offset, region } => (region.as_ptr() as usize, *offset),
         }
     }
 }
@@ -68,7 +67,7 @@ impl FutexEntry {
     }
 }
 
-pub struct FutexTable(Mutex<BTreeMap<usize, Arc<FutexEntry>>>);
+pub struct FutexTable(Mutex<BTreeMap<(usize, usize), Arc<FutexEntry>>>);
 impl FutexTable {
     #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
@@ -76,7 +75,7 @@ impl FutexTable {
     }
 
     pub fn get(&self, key: &FutexKey) -> Option<FutexGuard<'_>> {
-        let key = key.as_usize();
+        let key = key.table_key();
         let entry = self.0.lock().get(&key).cloned()?;
         Some(FutexGuard {
             table: self,
@@ -86,7 +85,7 @@ impl FutexTable {
     }
 
     pub fn get_or_insert(&self, key: &FutexKey) -> FutexGuard<'_> {
-        let key = key.as_usize();
+        let key = key.table_key();
         let mut table = self.0.lock();
         let entry = table
             .entry(key)
@@ -101,7 +100,7 @@ impl FutexTable {
 
 pub struct FutexGuard<'a> {
     table: &'a FutexTable,
-    key: usize,
+    key: (usize, usize),
     inner: Arc<FutexEntry>,
 }
 impl Deref for FutexGuard<'_> {

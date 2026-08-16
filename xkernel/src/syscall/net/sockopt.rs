@@ -3,7 +3,7 @@ use core::mem::size_of;
 use xerrno::{LinuxError, LinuxResult};
 use xfs::FileFlags;
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::ctypes::{
     IP_RECVERR, L_IP, L_MAX, L_SOCKET, L_TCP, L_UDP, MCAST_JOIN_GROUP, MCAST_LEAVE_GROUP,
     SO_DONTROUTE, SO_KEEPALIVE, SO_RCVBUF, SO_RCVTIMEO, SO_REUSEADDR, SO_SNDBUF, SO_SNDBUFFORCE,
@@ -114,13 +114,15 @@ pub fn sys_setsockopt(
     match level {
         L_SOCKET => match optname {
             SO_REUSEADDR => {
-                socket.set_reuse_addr(with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?)?;
+                let enabled = with_uspace(|uspace| uspace.read(optval.cast::<i32>()))? != 0;
+                socket.set_reuse_addr(enabled)?;
             }
             SO_RCVTIMEO => {
                 return Ok(0);
             }
             SO_KEEPALIVE => {
-                socket.set_keep_alive(with_uspace(|uspace| uspace.read(optval.cast::<bool>()))?)?;
+                let enabled = with_uspace(|uspace| uspace.read(optval.cast::<i32>()))? != 0;
+                socket.set_keep_alive(enabled)?;
             }
             SO_RCVBUF => return Ok(0),
             SO_SNDBUF => return Ok(0),
@@ -130,9 +132,8 @@ pub fn sys_setsockopt(
         },
         L_TCP => match optname {
             TCP_NODELAY => {
-                socket.set_nagle_enabled(!with_uspace(|uspace| {
-                    uspace.read(optval.cast::<bool>())
-                })?)?;
+                let enabled = with_uspace(|uspace| uspace.read(optval.cast::<i32>()))? != 0;
+                socket.set_nagle_enabled(!enabled)?;
             }
             TCP_KEEPIDLE => return Ok(0),
             _ => return Err(LinuxError::ENOPROTOOPT),

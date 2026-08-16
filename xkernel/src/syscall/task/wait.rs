@@ -4,7 +4,7 @@ use xerrno::{LinuxError, LinuxResult};
 use xtask::{TaskExtRef, current};
 
 use xprocess::{Pid, Process};
-use xuspace::{UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserPtr, nullable};
 use xutils::ctypes::task::WaitOptions;
 
 use crate::task::XProcess;

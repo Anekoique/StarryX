@@ -334,9 +334,45 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         )
     }
 
-    /// Copy entries from another page table within the given virtual memory range.
+    /// Visits every present leaf that overlaps the virtual address range.
+    ///
+    /// Empty page-table subtrees are skipped, so the cost is proportional to
+    /// the populated page-table structure rather than the number of virtual
+    /// pages in the range.
+    pub fn walk_leaf_range<F>(
+        &self,
+        start: M::VirtAddr,
+        size: usize,
+        mut visitor: F,
+    ) -> PagingResult
+    where
+        F: FnMut(M::VirtAddr, PhysAddr, MappingFlags, PageSize),
+    {
+        if size == 0 {
+            return Ok(());
+        }
+        let start = start.into();
+        let end = start.checked_add(size).ok_or(PagingError::NotAligned)?;
+        self.walk_leaf_range_recursive(
+            self.table_of(self.root_paddr()),
+            0,
+            0,
+            start,
+            end,
+            &mut visitor,
+        )
+    }
+
+    /// Copies top-level entries from another page table.
+    ///
+    /// # Safety
+    ///
+    /// The source hierarchy and every mapped target must outlive `self`. The
+    /// caller must separately retain any ownership represented by copied leaf
+    /// entries because this page table borrows the hierarchy without cloning
+    /// leaf resources.
     #[cfg(feature = "copy-from")]
-    pub fn copy_from(&mut self, other: &Self, start: M::VirtAddr, size: usize) {
+    pub unsafe fn copy_from(&mut self, other: &Self, start: M::VirtAddr, size: usize) {
         if size == 0 {
             return;
         }
@@ -536,6 +572,62 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
             }
         }
         Ok(())
+    }
+
+    fn walk_leaf_range_recursive<F>(
+        &self,
+        table: &[PTE],
+        level: usize,
+        prefix: usize,
+        range_start: usize,
+        range_end: usize,
+        visitor: &mut F,
+    ) -> PagingResult
+    where
+        F: FnMut(M::VirtAddr, PhysAddr, MappingFlags, PageSize),
+    {
+        let shift = 12 + (M::LEVELS - 1 - level) * 9;
+        let span = 1usize << shift;
+        for (index, entry) in table.iter().enumerate() {
+            if !entry.is_present() {
+                continue;
+            }
+            let raw_start = prefix | (index << shift);
+            let entry_start = Self::canonicalize_vaddr(raw_start);
+            let entry_end = entry_start.saturating_add(span);
+            if entry_end <= range_start || entry_start >= range_end {
+                continue;
+            }
+
+            if level == M::LEVELS - 1 || entry.is_huge() {
+                let page_size = match M::LEVELS - 1 - level {
+                    0 => PageSize::Size4K,
+                    1 => PageSize::Size2M,
+                    2 => PageSize::Size1G,
+                    _ => return Err(PagingError::MappedToHugePage),
+                };
+                visitor(entry_start.into(), entry.paddr(), entry.flags(), page_size);
+            } else {
+                self.walk_leaf_range_recursive(
+                    self.next_table(entry)?,
+                    level + 1,
+                    raw_start,
+                    range_start,
+                    range_end,
+                    visitor,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn canonicalize_vaddr(raw: usize) -> usize {
+        let sign_bit = 1usize << (M::VA_MAX_BITS - 1);
+        if raw & sign_bit == 0 {
+            raw
+        } else {
+            raw | (usize::MAX << M::VA_MAX_BITS)
+        }
     }
 
     fn dealloc_tree(&self, table_paddr: PhysAddr, level: usize) {

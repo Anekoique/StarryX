@@ -1,6 +1,6 @@
 use xerrno::{LinuxError, LinuxResult};
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::ctypes::{
     __user_cap_data_struct, __user_cap_header_struct, _LINUX_CAPABILITY_VERSION_1,
     _LINUX_CAPABILITY_VERSION_2, _LINUX_CAPABILITY_VERSION_3,
@@ -27,7 +27,8 @@ pub fn sys_capget(
     data: UserPtr<__user_cap_data_struct>,
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
-        validate_cap_header(uspace.raw_ptr(header)?)?;
+        let mut header_value = uspace.read(header)?;
+        validate_cap_header(&mut header_value)?;
         uspace.write(
             data,
             __user_cap_data_struct {
@@ -46,10 +47,13 @@ pub fn sys_capset(
 ) -> LinuxResult<isize> {
     with_uspace(|uspace| {
         let _data = uspace.read(data)?;
-        let header = uspace.raw_ptr(header)?;
-        validate_cap_header(header)
-            .inspect_err(|_| header.version = _LINUX_CAPABILITY_VERSION_3)
-            .map(|_| 0)
+        let mut header_value = uspace.read(header)?;
+        if let Err(error) = validate_cap_header(&mut header_value) {
+            header_value.version = _LINUX_CAPABILITY_VERSION_3;
+            uspace.write(header, header_value)?;
+            return Err(error);
+        }
+        Ok(0)
     })
 }
 

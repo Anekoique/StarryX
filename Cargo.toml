@@ -42,7 +42,7 @@ xdriver   = { path = "xcore/xdriver" }
 xdma      = { path = "xcore/xdma" }
 xhal      = { path = "xcore/xhal", features = ["uspace", "rtc", "irq"] }
 xlog      = { path = "xcore/xlog" }
-xmm       = { path = "xcore/xmm", features = ["cow", "copy-from"] }
+xmm       = { path = "xcore/xmm", features = ["copy-from"] }
 xnet      = { path = "xcore/xnet" }
 xns       = { path = "xcore/xns", features = ["thread-local"] }
 xruntime  = { path = "xcore/xruntime" }

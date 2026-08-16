@@ -7,8 +7,18 @@ pub use x86_64::structures::paging::page_table::PageTableFlags as PTF;
 
 use crate::{GenericPTE, MappingFlags};
 
+const ALLOC_FRAME_BIT: u64 = 1 << 9;
+const PROT_NONE_BIT: u64 = 1 << 10;
+
 impl From<PTF> for MappingFlags {
     fn from(f: PTF) -> Self {
+        if f.bits() & PROT_NONE_BIT != 0 {
+            let mut flags = Self::PROT_NONE;
+            if f.bits() & ALLOC_FRAME_BIT != 0 {
+                flags |= Self::ALLOC_FRAME;
+            }
+            return flags;
+        }
         if !f.contains(PTF::PRESENT) {
             return Self::empty();
         }
@@ -25,12 +35,24 @@ impl From<PTF> for MappingFlags {
         if f.contains(PTF::NO_CACHE) {
             ret |= Self::UNCACHED;
         }
+        if f.bits() & ALLOC_FRAME_BIT != 0 {
+            ret |= Self::ALLOC_FRAME;
+        }
         ret
     }
 }
 
 impl From<MappingFlags> for PTF {
     fn from(f: MappingFlags) -> Self {
+        if f.contains(MappingFlags::PROT_NONE) {
+            let bits = PROT_NONE_BIT
+                | if f.contains(MappingFlags::ALLOC_FRAME) {
+                    ALLOC_FRAME_BIT
+                } else {
+                    0
+                };
+            return Self::from_bits_retain(bits);
+        }
         if f.is_empty() {
             return Self::empty();
         }
@@ -46,6 +68,9 @@ impl From<MappingFlags> for PTF {
         }
         if f.contains(MappingFlags::DEVICE) || f.contains(MappingFlags::UNCACHED) {
             ret |= Self::NO_CACHE | Self::WRITE_THROUGH;
+        }
+        if f.contains(MappingFlags::ALLOC_FRAME) {
+            ret |= Self::from_bits_retain(ALLOC_FRAME_BIT);
         }
         ret
     }
@@ -63,35 +88,57 @@ impl X64PTE {
     pub const fn empty() -> Self {
         Self(0)
     }
+
+    fn encode_paddr(paddr: PhysAddr, prot_none: bool) -> u64 {
+        let bits = paddr.as_usize() as u64 & Self::PHYS_ADDR_MASK;
+        if prot_none {
+            !bits & Self::PHYS_ADDR_MASK
+        } else {
+            bits
+        }
+    }
+
+    fn is_prot_none(&self) -> bool {
+        self.0 & PROT_NONE_BIT != 0
+    }
 }
 
 impl GenericPTE for X64PTE {
     fn new_page(paddr: PhysAddr, flags: MappingFlags, is_huge: bool) -> Self {
+        let prot_none = flags.contains(MappingFlags::PROT_NONE);
         let mut flags = PTF::from(flags);
         if is_huge {
             flags |= PTF::HUGE_PAGE;
         }
-        Self(flags.bits() | (paddr.as_usize() as u64 & Self::PHYS_ADDR_MASK))
+        Self(flags.bits() | Self::encode_paddr(paddr, prot_none))
     }
     fn new_table(paddr: PhysAddr) -> Self {
         let flags = PTF::PRESENT | PTF::WRITABLE | PTF::USER_ACCESSIBLE;
         Self(flags.bits() | (paddr.as_usize() as u64 & Self::PHYS_ADDR_MASK))
     }
     fn paddr(&self) -> PhysAddr {
-        PhysAddr::from((self.0 & Self::PHYS_ADDR_MASK) as usize)
+        let bits = self.0 & Self::PHYS_ADDR_MASK;
+        let bits = if self.is_prot_none() {
+            !bits & Self::PHYS_ADDR_MASK
+        } else {
+            bits
+        };
+        PhysAddr::from(bits as usize)
     }
     fn flags(&self) -> MappingFlags {
         PTF::from_bits_truncate(self.0).into()
     }
     fn set_paddr(&mut self, paddr: PhysAddr) {
-        self.0 = (self.0 & !Self::PHYS_ADDR_MASK) | (paddr.as_usize() as u64 & Self::PHYS_ADDR_MASK)
+        self.0 = (self.0 & !Self::PHYS_ADDR_MASK) | Self::encode_paddr(paddr, self.is_prot_none())
     }
     fn set_flags(&mut self, flags: MappingFlags, is_huge: bool) {
+        let paddr = self.paddr();
+        let prot_none = flags.contains(MappingFlags::PROT_NONE);
         let mut flags = PTF::from(flags);
         if is_huge {
             flags |= PTF::HUGE_PAGE;
         }
-        self.0 = (self.0 & Self::PHYS_ADDR_MASK) | flags.bits()
+        self.0 = Self::encode_paddr(paddr, prot_none) | flags.bits()
     }
 
     fn bits(self) -> usize {
@@ -101,7 +148,7 @@ impl GenericPTE for X64PTE {
         self.0 == 0
     }
     fn is_present(&self) -> bool {
-        PTF::from_bits_truncate(self.0).contains(PTF::PRESENT)
+        PTF::from_bits_truncate(self.0).contains(PTF::PRESENT) || self.0 & PROT_NONE_BIT != 0
     }
     fn is_huge(&self) -> bool {
         PTF::from_bits_truncate(self.0).contains(PTF::HUGE_PAGE)

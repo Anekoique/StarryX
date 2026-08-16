@@ -136,3 +136,18 @@ Removed the legacy kernel page-cache path and recorded a reproducible ext4-backe
 | Hash | Message |
 |------|---------|
 | `2cfb6ea` | refactor(fs): decouple xcache |
+
+## Session 6: Redesign the MM subsystem
+
+### Summary
+
+Separated page-table mechanisms from safe VMA policy with unified Frame ownership and transactional protection.
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| `xmm` | Unified Frame lifetime, PTE ownership, and resident PROT_NONE state. |
+| `xvma` | Centralized VMA layout, backing policy, fault handling, fork, and COW. |
+| Kernel seams | Integrated safe usercopy, vDSO mapping, mmap, and SysV SHM lifecycle. |
+| Page tables | Added portable logical-leaf and allocator-owner software bits. |

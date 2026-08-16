@@ -3,8 +3,17 @@
 StarryX maps an external Linux `linux-vdso.so.1` image into every user
 address space. `xmodules/xvdso` is the reusable trusted component: it obtains
 and embeds the external image, owns the Linux-compatible vvar pages, updates
-time data, and resolves vDSO symbols. `xkernel/src/vdso.rs` is a small profile
-adapter that maps those shared pages into each process.
+time data, and resolves vDSO symbols. `xkernel/src/vdso.rs` is the profile
+adapter that connects the explicit refresh operation to the runtime timer and
+maps the shared pages into each process.
+
+`xvdso` has no dependency on `xruntime`, `xmm`, or `xvma`, and does not register
+kernel callbacks. It exposes the embedded image and opaque, kernel-owned vvar
+pages as static shared references plus an explicit `refresh_data` operation.
+The kernel adapter implements the generic runtime timer hook, invokes that
+operation, converts the references into `StaticFrameRange` proofs, and chooses
+the user permissions. Runtime composition and page-table policy therefore stay
+outside the vDSO component.
 
 There are no committed vDSO blobs, local vDSO source, regeneration target, or
 Docker-specific setup.

@@ -149,7 +149,7 @@ pub fn sys_fanotify_mark(
         0
     };
 
-    with_location(dirfd, path, loc_flag, |location| {
+    with_location(dirfd, path.as_deref(), loc_flag, |location| {
         if !location.is_dir() {
             if flags.contains(FanMarkFlags::ONLYDIR) {
                 return Err(LinuxError::ENOTDIR);

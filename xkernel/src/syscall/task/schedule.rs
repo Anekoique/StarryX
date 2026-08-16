@@ -2,7 +2,7 @@ use xerrno::{LinuxError, LinuxResult};
 use xtask::{XCpuMask, set_affinity, with_task};
 
 use xprocess::Pid;
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::{
     ctypes::{
         CLOCK_MONOTONIC, CLOCK_REALTIME, PRIO_PGRP, PRIO_PROCESS, PRIO_USER, TIMER_ABSTIME,
@@ -35,7 +35,7 @@ pub fn sys_sched_setaffinity(
 ) -> LinuxResult<isize> {
     with_task(pid.into(), |task| {
         let len = cpuset_size.min(xconfig::SMP.div_ceil(8));
-        let mask_slice = with_uspace(|uspace| uspace.raw_slice(mask, len))?;
+        let mask_slice = with_uspace(|uspace| uspace.read_slice(mask, len))?;
         let mut cpu_mask = XCpuMask::new();
 
         for i in 0..(len * 8).min(xconfig::SMP) {
@@ -69,7 +69,7 @@ pub fn sys_sched_getaffinity(
 
     with_task(pid.into(), |task| {
         let len = cpuset_size.min(xconfig::SMP.div_ceil(8));
-        let mask_slice = with_uspace(|uspace| uspace.raw_slice(mask, len))?;
+        let mut mask_slice = alloc::vec![0_u8; len];
         let cpumask = task.cpumask();
 
         for item in mask_slice.iter_mut().take(len) {
@@ -81,6 +81,7 @@ pub fn sys_sched_getaffinity(
                 mask_slice[cpu_id / 8] |= 1 << (cpu_id % 8);
             }
         }
+        with_uspace(|uspace| uspace.write_slice(mask, &mask_slice))?;
 
         Ok(xconfig::SMP.div_ceil(8).min(cpuset_size) as isize)
     })
@@ -92,13 +93,12 @@ pub fn sys_sched_getaffinity(
 /// # Arguments
 /// * `_pid` - Thread ID (currently unused)
 /// * `_param` - Buffer to store scheduling parameters (currently unused)
-pub fn sys_sched_getparam(pid: i32, param: UserPtr<usize>) -> LinuxResult<isize> {
+pub fn sys_sched_getparam(pid: i32, param: UserPtr<i32>) -> LinuxResult<isize> {
     if pid < 0 {
         return Err(LinuxError::EINVAL);
     }
     let thread = get_thread(pid as _)?;
-    with_uspace(|uspace| uspace.write(param, XThread::from_thread(&thread).get_priority() as _))
-        .map_err(|_| LinuxError::EINVAL)?;
+    with_uspace(|uspace| uspace.write(param, XThread::from_thread(&thread).get_priority()))?;
     Ok(0)
 }
 
@@ -107,17 +107,15 @@ pub fn sys_sched_getparam(pid: i32, param: UserPtr<usize>) -> LinuxResult<isize>
 /// # Arguments
 /// * `_pid` - Thread ID (currently unused)
 /// * `_param` - New scheduling parameters (currently unused)
-pub fn sys_sched_setparam(pid: i32, param: UserPtr<usize>) -> LinuxResult<isize> {
+pub fn sys_sched_setparam(pid: i32, param: UserConstPtr<i32>) -> LinuxResult<isize> {
     if pid < 0 {
         return Err(LinuxError::EINVAL);
     }
     let thread = get_thread(pid as _)?;
-    with_uspace(|uspace| -> LinuxResult<()> {
-        let priority = uspace.read(param)?;
-        XThread::from_thread(&thread).set_priority(priority as _);
-        Ok(())
-    })
-    .map_err(|_| LinuxError::EINVAL)?;
+    let priority = with_uspace(|uspace| uspace.read(param))?;
+    let xthread = XThread::from_thread(&thread);
+    validate_sched_priority(xthread.get_policy() as usize, priority)?;
+    xthread.set_priority(priority);
     Ok(0)
 }
 
@@ -130,19 +128,27 @@ pub fn sys_sched_setparam(pid: i32, param: UserPtr<usize>) -> LinuxResult<isize>
 pub fn sys_sched_setscheduler(
     pid: i32,
     policy: usize,
-    param: UserPtr<usize>,
+    param: UserConstPtr<i32>,
 ) -> LinuxResult<isize> {
-    if pid < 0 || policy > 6 {
+    if pid < 0 || !matches!(policy, 0 | 1 | 2 | 3 | 5) {
         return Err(LinuxError::EINVAL);
     }
     let thread = get_thread(pid as _)?;
-    with_uspace(|uspace| -> LinuxResult<()> {
-        XThread::from_thread(&thread).set_policy(policy as _);
-        uspace.write(param, XThread::from_thread(&thread).get_priority() as _)?;
-        Ok(())
-    })
-    .map_err(|_| LinuxError::EINVAL)?;
+    let priority = with_uspace(|uspace| uspace.read(param))?;
+    validate_sched_priority(policy, priority)?;
+    let xthread = XThread::from_thread(&thread);
+    xthread.set_policy(policy as _);
+    xthread.set_priority(priority);
     Ok(0)
+}
+
+fn validate_sched_priority(policy: usize, priority: i32) -> LinuxResult<()> {
+    let valid = match policy {
+        1 | 2 => (1..=99).contains(&priority),
+        0 | 3 | 5 => priority == 0,
+        _ => false,
+    };
+    valid.then_some(()).ok_or(LinuxError::EINVAL)
 }
 
 /// Get scheduling algorithm for a thread.
@@ -163,13 +169,12 @@ pub fn sys_sched_getscheduler(pid: i32) -> LinuxResult<isize> {
 /// * `_pid` - Thread ID (currently unused)
 /// * `_sched` - Scheduling algorithm (currently unused)
 /// * `_param_size` - Parameter size (currently unused)
-pub fn sys_sched_getscheduler_max(
-    _pid: Pid,
-    _sched: usize,
-    _param_size: usize,
-) -> LinuxResult<isize> {
-    warn!("sys_sched_getscheduler_max not implemented");
-    Ok(0)
+pub fn sys_sched_get_priority_max(policy: usize) -> LinuxResult<isize> {
+    match policy {
+        1 | 2 => Ok(99),
+        0 | 3 | 5 => Ok(0),
+        _ => Err(LinuxError::EINVAL),
+    }
 }
 
 /// Get minimum priority value for a scheduling algorithm.
@@ -178,13 +183,12 @@ pub fn sys_sched_getscheduler_max(
 /// * `_pid` - Thread ID (currently unused)
 /// * `_sched` - Scheduling algorithm (currently unused)
 /// * `_param_size` - Parameter size (currently unused)
-pub fn sys_sched_getscheduler_min(
-    _pid: Pid,
-    _sched: usize,
-    _param_size: usize,
-) -> LinuxResult<isize> {
-    warn!("sys_sched_getscheduler_min not implemented");
-    Ok(0)
+pub fn sys_sched_get_priority_min(policy: usize) -> LinuxResult<isize> {
+    match policy {
+        1 | 2 => Ok(1),
+        0 | 3 | 5 => Ok(0),
+        _ => Err(LinuxError::EINVAL),
+    }
 }
 
 fn sleep(clock: impl Fn() -> TimeValue, dur: TimeValue) -> TimeValue {

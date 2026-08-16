@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 
-use spin::RwLock;
 use xerrno::{LinuxError, LinuxResult};
 use xfs::FS_CONTEXT;
 use xhal::arch::{TrapFrame, UspaceContext};
@@ -14,7 +13,7 @@ use xutils::ctypes::{SIGCHLD, clone_args, task::CloneFlags};
 
 use crate::{
     fs::fd::FD_TABLE,
-    ipc::IPC_MANAGER,
+    ipc::{IPC_MANAGER, inherit_proc_shm},
     mm::{XUserSpace, copy_from_kernel},
     task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task, with_uspace},
 };
@@ -54,6 +53,9 @@ fn do_clone(
     if flags.contains(CloneFlags::FS) && flags.contains(CloneFlags::NEWNS) {
         return Err(LinuxError::EINVAL);
     }
+    if flags.contains(CloneFlags::NEWIPC) {
+        return Err(LinuxError::EOPNOTSUPP);
+    }
     if flags.contains(CloneFlags::PIDFD) {
         uspace.read(UserPtr::<u32>::from(pidfd))?;
     }
@@ -70,7 +72,8 @@ fn do_clone(
     new_uctx.set_retval(0);
 
     let set_child_tid = if flags.contains(CloneFlags::CHILD_SETTID) {
-        Some(uspace.raw_ptr(UserPtr::<u32>::from(child_tid))?)
+        uspace.check_write(UserPtr::<u32>::from(child_tid))?;
+        Some(child_tid)
     } else {
         None
     };
@@ -104,8 +107,6 @@ fn do_clone(
             Arc::new(Mutex::new(aspace))
         };
 
-        let vma_manager = RwLock::new(uspace.vma_manager.read().clone());
-
         new_task
             .ctx_mut()
             .set_page_table_root(aspace.lock().page_table_root());
@@ -119,11 +120,14 @@ fn do_clone(
         };
         let process_data = XProcess::new(
             xprocess.exe_path.read().clone(),
-            XUserSpace::new(aspace, vma_manager),
+            XUserSpace::new(aspace),
             signal_actions,
             exit_signal,
             Some(xprocess.rlimits.read().clone()),
         );
+        process_data
+            .signal
+            .set_default_restorer(xprocess.signal.default_restorer());
 
         if flags.contains(CloneFlags::FILES) {
             FD_TABLE
@@ -145,15 +149,10 @@ fn do_clone(
                 .init_new(FS_CONTEXT.copy_inner());
         }
 
-        if flags.contains(CloneFlags::NEWIPC) {
-            IPC_MANAGER
-                .deref_from(&process_data.ns)
-                .init_new(IPC_MANAGER.copy_inner());
-        } else {
-            IPC_MANAGER
-                .deref_from(&process_data.ns)
-                .init_shared(IPC_MANAGER.share());
-        }
+        IPC_MANAGER
+            .deref_from(&process_data.ns)
+            .init_shared(IPC_MANAGER.share());
+        inherit_proc_shm(IPC_MANAGER.deref_from(&process_data.ns), process.pid(), tid)?;
 
         builder.data(process_data).build()
     };

@@ -3,11 +3,11 @@ use core::{marker::PhantomData, mem, time::Duration};
 use alloc::boxed::Box;
 
 use crate::{
+    DirLookupResult, DirReader, Ext4Error, Ext4Result, FileAttr, InodeRef, InodeType,
     blockdev::{BlockDevice, Ext4BlockDevice},
     error::Context,
     ffi::*,
     util::get_block_size,
-    DirLookupResult, DirReader, Ext4Error, Ext4Result, FileAttr, InodeRef, InodeType,
 };
 
 pub trait SystemHal {
@@ -67,10 +67,10 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
 
     fn inode_ref(&mut self, ino: u32) -> Ext4Result<InodeRef<Hal>> {
         unsafe {
-            let mut result = InodeRef::new(mem::zeroed());
-            ext4_fs_get_inode_ref(self.inner.as_mut(), ino, result.inner.as_mut())
+            let mut inner: Box<ext4_inode_ref> = Box::new(mem::zeroed());
+            ext4_fs_get_inode_ref(self.inner.as_mut(), ino, inner.as_mut())
                 .context("ext4_fs_get_inode_ref")?;
-            Ok(result)
+            Ok(InodeRef::new(inner))
         }
     }
     fn clone_ref(&mut self, inode: &InodeRef<Hal>) -> InodeRef<Hal> {
@@ -98,9 +98,10 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
                 InodeType::Socket => EXT4_DE_SOCK,
                 InodeType::Unknown => EXT4_DE_UNKNOWN,
             };
-            let mut result = InodeRef::new(mem::zeroed());
-            ext4_fs_alloc_inode(self.inner.as_mut(), result.inner.as_mut(), ty as _)
-                .context("ext4_fs_get_inode_ref")?;
+            let mut inner: Box<ext4_inode_ref> = Box::new(mem::zeroed());
+            ext4_fs_alloc_inode(self.inner.as_mut(), inner.as_mut(), ty as _)
+                .context("ext4_fs_alloc_inode")?;
+            let mut result = InodeRef::new(inner);
             ext4_fs_inode_blocks_init(self.inner.as_mut(), result.inner.as_mut());
             Ok(result)
         }
@@ -139,6 +140,8 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
             child.add_entry("..", &mut parent)?;
             parent.inc_nlink();
             child.set_nlink(2);
+        } else {
+            child.set_nlink(1);
         }
         child.set_mode((child.mode() & !0o777) | (mode & 0o777));
 
@@ -200,13 +203,22 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
             return Err(Ext4Error::new(ENOTEMPTY as _, None));
         }
 
+        let is_dir = child_ref.is_dir();
+        let last_link = is_dir || child_ref.nlink() == 1;
+        if last_link {
+            child_ref.set_len(0)?;
+        }
+
         dir_ref.remove_entry(name)?;
 
-        if child_ref.is_dir() {
+        if is_dir {
             dir_ref.dec_nlink();
-        }
-        if child_ref.nlink() > 0 {
+            child_ref.set_nlink(0);
+        } else {
             child_ref.dec_nlink();
+        }
+        if child_ref.nlink() == 0 {
+            child_ref.free()?;
         }
         Ok(())
     }

@@ -1,6 +1,6 @@
 use core::{mem, slice};
 
-use crate::{error::Context, ffi::*, util::revision_tuple, Ext4Result, SystemHal};
+use crate::{Ext4Result, SystemHal, error::Context, ffi::*, util::revision_tuple};
 
 use super::{InodeRef, InodeType};
 
@@ -61,7 +61,6 @@ impl<Hal: SystemHal> InodeRef<Hal> {
             )
             .context("ext4_dir_add_entry")?;
         }
-        child.inc_nlink();
         Ok(())
     }
     pub(crate) fn remove_entry(&mut self, name: &str) -> Ext4Result {

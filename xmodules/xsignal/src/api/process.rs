@@ -68,7 +68,7 @@ impl<M: RawMutex, WQ: WaitQueue> ProcessSignalManager<M, WQ> {
     }
 
     /// Read the current default restorer address.
-    pub(crate) fn default_restorer(&self) -> usize {
+    pub fn default_restorer(&self) -> usize {
         self.default_restorer.load(Ordering::Acquire)
     }
 

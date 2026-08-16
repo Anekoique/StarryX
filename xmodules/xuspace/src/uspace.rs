@@ -4,15 +4,11 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
-use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
+use crate::{UserConstPtr, UserPtr};
+use alloc::{string::String, vec::Vec};
+use memory_addr::{VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 use xerrno::{LinuxError, LinuxResult};
-
-use crate::{UserConstPtr, UserPtr, UserReadable};
 
 #[percpu::def_percpu]
 static ACCESSING_USER_MEM: AtomicBool = AtomicBool::new(false);
@@ -44,69 +40,31 @@ pub trait UserSpaceAccess: Sized {
     /// Populate a memory region making it accessible
     fn populate_region(&self, range: VirtAddrRange, access_flags: MappingFlags) -> LinuxResult<()>;
 
-    /// Read a value from user space
-    fn read<P, T>(&self, ptr: P) -> LinuxResult<T>
-    where
-        P: UserReadable<T>,
-        T: Copy + 'static,
-    {
-        ptr.get_as_ref(self).copied()
+    /// Copies user bytes into a kernel-owned buffer.
+    fn copy_from_user(&self, address: VirtAddr, output: &mut [u8]) -> LinuxResult<()>;
+
+    /// Copies kernel-owned bytes into user memory.
+    fn copy_to_user(&self, address: VirtAddr, input: &[u8]) -> LinuxResult<()>;
+
+    /// Validates and populates a typed user output span without reading it.
+    fn check_write<T>(&self, ptr: UserPtr<T>) -> LinuxResult<()> {
+        check_region(self, ptr.address(), Layout::new::<T>(), MappingFlags::WRITE)
     }
 
     /// Read a null-terminated string from user space
-    fn read_str(&self, ptr: UserConstPtr<c_char>) -> LinuxResult<&'static str> {
-        ptr.get_as_str(self)
-    }
-
-    /// Read a slice from user space
-    fn read_slice<P, T>(&self, ptr: P, len: usize) -> LinuxResult<&'static [T]>
-    where
-        P: UserReadable<T>,
-    {
-        ptr.get_as_slice(self, len)
-    }
-
-    /// Read from user space into a kernel buffer using direct memory copy
-    fn read_slice_to<P, T>(&self, ptr: P, buf: &mut [T]) -> LinuxResult<()>
-    where
-        P: UserReadable<T>,
-        T: 'static,
-    {
-        let user_slice = ptr.get_as_slice(self, buf.len())?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(user_slice.as_ptr(), buf.as_mut_ptr(), buf.len());
+    fn read_str(&self, ptr: UserConstPtr<c_char>) -> LinuxResult<String> {
+        const MAX_STRING_BYTES: usize = 4096;
+        let mut bytes = Vec::new();
+        for index in 0..MAX_STRING_BYTES {
+            let mut byte = [0];
+            self.copy_from_user(ptr.cast::<u8>().offset(index).address(), &mut byte)?;
+            let byte = byte[0];
+            if byte == 0 {
+                return String::from_utf8(bytes).map_err(|_| LinuxError::EILSEQ);
+            }
+            bytes.push(byte);
         }
-        Ok(())
-    }
-
-    /// Get a mutable reference to user space data
-    fn raw_ptr<T>(&self, ptr: UserPtr<T>) -> LinuxResult<&'static mut T> {
-        ptr.get_as_mut(self)
-    }
-
-    /// Get a mutable slice to user space data
-    fn raw_slice<T>(&self, ptr: UserPtr<T>, len: usize) -> LinuxResult<&'static mut [T]> {
-        ptr.get_as_mut_slice(self, len)
-    }
-
-    /// Write a value to user space
-    fn write<T>(&self, ptr: UserPtr<T>, val: T) -> LinuxResult<()>
-    where
-        T: 'static,
-    {
-        ptr.get_as_mut(self).map(|v| *v = val)
-    }
-
-    /// Write a slice to user space using direct memory copy
-    fn write_slice<T>(&self, ptr: UserPtr<T>, slice: &[T]) -> LinuxResult<()>
-    where
-        T: 'static,
-    {
-        let user_slice = ptr.get_as_mut_slice(self, slice.len())?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(slice.as_ptr(), user_slice.as_mut_ptr(), slice.len());
-        }
-        Ok(())
+        Err(LinuxError::ENAMETOOLONG)
     }
 
     /// Read multiple strings from a null-terminated array of string pointers
@@ -118,11 +76,13 @@ pub trait UserSpaceAccess: Sized {
         }
 
         loop {
-            let str_ptr = self.read(ptr.offset(offset))?;
+            let mut raw = [0; core::mem::size_of::<usize>()];
+            self.copy_from_user(ptr.offset(offset).address(), &mut raw)?;
+            let str_ptr = UserConstPtr::from(usize::from_ne_bytes(raw));
             if str_ptr.is_null() {
                 break;
             }
-            strings.push(self.read_str(str_ptr)?.to_string());
+            strings.push(self.read_str(str_ptr)?);
             offset += 1;
         }
 
@@ -147,43 +107,6 @@ pub fn check_region<A: UserSpaceAccess>(
     uspace.check_region_access(range, access_flags)?;
     uspace.populate_region(range, access_flags)?;
     Ok(())
-}
-
-/// Find the length of a null-terminated array in user space
-pub fn check_null_terminated<T: PartialEq + Default, A: UserSpaceAccess>(
-    uspace: &A,
-    start: VirtAddr,
-    access_flags: MappingFlags,
-) -> LinuxResult<usize> {
-    let align = Layout::new::<T>().align();
-    if start.as_usize() & (align - 1) != 0 {
-        return Err(LinuxError::EFAULT);
-    }
-
-    let zero = T::default();
-
-    let start_ptr = start.as_ptr_of::<T>();
-
-    access_user_memory(|| {
-        let mut len = 0;
-        let mut page = start.align_down_4k();
-        loop {
-            let ptr = unsafe { start_ptr.add(len) };
-            while ptr as usize >= page.as_ptr() as usize {
-                uspace.check_region_access(
-                    VirtAddrRange::from_start_size(page, PAGE_SIZE_4K),
-                    access_flags,
-                )?;
-                page += PAGE_SIZE_4K;
-            }
-
-            if unsafe { ptr.read_volatile() } == zero {
-                break;
-            }
-            len += 1;
-        }
-        Ok(len)
-    })
 }
 
 #[macro_export]

@@ -40,6 +40,10 @@ bitflags::bitflags! {
         const PXN =         1 <<  53;
         /// The Execute-never or Unprivileged execute-never field.
         const UXN =         1 <<  54;
+        /// OS-owned marker in the software-reserved descriptor field.
+        const ALLOC_FRAME =     1 <<  55;
+        /// Resident but inaccessible marker in the software-reserved field.
+        const PROT_NONE =       1 <<  56;
 
         // Next-level attributes in stage 1 VMSAv8-64 Table descriptors:
 
@@ -113,6 +117,13 @@ impl MemAttr {
 
 impl From<DescriptorAttr> for MappingFlags {
     fn from(attr: DescriptorAttr) -> Self {
+        if attr.contains(DescriptorAttr::PROT_NONE) {
+            let mut flags = Self::PROT_NONE;
+            if attr.contains(DescriptorAttr::ALLOC_FRAME) {
+                flags |= Self::ALLOC_FRAME;
+            }
+            return flags;
+        }
         if !attr.contains(DescriptorAttr::VALID) {
             return Self::empty();
         }
@@ -142,12 +153,22 @@ impl From<DescriptorAttr> for MappingFlags {
             Some(MemAttr::NormalNonCacheable) => flags |= Self::UNCACHED,
             _ => {}
         }
+        if attr.contains(DescriptorAttr::ALLOC_FRAME) {
+            flags |= Self::ALLOC_FRAME;
+        }
         flags
     }
 }
 
 impl From<MappingFlags> for DescriptorAttr {
     fn from(flags: MappingFlags) -> Self {
+        if flags.contains(MappingFlags::PROT_NONE) {
+            let mut attr = Self::PROT_NONE;
+            if flags.contains(MappingFlags::ALLOC_FRAME) {
+                attr |= Self::ALLOC_FRAME;
+            }
+            return attr;
+        }
         if flags.is_empty() {
             return Self::empty();
         }
@@ -183,6 +204,9 @@ impl From<MappingFlags> for DescriptorAttr {
             if !flags.contains(MappingFlags::EXECUTE) {
                 attr |= Self::UXN;
             }
+        }
+        if flags.contains(MappingFlags::ALLOC_FRAME) {
+            attr |= Self::ALLOC_FRAME;
         }
         attr
     }
@@ -242,7 +266,8 @@ impl GenericPTE for A64PTE {
         self.0 == 0
     }
     fn is_present(&self) -> bool {
-        DescriptorAttr::from_bits_truncate(self.0).contains(DescriptorAttr::VALID)
+        DescriptorAttr::from_bits_truncate(self.0)
+            .intersects(DescriptorAttr::VALID | DescriptorAttr::PROT_NONE)
     }
     fn is_huge(&self) -> bool {
         !DescriptorAttr::from_bits_truncate(self.0).contains(DescriptorAttr::NON_BLOCK)

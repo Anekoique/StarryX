@@ -14,7 +14,7 @@ use xfs::FsContext;
 use xsync::{Mutex, RawMutex};
 use xvfs::{DeviceId, Filesystem, NodeType, VfsResult};
 
-use xuspace::{UserPtr, UserSpaceAccess};
+use xuspace::UserPtr;
 use xutils::{ctypes::sys::rtc_time, time::wall_time_nanos};
 
 use super::{

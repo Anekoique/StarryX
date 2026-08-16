@@ -245,6 +245,14 @@ impl SignalSet {
         self.0 == 0
     }
 
+    pub const fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
+
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
     /// Dequeues the first signal in `mask` from this set, if any.
     ///
     /// This finds the lowest-numbered signal that is both in this set
@@ -283,40 +291,46 @@ impl From<kernel_sigset_t> for SignalSet {
 /// depending on the signal type.
 #[derive(Clone)]
 #[repr(transparent)]
-pub struct SignalInfo(pub siginfo_t);
+pub struct SignalInfo([u8; mem::size_of::<siginfo_t>()]);
 
 impl SignalInfo {
     /// Creates a new signal info with the given signal number and code
     pub fn new(signo: Signo, code: i32) -> Self {
-        let mut result: Self = unsafe { mem::zeroed() };
+        let mut result = Self([0; mem::size_of::<siginfo_t>()]);
         result.set_signo(signo);
         result.set_code(code);
         result
     }
 
+    pub fn from_bytes(bytes: [u8; mem::size_of::<siginfo_t>()]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(&self) -> &[u8; mem::size_of::<siginfo_t>()] {
+        &self.0
+    }
+
     /// Returns the signal number
     pub fn signo(&self) -> Signo {
-        unsafe { Signo::from_repr(self.0.__bindgen_anon_1.__bindgen_anon_1.si_signo as _).unwrap() }
+        let raw = i32::from_ne_bytes(self.0[0..4].try_into().unwrap());
+        Signo::from_repr(raw as _).unwrap()
     }
 
     /// Sets the signal number
     pub fn set_signo(&mut self, signo: Signo) {
-        self.0.__bindgen_anon_1.__bindgen_anon_1.si_signo = signo as _;
+        self.0[0..4].copy_from_slice(&(signo as i32).to_ne_bytes());
     }
 
     /// Returns the signal code (reason for signal generation)
     pub fn code(&self) -> i32 {
-        unsafe { self.0.__bindgen_anon_1.__bindgen_anon_1.si_code }
+        i32::from_ne_bytes(self.0[8..12].try_into().unwrap())
     }
 
     /// Sets the signal code
     pub fn set_code(&mut self, code: i32) {
-        self.0.__bindgen_anon_1.__bindgen_anon_1.si_code = code;
+        self.0[8..12].copy_from_slice(&code.to_ne_bytes());
     }
 }
-
-unsafe impl Send for SignalInfo {}
-unsafe impl Sync for SignalInfo {}
 
 /// Signal stack configuration
 ///

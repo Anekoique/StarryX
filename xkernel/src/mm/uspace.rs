@@ -1,37 +1,35 @@
-use alloc::{sync::Arc, vec::Vec};
+use alloc::sync::Arc;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
-use spin::RwLock;
 use xerrno::{LinuxError, LinuxResult};
-use xmm::{AddrSpace, PageIter4K};
 use xsync::{Mutex, RawMutex};
 
 use xuspace::UserSpaceAccess;
-use xvma::{MmapRegion, VmFile, VmaManager};
+use xvma::{VmObject, VmSpace};
 
+/// Per-process userspace state.
+///
+/// Mapping layout and file-backed metadata are both owned by the single
+/// `xvma::VmSpace`; this wrapper only keeps process-local heap bounds and
+/// exposes the user-copy validation interface.
 pub struct XUserSpace {
-    pub aspace: Arc<Mutex<AddrSpace>>,
-    pub heap_bottom: AtomicUsize,
-    pub heap_top: AtomicUsize,
-    pub vma_manager: RwLock<VmaManager<FileWrapper>>,
+    pub aspace: Arc<Mutex<VmSpace>>,
+    heap_bottom: AtomicUsize,
+    heap_top: AtomicUsize,
 }
 
 impl XUserSpace {
-    pub fn new(
-        aspace: Arc<Mutex<AddrSpace>>,
-        vma_manager: RwLock<VmaManager<FileWrapper>>,
-    ) -> Self {
+    pub fn new(aspace: Arc<Mutex<VmSpace>>) -> Self {
         Self {
             aspace,
             heap_bottom: AtomicUsize::new(crate::config::USER_HEAP_BASE),
             heap_top: AtomicUsize::new(crate::config::USER_HEAP_BASE),
-            vma_manager,
         }
     }
 
-    pub fn get_heap_bottom(&self) -> usize {
+    pub fn heap_bottom(&self) -> usize {
         self.heap_bottom.load(Ordering::Acquire)
     }
 
@@ -39,52 +37,12 @@ impl XUserSpace {
         self.heap_bottom.store(bottom, Ordering::Release);
     }
 
-    pub fn get_heap_top(&self) -> usize {
+    pub fn heap_top(&self) -> usize {
         self.heap_top.load(Ordering::Acquire)
     }
 
     pub fn set_heap_top(&self, top: usize) {
         self.heap_top.store(top, Ordering::Release);
-    }
-
-    pub fn add_region(&self, region: MmapRegion<FileWrapper>) -> LinuxResult<()> {
-        self.vma_manager.write().add_region(region)
-    }
-
-    pub fn remove_overlapping_regions(
-        &self,
-        vaddr_range: VirtAddrRange,
-    ) -> Vec<MmapRegion<FileWrapper>> {
-        self.vma_manager.write().remove_overlapped(vaddr_range)
-    }
-
-    pub fn clear_regions(&self) {
-        self.vma_manager.write().clear()
-    }
-
-    pub fn populate_file_pages(&self, vaddr: VirtAddr, len: usize) -> LinuxResult<()> {
-        let start_addr = vaddr.align_down_4k();
-        let end_addr = (vaddr + len).align_up_4k();
-        let aspace = self.aspace.lock();
-
-        for page_addr in PageIter4K::new(start_addr, end_addr).unwrap() {
-            if let Some(region) = self.vma_manager.read().find_region(page_addr) {
-                if region.populated.lock().contains(&page_addr) {
-                    continue;
-                }
-
-                match region.get_buf(page_addr) {
-                    Ok(page_data) => {
-                        aspace.write(page_addr, &page_data, region.align)?;
-                    }
-                    Err(LinuxError::EEXIST) => {
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-        }
-        Ok(())
     }
 }
 
@@ -106,24 +64,58 @@ impl UserSpaceAccess for &XUserSpace {
     }
 
     fn populate_region(&self, range: VirtAddrRange, access_flags: MappingFlags) -> LinuxResult<()> {
-        let mut aspace = self.aspace.lock();
         let page_start = range.start.align_down_4k();
-        let page_end = (range.end).align_up_4k();
-        aspace.populate_area(page_start, page_end - page_start, access_flags)?;
-        drop(aspace);
-        self.populate_file_pages(page_start, page_end - page_start)?;
+        let page_end = range.end.align_up_4k();
+        self.aspace
+            .lock()
+            .populate_area(page_start, page_end - page_start, access_flags)?;
+        Ok(())
+    }
+
+    fn copy_from_user(&self, address: VirtAddr, output: &mut [u8]) -> LinuxResult<()> {
+        if output.is_empty() {
+            return Ok(());
+        }
+        let range =
+            VirtAddrRange::try_from_start_size(address, output.len()).ok_or(LinuxError::EFAULT)?;
+        let mut aspace = self.aspace.lock();
+        aspace.populate_area(
+            range.start.align_down_4k(),
+            range.end.align_up_4k() - range.start.align_down_4k(),
+            MappingFlags::READ,
+        )?;
+        aspace.read_bytes(address, output)?;
+        Ok(())
+    }
+
+    fn copy_to_user(&self, address: VirtAddr, input: &[u8]) -> LinuxResult<()> {
+        if input.is_empty() {
+            return Ok(());
+        }
+        let range =
+            VirtAddrRange::try_from_start_size(address, input.len()).ok_or(LinuxError::EFAULT)?;
+        let mut aspace = self.aspace.lock();
+        aspace.populate_area(
+            range.start.align_down_4k(),
+            range.end.align_up_4k() - range.start.align_down_4k(),
+            MappingFlags::WRITE,
+        )?;
+        aspace.write_bytes(address, input)?;
         Ok(())
     }
 }
 
-#[derive(Clone)]
+/// Temporary kernel adapter for file-backed mappings.
+///
+/// A future `xcache::FileMapping` will implement `VmObject` directly.
 pub struct FileWrapper(pub Arc<Mutex<xfs::FsFile<RawMutex>>>);
-impl VmFile for FileWrapper {
+
+impl VmObject for FileWrapper {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize> {
         self.0.lock().read_at(buf, offset)
     }
 
-    fn len(&self) -> LinuxResult<u64> {
+    fn byte_len(&self) -> LinuxResult<u64> {
         self.0.lock().len()
     }
 }

@@ -26,6 +26,15 @@ bitflags::bitflags! {
         const DEVICE        = 1 << 4;
         /// The memory is uncached.
         const UNCACHED      = 1 << 5;
+        /// The leaf owns one allocator-backed physical-frame reference.
+        ///
+        /// Page-table clients should treat this as internal ownership metadata,
+        /// not as a hardware access permission.
+        #[doc(hidden)]
+        const ALLOC_FRAME       = 1 << 6;
+        /// The leaf remains resident but is not accessible by hardware.
+        #[doc(hidden)]
+        const PROT_NONE         = 1 << 7;
     }
 }
 
@@ -58,7 +67,10 @@ pub trait GenericPTE: Debug + Clone + Copy + Sync + Send + Sized {
     fn bits(self) -> usize;
     /// Returns whether this entry is zero.
     fn is_unused(&self) -> bool;
-    /// Returns whether this entry flag indicates present.
+    /// Returns whether this entry describes a resident mapping.
+    ///
+    /// A software `PROT_NONE` entry is resident even though hardware treats it
+    /// as invalid.
     fn is_present(&self) -> bool;
     /// For non-last level translation, returns whether this entry maps to a
     /// huge frame.

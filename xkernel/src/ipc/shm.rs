@@ -4,8 +4,8 @@ use alloc::{sync::Arc, vec::Vec};
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange, align_up_4k};
 use page_table_entry::MappingFlags;
 use xerrno::{LinuxError, LinuxResult};
-use xmm::SharedPages;
 use xsync::Mutex;
+use xvma::SharedObject;
 
 use xprocess::Pid;
 use xutils::{
@@ -17,7 +17,7 @@ use xutils::{
     time::monotonic_time_nanos,
 };
 
-use super::{IpcPerm, IpcidGenerator};
+use super::{IPC_MANAGER, IpcManager, IpcPerm, IpcidGenerator};
 
 /// Shared memory segment information structure
 #[repr(C)]
@@ -87,8 +87,8 @@ pub struct ShmSegment {
     pub page_num: usize,
     /// Virtual address ranges mapped by each process
     pub va_range: BTreeMap<Pid, VirtAddrRange>,
-    /// Physical pages backing this segment
-    pub phys_pages: Option<Arc<SharedPages>>,
+    /// Shared VM object backing this segment.
+    pub object: Option<Arc<SharedObject>>,
     /// Whether segment is marked for removal
     pub rmid: bool,
     /// Memory mapping flags
@@ -104,7 +104,7 @@ impl ShmSegment {
             shmid,
             page_num: align_up_4k(size) / PAGE_SIZE_4K,
             va_range: BTreeMap::new(),
-            phys_pages: None,
+            object: None,
             rmid: false,
             mapping_flags,
             shmid_ds: ShmInfo::new(
@@ -134,9 +134,9 @@ impl ShmSegment {
         Ok(self.shmid as isize)
     }
 
-    /// Set the physical pages backing this segment
-    pub fn map_to_phys(&mut self, phys_pages: Arc<SharedPages>) {
-        self.phys_pages = Some(phys_pages);
+    /// Publishes the shared VM object backing this segment.
+    pub fn set_object(&mut self, object: Arc<SharedObject>) {
+        self.object = Some(object);
     }
 
     /// Get the number of processes currently attached
@@ -201,15 +201,11 @@ pub struct ShmManager {
     id_generator: Mutex<IpcidGenerator>,
 }
 
-impl Clone for ShmManager {
-    fn clone(&self) -> Self {
-        Self {
-            index: self.index.clone(),
-            segments: self.segments.clone(),
-            pid_shmid_vaddr: self.pid_shmid_vaddr.clone(),
-            id_generator: Mutex::new(self.id_generator.lock().clone()),
-        }
-    }
+struct InheritedAttachment {
+    shmid: i32,
+    vaddr: VirtAddr,
+    range: VirtAddrRange,
+    segment: Arc<Mutex<ShmSegment>>,
 }
 
 impl ShmManager {
@@ -241,12 +237,6 @@ impl ShmManager {
             .cloned()
     }
 
-    /// Get all shared memory IDs for a process
-    pub fn get_shmids_by_pid(&self, pid: Pid) -> Option<Vec<i32>> {
-        let map = self.pid_shmid_vaddr.get(&pid)?;
-        Some(map.forward.keys().cloned().collect())
-    }
-
     /// Find virtual address by process and shared memory ID
     pub fn find_vaddr_by_shmid(&self, pid: Pid, shmid: i32) -> Option<VirtAddr> {
         self.pid_shmid_vaddr.get(&pid)?.get_by_key(&shmid).cloned()
@@ -270,25 +260,85 @@ impl ShmManager {
             .insert(shmid, vaddr);
     }
 
+    /// Register the System V shared-memory attachments inherited by a child.
+    pub fn inherit_process(&mut self, parent_pid: Pid, child_pid: Pid) -> LinuxResult<()> {
+        if self.pid_shmid_vaddr.contains_key(&child_pid) {
+            return Err(LinuxError::EINVAL);
+        }
+
+        let Some(parent_mappings) = self.pid_shmid_vaddr.get(&parent_pid) else {
+            return Ok(());
+        };
+        let mut attachments = Vec::new();
+        attachments
+            .try_reserve_exact(parent_mappings.forward.len())
+            .map_err(|_| LinuxError::ENOMEM)?;
+        for (&shmid, &vaddr) in &parent_mappings.forward {
+            let segment = self.get_segment_by_shmid(shmid).ok_or(LinuxError::EINVAL)?;
+            let range = {
+                let segment = segment.lock();
+                if segment.is_attached(child_pid) {
+                    return Err(LinuxError::EINVAL);
+                }
+                segment
+                    .get_addr_range(parent_pid)
+                    .ok_or(LinuxError::EINVAL)?
+            };
+            attachments.push(InheritedAttachment {
+                shmid,
+                vaddr,
+                range,
+                segment,
+            });
+        }
+
+        for (attached, attachment) in attachments.iter().enumerate() {
+            if let Err(error) = attachment
+                .segment
+                .lock()
+                .attach_process(child_pid, attachment.range)
+            {
+                for attachment in attachments[..attached].iter().rev() {
+                    let result = attachment.segment.lock().detach_process(child_pid);
+                    debug_assert!(result.is_ok());
+                }
+                return Err(error);
+            }
+        }
+
+        let mut child_mappings = BiBTreeMap::new();
+        for attachment in attachments {
+            child_mappings.insert(attachment.shmid, attachment.vaddr);
+        }
+        self.pid_shmid_vaddr.insert(child_pid, child_mappings);
+        Ok(())
+    }
+
     /// Remove a virtual address mapping
-    pub fn remove_shmaddr(&mut self, pid: Pid, shmaddr: VirtAddr) -> bool {
-        let should_remove_pid = if let Some(map) = self.pid_shmid_vaddr.get_mut(&pid) {
+    pub fn remove_shmaddr(&mut self, pid: Pid, shmaddr: VirtAddr) {
+        let remove_pid = if let Some(map) = self.pid_shmid_vaddr.get_mut(&pid) {
             map.remove_by_value(&shmaddr);
             map.forward.is_empty()
         } else {
             false
         };
 
-        if should_remove_pid {
+        if remove_pid {
             self.pid_shmid_vaddr.remove(&pid);
         }
-
-        should_remove_pid
     }
 
-    /// Remove all mappings for a process
-    pub fn remove_pid(&mut self, pid: Pid) {
-        self.pid_shmid_vaddr.remove(&pid);
+    /// Detach every segment inherited or attached by a process.
+    fn detach_process(&mut self, pid: Pid) {
+        if let Some(mappings) = self.pid_shmid_vaddr.remove(&pid) {
+            for shmid in mappings.forward.keys() {
+                if let Some(segment) = self.get_segment_by_shmid(*shmid) {
+                    let result = segment.lock().detach_process(pid);
+                    debug_assert!(result.is_ok());
+                }
+            }
+        }
+        self.cleanup_orphaned_segments();
     }
 
     /// Remove a shared memory segment completely
@@ -388,4 +438,22 @@ impl ShmManager {
         self.segments.clear();
         self.pid_shmid_vaddr.clear();
     }
+}
+
+/// Register shared-memory attachments inherited across process creation.
+pub fn inherit_proc_shm(
+    ipc_manager: &Mutex<IpcManager>,
+    parent_pid: Pid,
+    child_pid: Pid,
+) -> LinuxResult<()> {
+    ipc_manager
+        .lock()
+        .get_shm()
+        .lock()
+        .inherit_process(parent_pid, child_pid)
+}
+
+/// Detach all System V shared-memory segments owned by a process.
+pub fn clear_proc_shm(pid: Pid) {
+    IPC_MANAGER.with_shm(|manager| manager.detach_process(pid));
 }

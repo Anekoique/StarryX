@@ -8,7 +8,7 @@ pub use dir::{DirEntry, DirLookupResult, DirReader};
 
 use core::marker::PhantomData;
 
-use crate::{ffi::*, SystemHal};
+use crate::{Ext4Result, SystemHal, error::Context, ffi::*};
 
 /// Inode type.
 #[repr(u8)]
@@ -45,9 +45,9 @@ pub struct InodeRef<Hal: SystemHal> {
     _phantom: PhantomData<Hal>,
 }
 impl<Hal: SystemHal> InodeRef<Hal> {
-    pub(crate) fn new(inner: ext4_inode_ref) -> Self {
+    pub(crate) fn new(inner: Box<ext4_inode_ref>) -> Self {
         Self {
-            inner: Box::new(inner),
+            inner,
             _phantom: PhantomData,
         }
     }
@@ -80,6 +80,15 @@ impl<Hal: SystemHal> InodeRef<Hal> {
     pub(crate) fn set_nlink(&mut self, nlink: u16) {
         self.raw_inode_mut().links_count = u16::to_le(nlink);
         self.mark_dirty();
+    }
+
+    pub(crate) fn free(&mut self) -> Ext4Result {
+        debug_assert_eq!(self.nlink(), 0);
+        unsafe {
+            ext4_inode_set_del_time(self.inner.inode, u32::MAX);
+            self.mark_dirty();
+            ext4_fs_free_inode(self.inner.as_mut()).context("ext4_fs_free_inode")
+        }
     }
 
     pub(crate) fn raw_inode(&self) -> &ext4_inode {

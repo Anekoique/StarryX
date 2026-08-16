@@ -6,7 +6,7 @@ mod tcp;
 mod udp;
 mod unix_socket;
 
-use alloc::vec;
+use alloc::{vec, vec::Vec};
 use core::cell::RefCell;
 use core::ops::DerefMut;
 
@@ -18,7 +18,7 @@ use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr};
 use xdriver::prelude::*;
 use xdriver_net::{DevError, NetBufPtr};
-use xhal::time::{NANOS_PER_MICROS, wall_time_nanos};
+use xhal::time::{NANOS_PER_MICROS, NANOS_PER_SEC, wall_time_nanos};
 use xsync::Mutex;
 
 use self::config::*;
@@ -40,7 +40,15 @@ use self::loopback::LoopbackDev;
 
 static ETH0: LazyInit<InterfaceWrapper> = LazyInit::new();
 
-struct SocketSetWrapper<'a>(Mutex<SocketSet<'a>>);
+const DEFERRED_TCP_CLOSE_TIMEOUT_NANOS: u64 = 60 * NANOS_PER_SEC;
+
+#[derive(Clone, Copy)]
+struct DeferredTcpClose {
+    handle: SocketHandle,
+    deadline_nanos: u64,
+}
+
+struct SocketSetWrapper<'a>(Mutex<SocketSet<'a>>, Mutex<Vec<DeferredTcpClose>>);
 
 struct DeviceWrapper {
     inner: RefCell<XNetDevice>, // use `RefCell` is enough since it's wrapped in `Mutex` in `InterfaceWrapper`.
@@ -55,7 +63,7 @@ struct InterfaceWrapper {
 
 impl<'a> SocketSetWrapper<'a> {
     fn new() -> Self {
-        Self(Mutex::new(SocketSet::new(vec![])))
+        Self(Mutex::new(SocketSet::new(vec![])), Mutex::new(Vec::new()))
     }
 
     pub fn new_tcp_socket() -> socket::tcp::Socket<'a> {
@@ -127,11 +135,48 @@ impl<'a> SocketSetWrapper<'a> {
     }
 
     pub fn poll_interfaces(&self) {
+        let now_nanos = wall_time_nanos();
+        let mut sockets = self.0.lock();
+        let mut closing = self.1.lock();
+
+        for deferred in closing.iter() {
+            if now_nanos >= deferred.deadline_nanos {
+                let socket = sockets.get_mut::<socket::tcp::Socket>(deferred.handle);
+                if socket.state() != socket::tcp::State::Closed {
+                    socket.abort();
+                    debug!("socket {}: deferred close timed out", deferred.handle);
+                }
+            }
+        }
+
         LOOPBACK.lock().poll(
-            Instant::from_micros_const((wall_time_nanos() / NANOS_PER_MICROS) as i64),
+            Instant::from_micros_const((now_nanos / NANOS_PER_MICROS) as i64),
             LOOPBACK_DEV.lock().deref_mut(),
-            &mut self.0.lock(),
+            &mut sockets,
         );
+
+        let mut index = 0;
+        while index < closing.len() {
+            let handle = closing[index].handle;
+            let is_closed = matches!(
+                sockets.get::<socket::tcp::Socket>(handle).state(),
+                socket::tcp::State::Closed
+            );
+            if is_closed {
+                sockets.remove(handle);
+                closing.swap_remove(index);
+                debug!("socket {}: graceful close completed", handle);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    pub fn defer_tcp_close(&self, handle: SocketHandle) {
+        self.1.lock().push(DeferredTcpClose {
+            handle,
+            deadline_nanos: wall_time_nanos().saturating_add(DEFERRED_TCP_CLOSE_TIMEOUT_NANOS),
+        });
     }
 
     pub fn remove(&self, handle: SocketHandle) {

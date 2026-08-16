@@ -5,16 +5,16 @@ use xerrno::{LinuxError, LinuxResult};
 use xhal::arch::TrapFrame;
 
 use xprocess::{Pid, Thread};
-use xsignal::{SignalInfo, SignalSet, SignalStack, Signo};
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xsignal::{SignalAction, SignalInfo, SignalSet, SignalStack, Signo};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::{
     ctypes::{
-        MINSIGSTKSZ, SI_TKILL, SI_USER, SIG_BLOCK, SIG_SETMASK, SIG_UNBLOCK, kernel_sigaction,
-        siginfo, timespec,
+        MINSIGSTKSZ, SI_TKILL, SI_USER, SIG_BLOCK, SIG_SETMASK, SIG_UNBLOCK, siginfo, timespec,
     },
     time::TimeValueLike,
 };
 
+use crate::mm::UserSignalAction;
 use crate::task::*;
 
 use crate::syscall::task::check_signals;
@@ -73,10 +73,10 @@ pub fn sys_rt_sigprocmask(
 /// * `act` - New signal action (NULL to only query current action)
 /// * `oldact` - Buffer to store previous signal action (NULL if not needed)
 /// * `sigsetsize` - Size of the signal set
-pub fn sys_rt_sigaction(
+pub(crate) fn sys_rt_sigaction(
     signo: u32,
-    act: UserConstPtr<kernel_sigaction>,
-    oldact: UserPtr<kernel_sigaction>,
+    act: UserConstPtr<UserSignalAction>,
+    oldact: UserPtr<UserSignalAction>,
     sigsetsize: usize,
 ) -> LinuxResult<isize> {
     check_sigset_size(sigsetsize)?;
@@ -90,11 +90,17 @@ pub fn sys_rt_sigaction(
         debug!("sys_rt_sigaction <= signo: {:?}", signo);
 
         let mut actions = xprocess.signal.actions.lock();
-        if let Some(oldact) = nullable!(uspace.raw_ptr(oldact))? {
-            actions[signo].to_ctype(oldact);
-        }
+        let old_value = &actions[signo];
+        nullable!(uspace.write(
+            oldact,
+            UserSignalAction {
+                handler: old_value.handler_address(),
+                flags: old_value.flags.bits(),
+                mask: old_value.mask,
+            }
+        ))?;
         if let Some(act) = nullable!(uspace.read(act))? {
-            actions[signo] = act.try_into()?;
+            actions[signo] = SignalAction::from_raw_parts(act.handler, act.flags, act.mask, None)?;
         }
         Ok(0)
     })
@@ -234,7 +240,7 @@ pub fn make_queue_signal_info(
     with_thread(|thread| {
         let signo = parse_signo(signo)?;
         let uspace = XProcess::from_thread(thread).uspace();
-        let mut info = uspace.raw_ptr(info)?.clone();
+        let mut info = uspace.read(info)?;
         info.set_signo(signo);
         if thread.process().pid() != tgid && (info.code() >= 0 || info.code() == SI_TKILL) {
             return Err(LinuxError::EPERM);
@@ -323,7 +329,9 @@ pub fn sys_rt_sigtimedwait(
             return Err(LinuxError::EAGAIN);
         };
 
-        nullable!(uspace.write(info, sig.0))?;
+        if !info.is_null() {
+            uspace.write_slice(info.cast::<u8>(), sig.as_bytes())?;
+        }
         Ok(0)
     })
 }
@@ -352,13 +360,22 @@ pub fn sys_rt_sigsuspend(
             .signal
             .with_blocked_mut(|blocked| mem::replace(blocked, set));
 
+        // Signal delivery snapshots this trap frame before syscall dispatch
+        // writes the returned error into a0. Preserve the Linux-visible
+        // sigsuspend result in the frame restored by rt_sigreturn.
+        tf.set_retval((-LinuxError::EINTR.code() as isize) as usize);
         loop {
             if check_signals(tf, Some(old_blocked)) {
                 break;
             }
             xprocess.signal.wait_signal();
         }
-        Err(LinuxError::EINTR)
+
+        // The trap layer writes this return value into the live trap frame.
+        // Signal delivery has already changed that frame to enter the handler,
+        // where a0 must remain the signal number.  The saved signal frame still
+        // contains -EINTR and rt_sigreturn restores that syscall result later.
+        Ok(tf.retval() as isize)
     })
 }
 

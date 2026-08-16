@@ -1,10 +1,22 @@
 # 内存管理
 
-![XMM 结构](./images/xmm.png)
+```mermaid
+flowchart LR
+    K["xkernel: Linux ABI"] --> V["xvma::VmSpace"]
+    V --> A["BTreeMap<VmArea>"]
+    V --> X["xmm::AddressSpace"]
+    A --> B["Static | Private | Shared"]
+    B --> O["VmObject source"]
+    B --> S["SharedObject: Box<[Frame]>"]
+    X --> P["hardware PageTable"]
+    P --> E["ALLOC_FRAME PTE owns Frame"]
+    E --> M["PFN FrameMeta { ref_count }"]
+    S --> M
+```
 
 ## 整体架构
 
-StarryX的内存管理模块主要由内存分配模块和虚拟内存管理模块组成，它们的内核基础功能分别由arceos的xalloc模块和xmm模块提供。考虑到系统性能需求，StarryX使用单一页表架构，内核与用户共享地址空间，无需频繁切换根页表产生开销。对于内存分配模块，xalloc实现了一个全局内存分配器，支持多种内存分配算法，并提供api实现灵活内存分配；对于虚拟内存管理模块，xmm实现了`AddrSpace`管理任务地址空间，宏内核在其基础上扩展了进程地址空间。另外我们实现了写时复制、内存懒分配等高级机制，将用户空间访问解耦为组件提供复用。
+StarryX 将进程虚拟内存拆分为物理帧、硬件地址空间与安全策略三部分。`xalloc` 提供底层物理页和内核堆分配；`xmm::AddressSpace` 封装受信任的页表、PTE 和 TLB 操作；安全组件 `xvma::VmSpace` 则是进程 VMA 布局、映射属性和文件后端的唯一所有者。`xkernel` 仅完成 Linux syscall、文件对象和信号语义的适配，不再维护第二张文件 VMA 表。
 
 ## 内存分配
 
@@ -46,155 +58,180 @@ pub trait XAllocIf {
 
 ## 地址空间管理
 
-StarryX的地址空间通过`xmm`模块的`AddrSpace`结构体管理，其包括三个字段，va_range管理虚拟地址范围、areas管理具体的内存区域、pt为该地址空间下的虚拟页表：
+每个进程只持有一个 `xvma::VmSpace`。它以按起始地址排序的 `BTreeMap` 管理完整 VMA 元数据，并私有持有一个 `xmm::AddressSpace` 作为硬件地址空间：
 
 ```rust
-/// The virtual memory address space.
-pub struct AddrSpace {
-    va_range: VirtAddrRange,
-    areas: MemorySet<Backend>,
-    pt: PageTable,
+pub struct VmSpace {
+    range: VirtAddrRange,
+    areas: BTreeMap<VirtAddr, VmArea>,
+    address_space: xmm::AddressSpace,
 }
 ```
 
-其中areas为内存区域集合MemorySet，MemorySet通过B树管理该地址空间的内存区域
+`VmArea` 不再按 syscall 来源堆叠 backing 类型，而是按生命周期和 fork 语义
+归纳为三类：`Static` 表示内核全生命周期有效的物理帧区间；`Private` 表示需要按需建立
+私有页并参与 COW 的映射；`Shared` 表示由稳定共享对象持有的页集合。匿名零页
+和私有文件页都是 `Private`，区别仅在于后者带有 `VmObject` source。`map`、
+`unmap`、`mprotect`、缺页和 `fork` 都先经过这一所有者；区域切分和合并也只
+在这里发生。文件 source 通过不依赖 `xfs`/`xkernel` 的 `VmObject` 接口读取，
+后续页缓存可以实现同一接口。
 
 ```rust
-pub struct MemorySet<B: MappingBackend> {
-    areas: BTreeMap<B::Addr, MemoryArea<B>>,
+pub trait VmObject: Send + Sync {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize>;
+    fn byte_len(&self) -> LinuxResult<u64>;
 }
 ```
 
-对于每个内存区域，有特定的映射方式，每个特定映射都需要实现以下接口：
+`xmm::AddressSpace` 不再保存区域、backing 模型或普通驻留页的逐页索引。物理帧模型
+只保留三个有独立职责的数据结构：
 
 ```rust
-pub trait MappingBackend {
-    /// What to do when mapping a region within the area with the given flags.
-    fn map(
-        &self,
-        start: Self::Addr,
-        size: usize,
-        flags: Self::Flags,
-        page_table: &mut Self::PageTable,
-    ) -> bool;
+pub struct Frame {
+    paddr: PhysAddr,
+}
 
-    /// What to do when unmaping a memory region within the area.
-    fn unmap(&self, start: Self::Addr, size: usize, page_table: &mut Self::PageTable) -> bool;
+struct FrameMeta {
+    ref_count: AtomicU32,
+}
 
-    /// What to do when changing access flags.
-    fn protect(
-        &self,
-        start: Self::Addr,
-        size: usize,
-        new_flags: Self::Flags,
-        page_table: &mut Self::PageTable,
-    ) -> bool;
+pub struct StaticFrameRange {
+    start: PhysAddr,
+    size: usize,
+    allowed_flags: MappingFlags,
 }
 ```
 
-xmm一共实现了三种映射方式，每种映射方式分别应用于不同场景：
+`Frame` 是 allocator-backed 4 KiB 物理帧的唯一公开 RAII 句柄。clone 增加
+引用计数，drop 减少引用计数，最后一个引用负责把物理帧归还 `xalloc`。旧设计
+中的 `Page` 只表示“尚未发布的唯一页”，`PageRef` 表示“可共享的页引用”；两者
+物理表示相同，区别只在能否写入。现在新分配的 `Frame` 从计数一开始，
+`try_write_at` 仅在计数仍为一时写入，因此不再需要两个公开类型和 `into_ref()`
+转换。
 
-1. 线性映射（linear）：线性映射直接将虚拟内存按照偏移线性映射到特定的物理内存范围，线性映射一般常用于映射内核代码段、数据段以及设备MMIO区域
+`FrameMeta` 不是另一种 Frame，而是类似 `ArcInner` 的私有控制块。硬件 PTE
+只能保存物理地址，解除映射时必须用 PFN 找回引用计数；因此它不能与句柄合并，
+也不能直接用一个无法从 `PhysAddr` 恢复的普通 `Arc` 替代。它只保存
+`ref_count`，不承载 VMA、共享内存或页缓存策略。
 
-2. 动态映射（alloc）：alloc映射动态分配物理内存，通过alloc可以实现写时复制和懒分配机制，只有当程序访问该VMA内的某个地址并触发缺页异常时，才动态分配一个物理页帧并建立映射。这是实现按需分页的基础，常用于进程的堆和栈。
+旧 `ManagedPage` 只是 `address + PageRef + flags + page_size` 的查询 DTO，没有
+独立生命周期语义，现已删除。COW 单页查询通过 `frame_if_shared` 完成：PTE
+独占时返回 `None`，只有确实共享时才克隆并返回 `Frame`；稀疏批量查询
+`mapped_frames` 返回 `(VirtAddr, Frame, MappingFlags)`。allocator-backed 用户帧
+当前固定为 4 KiB，因此查询结果不重复保存页大小。`Frame` 的分配 API 和
+`SharedObject` 同样不再重复接收或保存恒定的 page size；只有支持多级页表粒度的
+Static mapping 显式携带 `PageSize`。
 
-3. 共享映射（shared）：可用于实现进程间的共享内存(MAP_SHARED)和System V共享内存机制。它在创建时就分配好全部所需的物理页，并由一个共享对象 (SharedPages) 持有。其他进程映射同一块共享内存时，会复用这些已分配的物理页，从而实现对同一物理内存的并发读写。
+`StaticFrameRange` 则是静态物理帧范围的生命周期与权限证明，不拥有引用计数。
+它必须独立存在，因为内核映像、MMIO 和 vDSO 不能由 `Frame::drop` 释放。
+
+PTE 的释放策略由一个内部枚举统一表达：
+
+```rust
+enum FrameKind {
+    Alloc,  // PTE owns one Frame reference
+    Static, // lifetime is guaranteed by StaticFrameRange
+}
+```
+
+`Alloc` leaf 在架构 PTE 的软件位记录 `ALLOC_FRAME`；`Static` leaf 不设置该位。
+unmap、COW 和帧查询必须验证这一标记，不能仅凭 PFN 当前存在有效引用推断 PTE
+拥有一个 `Frame`。
+
+```rust
+pub struct AddressSpace {
+    range: VirtAddrRange,
+    page_table: PageTable,
+}
+
+struct FrameMeta {
+    ref_count: AtomicU32,
+}
+```
+
+页表是 resident mapping 的唯一事实来源。`AddressSpace::drop` 直接遍历 PTE，
+确认所有 `Alloc` mapping 都已经通过正常 unmap 路径释放，不再维护可从
+`ALLOC_FRAME` leaf 推导出的聚合计数。普通权限页和 `PROT_NONE` 驻留页都只保存在
+页表中，不存在按虚拟地址索引的第二套 resident map。
+unmap 先无分配遍历 PTE 完成 kind、页大小和 Frame owner 预检，再按页表粒度原地
+移除 leaf；`VmSpace::drop` 因此不需要为 resident pages 构造临时向量。
+
+`xmm` 只提供基于 `StaticFrameRange` proof token 的
+`map_static_range`、`map_frame`、`replace_frame`、`unmap_*_range`、通用
+`ProtectionTransaction`、单次 resident-flags 查询和查询/复制机制。
+匿名、文件、共享、COW 与 fork 的选择全部在 `xvma`。
+
+安全字节复制同样属于 ownership 边界：`VmSpace::read_bytes/write_bytes`
+先检查 authoritative VMA 权限；底层 `AddressSpace::read_bytes` 再逐 PTE
+检查 READ 并拒绝设备内存，`write_alloc_bytes` 则逐 PTE 要求 WRITE 和
+`FrameKind::Alloc`。因此只读 `StaticFrameRange`（如 vDSO）不能通过安全内核
+API 被改写。ELF 与共享文件 snapshot 在地址空间尚未对用户可见时临时增加
+Alloc 映射的 WRITE 权限，填充后立即恢复最终权限。
+
+`PROT_NONE` 不会被编码成“有效但没有 R/W/X”的硬件 leaf。每种架构只增加一个
+软件保留位：清除硬件 valid/present 位与访问位，同时保留可恢复的物理地址、
+`ALLOC_FRAME` 和页大小信息；其中 x86 为避免 non-present PTE 暴露真实 PFN，会在 PTE 内反转地址位，
+并在软件查询时还原。`GenericPTE::is_present` 表示逻辑 resident，因此 query、稀疏遍历、
+fork 和 unmap 仍沿用一条页表路径；处理器则把该 PTE 视为不可访问并正常触发缺页。
+恢复权限只是原地更新 PTE flags，不需要 clone Frame、重建页表或维护旁路容器。
+
+`VmSpace::protect` 对整个 syscall 范围是事务式的，而不是逐 VMA 尽力修改。
+它先构造切分、合并后的 VMA tree；`ProtectionTransaction` 先用 authoritative
+leaf walk 完成 kind/page-size/Frame owner 预检并统计 resident leaf，再预留
+journal 容量。第二次 walk 同时记录 address、old flags 和已经计算好的 new
+flags，随后直接 apply，不再调用普通 protect 路径重复 preflight。只有全部
+backing 更新成功后才提交 VMA flags。若后续范围失败，事务按逆序执行不分配
+内存的 PTE restore，因此 authoritative VMA 与页表状态不会分叉。`PROT_NONE`
+的 PFN 和 owner 从未离开 PTE，回滚不涉及 Frame 转移或页表重建。
+
+裸静态物理范围只能通过 `unsafe StaticFrameRange::new` 建立，调用者必须
+证明 kernel-long lifetime 与允许的访问/alias 契约；普通安全代码不能把
+allocator-backed `Frame` 伪装成 `Static` PTE。用户页表导入也不接受任意 source，
+只能调用 `copy_kernel_mappings` 借用永不析构的全局 kernel hierarchy，并在
+导入前拒绝任何 `ALLOC_FRAME` leaf。
+
+对于页对齐的 `'static + Sync` 对象，`StaticFrameRange::from_static_readonly`
+安全地产生只读 proof；不可变静态字节可以通过 `from_static_code` 产生
+READ/EXECUTE proof。vDSO 因此只需公开 image 与 opaque vvar 静态引用，不需要
+依赖 `xmm`，proof 构造和用户权限选择由 `xkernel::vdso` 适配层完成。
+
+页元数据在页分配器初始化前占用最大空闲内存区域的一段连续前缀，因此地址
+永久稳定，也不需要为每个页额外进行堆分配。fork 枚举驻留页时直接遍历指定
+范围内已经存在的页表子树，不扫描整个稀疏虚拟区间，也不维护第二套虚拟索引。
+当前 `FrameMeta` 为每个 4 KiB 帧占用 4 字节；1 GiB RAM 对应 1 MiB 固定
+metadata，约占物理内存的 0.098%。页缓存 dirty/writeback、回收队列或设备 pin
+都属于各自组件的状态；只有证明为所有物理页共有的机制，才应进入 `FrameMeta`。
 
 ## 延迟分配技术
 
-延迟分配技术是操作系统重要的内存技术，其核心思想是不提前分配物理内存，而是等程序真正访问（触发缺页异常）时，再去分配并建立映射，StarryX在xmm中扩展实现了懒分配和写时复制两种重要机制，极大减少了进程复制时的内存复制开销。
+延迟分配技术的核心是不提前分配物理内存，而是在程序首次访问时建立
+驻留页。StarryX 由 `xvma` 根据 authoritative `VmArea` 决定是否分配，
+再调用 `xmm` 的单页机制发布 PTE。
 
 ### 懒分配
 
-我们在内存映射（mmap）、程序间断点（brk）、用户栈（stack）的分配过程中使用了懒分配技术，其实现核心是内存区域的alloc映射，alloc映射内部维护一个关键元数据populate，其可以通过调用者在创建内存区域时自由指定
+`mmap`、`brk` 和用户栈可以选择 lazy 或 populate。lazy 匿名缺页先分配一个
+引用计数为一的零 `Frame`，然后由 `xvma` 调用 `map_frame` 消费该句柄；文件
+缺页同样只在唯一帧中填充数据，读取失败时由普通 drop 回收，不会留下可见映射。
 
-```rust
-pub enum {
-    Alloc {
-        /// Whether to populate the physical frames when creating the mapping.
-        populate: bool,
-    },
-}
-```
-
-对于populate为true的情况，直接分配物理内存并建立分页映射；对于populate为false的情况将延迟分配内存，由于未在页表建立映射，当用户读取对应页面的数据时将触发缺页异常，从而使得访存行为被内存捕获，此时会执行页面错误处理程序，当从MemorySet中找到对应内存范围后执行特定函数，检查populate元数据并执行分配和映射：
-
-```rust
-pub(crate) fn handle_page_fault_alloc(
-    vaddr: VirtAddr,
-    orig_flags: MappingFlags,
-    pt: &mut PageTable,
-    populate: bool,
-    align: PageSize,
-) -> bool {
-    if populate {
-        false
-    } else if let Some(frame) = alloc_frame(true, align) {
-        pt.map(vaddr, frame, PageSize::Size4K, orig_flags)
-            .map(|tlb| tlb.flush())
-            .is_ok()
-    } else {
-        false
-    }
-}
-```
-
-特别地，mmap除了会建立直接的内存映射，还会创建文件映射（MAP_FILE)，对于这一类映射，将会在内存管理模块xmm和文件系统xfs建立练习，造成模块耦合且在arceos引入了宏内核内容，为了避免这种情况我们实现了模块解耦的虚拟内存管理模块（xvma），通过其我们实现了文件页的懒分配，有效解决了这一种情况，我们将在第七章深入介绍。
+文件 `mmap` 的元数据和按需填充由 `xvma` 统一处理。缺页入口只调用一次 `VmSpace::handle_page_fault`，由其返回 `Resolved/Retry/Segv/Bus/NoMemory`，再由内核映射为 Linux 信号语义。
 
 ### 写时复制
 
 宏内核的以clone()为代表的进程复制操作中，在创建新的子进程时需要将原有的内存信息完整地拷贝一份，这一行为通常会耗费大量的内存空间，为内核带来巨大的内存开销负担，为了尽量避免进程复制时的内存开销，我们引入了写时复制（copy-on-write）技术。
 
-对于COW的实现，我们在全局维护一张物理页帧表(Frame Table), 每一个物理页帧对应一个FrameInfo结构体，FrameInfo结构体内部维护一个引用计数，当StarryX处理clone时会调用xmm的try_clone()，try_clone()将会对被复制的每一个内存区域进行处理，去除写标志位并对对应的Frameinfo增加引用计数，只有Frameinfo的引用计数为0时才会被真正释放。当用户真正写入时由于该页表项未设置W位，该操作将被操作系统捕获，进行实际的页面复制行为。
+现在每个 `Alloc` PTE 自身持有一个 `FrameMeta` 引用。fork 由 `xvma` 复制
+VMA 策略，通过稀疏页表遍历把私有驻留页以只读方式映射给子进程，再把父进程
+对应 PTE 改为只读；处于 `PROT_NONE` 的私有驻留帧仍由原 PTE 持有，并通过
+同一稀疏页表遍历克隆给子进程，不丢失匿名或私有脏数据。写缺页时，`xvma`
+调用 `AddressSpace::frame_if_shared`：独占页返回 `None` 并只恢复写权限，共享页
+返回一个保持旧页存活的 `Frame`，再 `deep_copy` 后原子替换。`mprotect` 增加逻辑
+写权限时，事务在 xmm 内批量查询每个 Alloc leaf 的 exclusivity，并让 xvma 提供
+目标权限选择，因此 fork 共享页仍保持只读，不会绕过 COW。
 
-```rust
-pub(crate) struct FrameRefTable {
-    data: Box<[FrameInfo; MAX_FRAME_NUM]>,
-}
-pub(crate) struct FrameInfo {
-    ref_count: AtomicUsize,
-}
-```
-
-```rust
-#[cfg(feature = "cow")]
-fn handle_cow_fault(
-    vaddr: VirtAddr,
-    paddr: PhysAddr,
-    flags: MappingFlags,
-    align: PageSize,
-    pt: &mut PageTable,
-) -> bool {
-    match frame_table().ref_count(paddr) {
-        0 => unreachable!(),
-        // There is only one AddrSpace reference to the page,
-        // so there is no need to copy it.
-        1 => pt.protect(vaddr, flags).map(|(_, tlb)| tlb.flush()).is_ok(),
-        // Allocates the new page and copies the contents of the original page,
-        // remapping the virtual address to the physical address of the new page.
-        2.. => match alloc_frame(false, align) {
-            Some(new_frame) => {
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        phys_to_virt(paddr).as_ptr(),
-                        phys_to_virt(new_frame).as_mut_ptr(),
-                        align.into(),
-                    )
-                };
-
-                dealloc_frame(paddr, align);
-
-                pt.remap(vaddr, new_frame, flags)
-                    .map(|(_, tlb)| {
-                        tlb.flush();
-                    })
-                    .is_ok()
-            }
-            None => false,
-        },
-    }
-}
-```
+这里不需要额外 `map_count`：精确的 PTE ownership 由架构软件位 `ALLOC_FRAME`
+表达，而 `ref_count == 1` 已经证明当前 PTE 是该页唯一 owner。若另一个 PTE、
+共享对象或临时句柄仍持有该页，计数必然大于一。
 
 ## 用户地址访问
 
@@ -206,4 +243,4 @@ fn handle_cow_fault(
 - 引入了大量对裸指针的unsafe操作
 - 实现cow后可能导致在内核态发生缺页异常而发生致命错误
 
-当实现内存延迟分配机制后，内核外组件无法再直接访问用户地址空间，因此我们将`xuspace`从内核实现中解耦成为一个独立组件，并提供抽象接口使其可以被其他系统所复用。我们将在第七章详细介绍这一组件。
+`xuspace` 只把用户指针作为地址令牌保存。读取字符串、切片和结构体时返回内核拥有的数据，写入通过显式 copy-to-user 完成；公开接口不再返回可逃逸的用户引用，也不会为 `CHILD_SETTID` 等延迟操作保存用户引用。

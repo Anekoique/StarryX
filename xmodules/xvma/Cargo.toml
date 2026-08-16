@@ -3,9 +3,11 @@ name = "xvma"
 version = "0.1.0"
 edition = "2024"
 authors = ["Anekoique <ctolu01@gmail.com>"]
+description = "Safe user virtual-memory policy and address-space ownership for StarryX"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 xerrno              = { workspace = true }
+xmm                 = { workspace = true }
 memory_addr          = { workspace = true }
-page_table_multiarch = { workspace = true }
-spin                 = { workspace = true }

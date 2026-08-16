@@ -7,7 +7,7 @@ use crate::{
     fs::fd::{EpollEventInfo, EpollInstance, FD_TABLE, add_file_like, get_file_like},
     task::with_uspace,
 };
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::{
     ctypes::{
         EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLLERR, EPOLLET, EPOLLHUP,

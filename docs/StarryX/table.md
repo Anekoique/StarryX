@@ -56,7 +56,7 @@ xalloc + allocator
 
 ## 1.3 地址空间管理
 
-xmm (backend(leaner + alloc + shared) design)
+xmm (PTE/frame mechanism; VMA policy lives in xvma)
 
 ## 1.4 延迟分配技术
 

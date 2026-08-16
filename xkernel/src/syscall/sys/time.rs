@@ -1,6 +1,6 @@
 use xerrno::{LinuxError, LinuxResult};
 
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::{
     ctypes::{
         __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_MONOTONIC_RAW, CLOCK_PROCESS_CPUTIME_ID,
@@ -108,15 +108,18 @@ pub fn sys_times(tms: UserPtr<Tms>) -> LinuxResult<isize> {
 pub fn sys_getitimer(which: u32, value: UserPtr<itimerval>) -> LinuxResult<isize> {
     with_thread(|thread| {
         let uspace = XProcess::from_thread(thread).uspace();
-        if let Some(value) = nullable!(uspace.raw_ptr(value))? {
+        if !value.is_null() {
             match which {
                 ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
                     let (_, interval_ns, remained_ns) =
                         XThread::from_thread(thread).time.read().stat_timer();
-                    *value = itimerval {
-                        it_interval: timeval::from_nanos(interval_ns as u64),
-                        it_value: timeval::from_nanos(remained_ns as u64),
-                    };
+                    uspace.write(
+                        value,
+                        itimerval {
+                            it_interval: timeval::from_nanos(interval_ns as u64),
+                            it_value: timeval::from_nanos(remained_ns as u64),
+                        },
+                    )?;
                     Ok(0)
                 }
                 _ => {
@@ -147,7 +150,7 @@ pub fn sys_setitimer(
 
     with_thread(|thread| {
         let uspace = XProcess::from_thread(thread).uspace();
-        if let Some(new_value) = nullable!(uspace.raw_ptr(new_value))? {
+        if let Some(new_value) = nullable!(uspace.read(new_value))? {
             match which {
                 ITIMER_REAL | ITIMER_VIRTUAL | ITIMER_PROF => {
                     let interval_ns = new_value.it_interval.to_nanos();

@@ -5,7 +5,7 @@ use xfs::FileFlags;
 use xnet::{TcpSocket, UdpSocket, UnixSocket};
 use xsync::Mutex;
 
-use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
+use xuspace::{UserConstPtr, UserPtr, nullable};
 use xutils::ctypes::{
     AF_INET, AF_INET6, AF_UNIX, IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, SOCK_CLOEXEC,
     SOCK_DGRAM, SOCK_NONBLOCK, SOCK_STREAM, sockaddr, socklen_t,
@@ -235,9 +235,9 @@ pub fn sys_sendto(
     let socket = Socket::from_fd(fd, FileFlags::WRITE, FileFlags::empty())?;
 
     let sent = if let Some(addr) = addr {
-        socket.sendto(bytes, addr)?
+        socket.sendto(&bytes, addr)?
     } else {
-        socket.send(bytes)?
+        socket.send(&bytes)?
     };
 
     Ok(sent as isize)
@@ -264,8 +264,9 @@ pub fn sys_recvfrom(
 
     with_uspace(|uspace| {
         let socket = Socket::from_fd(fd, FileFlags::READ, FileFlags::empty())?;
-        let buf = uspace.raw_slice(buf, len)?;
-        let (recv, remote_addr) = socket.recvfrom(buf)?;
+        let mut kernel_buf = alloc::vec![0_u8; len];
+        let (recv, remote_addr) = socket.recvfrom(&mut kernel_buf)?;
+        uspace.write_slice(buf, &kernel_buf[..recv])?;
 
         if let Some(remote_addr) = remote_addr
             && !addr.is_null()
@@ -339,9 +340,7 @@ pub fn sys_socketpair(domain: u32, ty: u32, proto: u32, sv: UserPtr<i32>) -> Lin
         .map_err(|_| LinuxError::EMFILE)?;
 
     with_uspace(|uspace| {
-        let sv_slice = uspace.raw_slice(sv, 2)?;
-        sv_slice[0] = fd1;
-        sv_slice[1] = fd2;
+        uspace.write_slice(sv, &[fd1, fd2])?;
         debug!("sys_socketpair => fds: [{}, {}]", fd1, fd2);
         Ok(0)
     })

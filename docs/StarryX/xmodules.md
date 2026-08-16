@@ -14,7 +14,7 @@
 | 内核机制 | `xprocess` | 维护进程、线程、进程组和会话的 POSIX 关系与生命周期框架。 |
 | 内核机制 | `xsignal` | 提供信号动作、挂起队列、发送与交付等通用机制。 |
 | 存储机制 | `xcache` | 保留页缓存、脏页、回写和回收原型；当前未接入内核运行时。 |
-| 内存机制 | `xvma` | 管理文件支持的虚拟内存映射区域及按需填充。 |
+| 内存机制 | `xvma` | 作为进程地址空间的唯一策略所有者，管理全部 VMA、缺页和文件后端。 |
 | 共享支持 | `xutils` | 收纳多个高层内核组件共同使用的数据结构、C 类型和时间工具。 |
 | 用户接口 | `xvdso` | 获取并嵌入固定版本的 Linux vDSO，维护共享 vvar 数据与时间更新。 |
 
@@ -26,7 +26,7 @@
 
 ArceOS 的设计强调组件化与模块化，StarryX 也沿用这一理念，将跨内核形态可复用的契约、算法和机制抽象为独立组件，同时避免不必要的反向依赖，降低耦合度并提升可维护性。
 
-其中较高层的内核机制包括用户地址访问 `xuspace`、内存映射管理 `xvma`、信号系统 `xsignal`、进程管理 `xprocess`、vDSO 支持 `xvdso` 和共享工具 `xutils`；基础契约与机制则由 `xerrno`、`xio`、`xsched` 和 `xvfs` 提供。`xcache` 当前仅作为待重构的页缓存原型保留，`xkernel` 不依赖或调用它。`xvdso` 不依赖 `xkernel`，具体进程地址空间的映射仍由内核适配层完成。`xtest` 是独立的应用测试体系，不属于 `xmodules/`。
+其中较高层的内核机制包括用户地址访问 `xuspace`、内存映射管理 `xvma`、信号系统 `xsignal`、进程管理 `xprocess`、vDSO 支持 `xvdso` 和共享工具 `xutils`；基础契约与机制则由 `xerrno`、`xio`、`xsched` 和 `xvfs` 提供。`xcache` 当前仅作为待重构的页缓存原型保留，`xkernel` 不依赖或调用它。`xvdso` 不依赖 `xkernel`、`xruntime`、`xmm` 或 `xvma`，只提供静态 image/vvar 对象与显式刷新操作；定时器注册、映射 proof 与进程地址空间安装均由 `xkernel` 适配层完成。`xtest` 是独立的应用测试体系，不属于 `xmodules/`。
 
 ## 用户地址访问
 
@@ -263,42 +263,32 @@ ext4 路径上的[无页缓存 iozone 基线](../benchmarks/iozone-no-page-cache
 
 ## 内存映射管理
 
-`xvma`组件是StarryX中专门处理文件支持的虚拟内存区域(mmap分配)管理模块，它实现了高效的按需加载内存映射机制。该组件专注于文件映射场景，提供精确的地址范围管理和智能的页面加载策略。
+`xvma` 是安全的用户虚拟内存策略组件。每个进程拥有一个 `VmSpace`，其中按生命周期统一保存 `Static`、`Private` 和 `Shared` VMA；匿名零页与私有文件 source 共用 `Private` 的 fault/fork/COW 语义，共享帧集合则由 `xvma::SharedObject` 自身持有。旧的 `xmm::AddrSpace` 与独立 `VmaManager` 并行状态已经移除。
 
-在原本arceos的内存管理设计中xmm模块已经实现了地址空间`memory_set`的管理，POSIX标准下mmap映射文件会引入虚拟内存区域与文件相关联的操作，这与页缓存一样会使基座OS独立的模块引入依赖，在与arceos的开发者交流后，我们选择将这一层功能放在宏内核实现，避免引入依赖，保持模块的低耦合。
+`xvma` 通过 `#![forbid(unsafe_code)]` 固定安全边界，只依赖 `xmm` 暴露的页表机制，不直接依赖 `xhal`、页表 crate、`xkernel`、`xfs` 或 `xcache`。`xmm::AddressSpace` 私有保存在 `VmSpace` 内部，负责真实 PTE、TLB 和 managed-page 映射引用。
 
-在组件内部我们实现了文件映射区域的有效管理，并且未来可以扩展到对所有mmap区域进行管理，与PageCache等组件配合工作完整实现mmap的所有功能：
+文件映射使用中立的对象接口，因此未来可以由 `xcache::FileMapping` 实现，而无需反向耦合文件系统：
 
 ```rust
-/// 文件支持的内存映射区域
-pub struct MmapRegion<F: VmFile> {
-    pub range: VirtAddrRange,                    // 虚拟地址范围
-    pub file: F,                                 // 支持的文件对象
-    pub offset: isize,                           // 文件偏移量
-    pub populated: Mutex<BTreeSet<VirtAddr>>,    // 已加载页面集合
-    pub align: PageSize,                         // 页面对齐大小
-}
-
-/// 虚拟内存区域管理器
-pub struct VmaManager<F: VmFile> {
-    regions: Vec<MmapRegion<F>>,                 // 内存映射区域集合
+pub trait VmObject: Send + Sync {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize>;
+    fn byte_len(&self) -> LinuxResult<u64>;
 }
 ```
 
-mmap系统调用会对映射的文件页和内存区域在`VmaManager`注册虚拟内存区域，并对虚拟内存区域进行管理，完成精确的地址范围管理以及区域分割与合并，保持页面加载状态的一致性，并实现高效的地址查找和范围操作：
+VMA 以起始地址为 key 存入 `BTreeMap`。映射、解除映射与修改权限会检查完整范围，必要时切分区域，并只合并后端身份、权限、页大小和文件偏移连续的相邻区域。
+创建入口统一为 `VmSpace::map(..., Backend)`；内部通过 crate-private
+`AreaBackend` trait 静态分发 map/unmap/protect/fault/fork，不使用 trait object。
 
 ```rust
-impl<F: VmFile> VmaManager<F> {
-    add_region()...             // 添加映射区域
-    find_region()...            // 查找包含地址的区域
-    remove_overlapped()...      // 移除重叠区
-    split_at_range()...         // 区域分割
+pub struct VmSpace {
+    range: VirtAddrRange,
+    areas: BTreeMap<VirtAddr, VmArea>,
+    address_space: xmm::AddressSpace,
 }
 ```
 
-通过`xvma`StarryX实现了文件页的延迟加载策略，支持文件数据的按需读取和缓存，支持文件数据的按需读取和缓存；在发生缺页异常时，内核会先对发生缺页异常的地址进行快速区域查找，找到则读取文件数据，未找到则再交付给底层xmm执行缺页异常处理，实现了高效的文件页懒分配机制。
-
-目前`xvma`主要支持了mmap的文件页映射管理，未来我们希望扩展xvma更多功能，使其可以成为一个高效独立管理mmap区域的组件，通过该组件减少进程管理、内存管理和文件系统间复杂的内核耦合关系。
+缺页入口通过一个 `VmSpace::handle_page_fault` 同时完成 VMA 权限检查、页表机制处理和文件页填充，并返回类型化结果供内核选择 `SIGSEGV` 或 `SIGBUS`。当前文件适配器提供同步读取和 EOF 零填充；`FrameMeta` 只保存 intrusive `ref_count`，文件对象身份、页锁、回写与回收策略仍属于后续 `xcache` 集成范围。
 
 ## 信号系统
 
