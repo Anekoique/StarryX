@@ -139,6 +139,13 @@ Removed the legacy kernel page-cache path and recorded a reproducible ext4-backe
 
 ## Session 6: Redesign the MM subsystem
 
+**Date**: 2026-08-16
+**Slug**: redesign-mm-subsystem
+**Branch**: `feat/redesign-mm-subsystem`
+**Base Branch**: `main`
+**Start Head**: `143ede7`
+**Closing Commit**: `cab58f7`
+
 ### Summary
 
 Separated page-table mechanisms from safe VMA policy with unified Frame ownership and transactional protection.
@@ -151,3 +158,9 @@ Separated page-table mechanisms from safe VMA policy with unified Frame ownershi
 | `xvma` | Centralized VMA layout, backing policy, fault handling, fork, and COW. |
 | Kernel seams | Integrated safe usercopy, vDSO mapping, mmap, and SysV SHM lifecycle. |
 | Page tables | Added portable logical-leaf and allocator-owner software bits. |
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cab58f7` | redesign mm subsystem |
