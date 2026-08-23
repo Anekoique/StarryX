@@ -10,5 +10,6 @@ are auto-maintained.
 | Feature | Scope | Promoted |
 |---------|-------|----------|
 | `mm/INDEX.md` | redesign mm subsystem | 2026-08-16 from task `redesign-mm-subsystem` |
+| `fs/INDEX.md` | redesign page cache | 2026-08-23 from task `redesign-page-cache` |
 
 <!-- ARK:FEATURES:END -->

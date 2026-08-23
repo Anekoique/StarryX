@@ -124,6 +124,17 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
     pub fn set_symlink(&mut self, ino: u32, buf: &[u8]) -> Ext4Result<()> {
         self.inode_ref(ino)?.set_symlink(buf)
     }
+    pub fn sync(&mut self) -> Ext4Result<()> {
+        self.bdev.flush()
+    }
+    pub fn release_unlinked(&mut self, ino: u32) -> Ext4Result<()> {
+        let mut inode = self.inode_ref(ino)?;
+        if inode.nlink() != 0 {
+            return Ok(());
+        }
+        inode.set_len(0)?;
+        inode.free()
+    }
     pub fn lookup(&mut self, parent: u32, name: &str) -> Ext4Result<DirLookupResult<Hal>> {
         self.inode_ref(parent)?.lookup(name)
     }
@@ -204,8 +215,7 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         }
 
         let is_dir = child_ref.is_dir();
-        let last_link = is_dir || child_ref.nlink() == 1;
-        if last_link {
+        if is_dir {
             child_ref.set_len(0)?;
         }
 
@@ -217,7 +227,9 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         } else {
             child_ref.dec_nlink();
         }
-        if child_ref.nlink() == 0 {
+        // Regular inodes with no directory links remain usable through open
+        // VFS handles. Their last handle releases the inode and blocks.
+        if is_dir && child_ref.nlink() == 0 {
             child_ref.free()?;
         }
         Ok(())

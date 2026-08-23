@@ -5,9 +5,9 @@ flowchart LR
     K["xkernel: Linux ABI"] --> V["xvma::VmSpace"]
     V --> A["BTreeMap<VmArea>"]
     V --> X["xmm::AddressSpace"]
-    A --> B["Static | Private | Shared"]
-    B --> O["VmObject source"]
-    B --> S["SharedObject: Box<[Frame]>"]
+    A --> B["Backing { source, private }"]
+    B --> O["Source: Zero | Static | Object"]
+    O --> S["VmObject -> VmPage { Frame, guard }"]
     X --> P["hardware PageTable"]
     P --> E["ALLOC_FRAME PTE owns Frame"]
     E --> M["PFN FrameMeta { ref_count }"]
@@ -46,15 +46,10 @@ cfg_if::cfg_if! {
 }
 ```
 
-xalloc为内核提供内存分配的接口的同时，StarryX为该模块新添加了内存回收接口，通过使用crate_interface组件解决循环依赖问题，当内核内存不足时，可以回收别的内核功能实现的内存，比如页缓存：
-
-```rust
-#[crate_interface::def_interface]
-pub trait XAllocIf {
-    fn evict_cache(num_pages: usize) -> AllocResult;
-}
-
-```
+xalloc 只暴露物理页分配与当前空闲页数，不反向调用页缓存。`xkernel` 启动的
+page-cache worker 读取 `available_pages()` 并按水位主动回写、回收；一次 Frame
+分配失败后，xcache 也只在 allocator lock 已释放时执行 clean reclaim，再重试
+一次。这样 allocator、filesystem 和 cache 之间没有 callback 或循环依赖。
 
 ## 地址空间管理
 
@@ -65,23 +60,31 @@ pub struct VmSpace {
     range: VirtAddrRange,
     areas: BTreeMap<VirtAddr, VmArea>,
     address_space: xmm::AddressSpace,
+    write_guards: Vec<(VirtAddr, VmPageGuard)>,
 }
 ```
 
-`VmArea` 不再按 syscall 来源堆叠 backing 类型，而是按生命周期和 fork 语义
-归纳为三类：`Static` 表示内核全生命周期有效的物理帧区间；`Private` 表示需要按需建立
-私有页并参与 COW 的映射；`Shared` 表示由稳定共享对象持有的页集合。匿名零页
-和私有文件页都是 `Private`，区别仅在于后者带有 `VmObject` source。`map`、
-`unmap`、`mprotect`、缺页和 `fork` 都先经过这一所有者；区域切分和合并也只
-在这里发生。文件 source 通过不依赖 `xfs`/`xkernel` 的 `VmObject` 接口读取，
-后续页缓存可以实现同一接口。
+`VmArea` 不按 syscall 来源堆叠 backing 类型。`Backing` 只保存两个正交属性：
+`Source::{Zero, Static, Object}` 决定页来自匿名零填充、kernel-long 静态范围还是
+一个共享供页对象；`private` 决定 store 使用 COW 还是写透。匿名共享内存、
+System V SHM 与缓存文件都实现相同的 `VmObject`，xvma 不认识文件系统或页缓存。
+`map`、`unmap`、`mprotect`、缺页和 `fork` 都先经过这一唯一所有者；区域切分和
+合并也只在这里发生。
 
 ```rust
 pub trait VmObject: Send + Sync {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> LinuxResult<usize>;
+    fn id(&self) -> u64;
     fn byte_len(&self) -> LinuxResult<u64>;
+    fn page(&self, index: u64, write: bool) -> LinuxResult<VmPage>;
+    fn sync(&self, range: Range<u64>, wait: bool) -> LinuxResult;
+    fn requires_write_guard(&self) -> bool;
 }
 ```
+
+`VmPage` 只包含一个引用计数 `Frame` 和可选 opaque guard。普通共享内存不需要
+guard；缓存文件的共享写映射必须先取得 guard，再由 xvma 发布 writable PTE。
+文件截断的 observer 与注册 lifetime 位于 xkernel 适配层，xvma 仅提供通用的
+object-range 校验、失效与同步机制。
 
 `xmm::AddressSpace` 不再保存区域、backing 模型或普通驻留页的逐页索引。物理帧模型
 只保留三个有独立职责的数据结构：

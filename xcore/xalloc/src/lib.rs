@@ -123,11 +123,6 @@ impl GlobalAllocator {
                     let heap_ptr = match self.alloc_pages(try_size / PAGE_SIZE, PAGE_SIZE) {
                         Ok(ptr) => ptr,
                         Err(err) => {
-                            // let _ = crate_interface::call_interface!(
-                            //     XAllocIf::evict_cache,
-                            //     try_size / PAGE_SIZE
-                            // )
-                            // .map_err(|_| try_size /= 2);
                             try_size /= 2;
                             if try_size < min_size {
                                 return Err(err);
@@ -252,9 +247,4 @@ pub fn global_add_memory(start_vaddr: usize, size: usize) -> AllocResult {
         start_vaddr + size
     );
     GLOBAL_ALLOCATOR.add_memory(start_vaddr, size)
-}
-
-#[crate_interface::def_interface]
-pub trait XAllocIf {
-    fn evict_cache(num_pages: usize) -> AllocResult;
 }

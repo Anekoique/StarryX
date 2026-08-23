@@ -1,0 +1,414 @@
+{
+  "command": "make test ARCH=riscv64 CASE=testsuit/iozone/run SMP=1 MEM=1G LOG=off MODE=release",
+  "expected": {
+    "host_arch": "arm64",
+    "iozone_driver_sha256": "86973a9de127d1224838e7a13e51219a07bf83263bd630afc4e8cfcda4b6c1a6",
+    "iozone_manifest_sha256": "26f53f0b5335a44042ccc2866ff19e70b68bcef7948f047187fa7e964ec23a67",
+    "macos": "26.5 (25F71)",
+    "qemu": "QEMU emulator version 11.0.0",
+    "rootfs_sha256": "636840a4feda55e10f5d1dce394fd733d16ed626b97668239024d9ac2c5aaef6",
+    "rustc": "rustc 1.96.0-nightly (03749d625 2026-03-14)",
+    "starryx_baseline": "b76f4d7138e1d9bd02d660cf0bbad1c9c611ded6",
+    "xtest_revision": "59faed8281fd17234d682144a7fcd70accb0a6ad"
+  },
+  "metrics": {
+    "auto.backward_read": {
+      "baseline": "13549",
+      "delta_percent": "348.6161340320318842719019854",
+      "median": "60783",
+      "passed": true,
+      "runs": [
+        "61554",
+        "60783",
+        "59899"
+      ]
+    },
+    "auto.fread": {
+      "baseline": "5813",
+      "delta_percent": "786.2205401685876483743333907",
+      "median": "51516",
+      "passed": true,
+      "runs": [
+        "52704",
+        "51516",
+        "50862"
+      ]
+    },
+    "auto.freread": {
+      "baseline": "6595",
+      "delta_percent": "693.2221379833206974981046247",
+      "median": "52313",
+      "passed": true,
+      "runs": [
+        "53488",
+        "52313",
+        "50801"
+      ]
+    },
+    "auto.frewrite": {
+      "baseline": "9601",
+      "delta_percent": "614.0089574002708051244662014",
+      "median": "68552",
+      "passed": true,
+      "runs": [
+        "69962",
+        "68552",
+        "67853"
+      ]
+    },
+    "auto.fwrite": {
+      "baseline": "7736",
+      "delta_percent": "773.7331954498448810754912099",
+      "median": "67592",
+      "passed": true,
+      "runs": [
+        "69616",
+        "67592",
+        "67466"
+      ]
+    },
+    "auto.random_read": {
+      "baseline": "15368",
+      "delta_percent": "289.4846434148880791254554919",
+      "median": "59856",
+      "passed": true,
+      "runs": [
+        "60882",
+        "59856",
+        "59334"
+      ]
+    },
+    "auto.random_write": {
+      "baseline": "14165",
+      "delta_percent": "320.3106247793858100953053300",
+      "median": "59537",
+      "passed": true,
+      "runs": [
+        "60395",
+        "59537",
+        "59135"
+      ]
+    },
+    "auto.read": {
+      "baseline": "17395",
+      "delta_percent": "456.2977867203219315895372233",
+      "median": "96768",
+      "passed": true,
+      "runs": [
+        "100527",
+        "96742",
+        "96768"
+      ]
+    },
+    "auto.record_rewrite": {
+      "baseline": "11671",
+      "delta_percent": "424.9764373232799245994344958",
+      "median": "61270",
+      "passed": true,
+      "runs": [
+        "61966",
+        "61270",
+        "60418"
+      ]
+    },
+    "auto.reread": {
+      "baseline": "17359",
+      "delta_percent": "473.8521804251396969871536379",
+      "median": "99615",
+      "passed": true,
+      "runs": [
+        "100151",
+        "99615",
+        "98157"
+      ]
+    },
+    "auto.rewrite": {
+      "baseline": "17512",
+      "delta_percent": "457.3035632708999543170397442",
+      "median": "97595",
+      "passed": true,
+      "runs": [
+        "99083",
+        "97595",
+        "97066"
+      ]
+    },
+    "auto.stride_read": {
+      "baseline": "9899",
+      "delta_percent": "509.4352964945954136781493080",
+      "median": "60328",
+      "passed": true,
+      "runs": [
+        "61025",
+        "60328",
+        "59547"
+      ]
+    },
+    "auto.write": {
+      "baseline": "19883",
+      "delta_percent": "273.8319167127697027611527435",
+      "median": "74329",
+      "passed": true,
+      "runs": [
+        "75241",
+        "74329",
+        "72744"
+      ]
+    },
+    "backward.initial_writers": {
+      "baseline": "16234.92",
+      "delta_percent": "347.5842812899601599515119261",
+      "median": "72664.95",
+      "passed": true,
+      "runs": [
+        "74870.29",
+        "70616.00",
+        "72664.95"
+      ]
+    },
+    "backward.reverse_readers": {
+      "baseline": "14715.40",
+      "delta_percent": "291.1379235358875735623904209",
+      "median": "57557.51",
+      "passed": true,
+      "runs": [
+        "57557.51",
+        "53167.09",
+        "58494.26"
+      ]
+    },
+    "backward.rewriters": {
+      "baseline": "12420.24",
+      "delta_percent": "612.8883177780783624148969746",
+      "median": "88542.44",
+      "passed": true,
+      "runs": [
+        "98849.76",
+        "79509.27",
+        "88542.44"
+      ]
+    },
+    "positional.pread_readers": {
+      "baseline": "7222.52",
+      "delta_percent": "1332.390495284194436290934466",
+      "median": "103454.69",
+      "passed": true,
+      "runs": [
+        "103454.69",
+        "84106.80",
+        "104116.77"
+      ]
+    },
+    "positional.pwrite_writers": {
+      "baseline": "12099.74",
+      "delta_percent": "555.3806114842137103772477756",
+      "median": "79299.35",
+      "passed": true,
+      "runs": [
+        "73595.07",
+        "80093.16",
+        "79299.35"
+      ]
+    },
+    "random.initial_writers": {
+      "baseline": "16475.96",
+      "delta_percent": "341.9199245446092367303635114",
+      "median": "72810.55",
+      "passed": true,
+      "runs": [
+        "72810.55",
+        "67846.43",
+        "75946.62"
+      ]
+    },
+    "random.random_readers": {
+      "baseline": "14813.51",
+      "delta_percent": "234.9293989068087171777654317",
+      "median": "49614.80",
+      "passed": true,
+      "runs": [
+        "49020.77",
+        "49614.80",
+        "57849.79"
+      ]
+    },
+    "random.random_writers": {
+      "baseline": "12720.95",
+      "delta_percent": "318.9759412622484955919172703",
+      "median": "53297.72",
+      "passed": true,
+      "runs": [
+        "58291.18",
+        "51827.61",
+        "53297.72"
+      ]
+    },
+    "random.rewriters": {
+      "baseline": "17756.47",
+      "delta_percent": "404.9888857413663864495589495",
+      "median": "89668.20",
+      "passed": true,
+      "runs": [
+        "92136.53",
+        "80432.73",
+        "89668.20"
+      ]
+    },
+    "stdio.freaders": {
+      "baseline": "15157.02",
+      "delta_percent": "1232.909107463076515040555465",
+      "median": "202029.30",
+      "passed": true,
+      "runs": [
+        "206933.03",
+        "202029.30",
+        "198313.45"
+      ]
+    },
+    "stdio.fwriters": {
+      "baseline": "34065.80",
+      "delta_percent": "601.5600396878981265668206823",
+      "median": "238992.04",
+      "passed": true,
+      "runs": [
+        "245294.95",
+        "238992.04",
+        "218531.74"
+      ]
+    },
+    "stride.initial_writers": {
+      "baseline": "16874.84",
+      "delta_percent": "358.1103583796942667308252997",
+      "median": "77305.39",
+      "passed": true,
+      "runs": [
+        "77305.39",
+        "78575.41",
+        "74090.19"
+      ]
+    },
+    "stride.rewriters": {
+      "baseline": "15491.26",
+      "delta_percent": "400.8830140350107092644497607",
+      "median": "77593.09",
+      "passed": true,
+      "runs": [
+        "75588.41",
+        "94603.96",
+        "77593.09"
+      ]
+    },
+    "stride.stride_readers": {
+      "baseline": "12764.59",
+      "delta_percent": "324.4112815217723405138747112",
+      "median": "54174.36",
+      "passed": true,
+      "runs": [
+        "49766.46",
+        "54174.36",
+        "57466.64"
+      ]
+    },
+    "vector_fallback.initial_writers": {
+      "baseline": "13022.66",
+      "delta_percent": "506.5035868248115208413642067",
+      "median": "78982.90",
+      "passed": true,
+      "runs": [
+        "80087.48",
+        "66416.02",
+        "78982.90"
+      ]
+    },
+    "vector_fallback.rewriters": {
+      "baseline": "13076.74",
+      "delta_percent": "610.2022369489643443243499527",
+      "median": "92871.30",
+      "passed": true,
+      "runs": [
+        "94387.74",
+        "84314.84",
+        "92871.30"
+      ]
+    },
+    "write_read.initial_writers": {
+      "baseline": "14932.09",
+      "delta_percent": "387.6096380345952910811547479",
+      "median": "72810.31",
+      "passed": true,
+      "runs": [
+        "70556.84",
+        "79268.61",
+        "72810.31"
+      ]
+    },
+    "write_read.re_readers": {
+      "baseline": "14011.29",
+      "delta_percent": "495.6270978617957375801942576",
+      "median": "83455.04",
+      "passed": true,
+      "runs": [
+        "89431.08",
+        "83455.04",
+        "81334.15"
+      ]
+    },
+    "write_read.readers": {
+      "baseline": "15909.74",
+      "delta_percent": "476.8285968218210982706191302",
+      "median": "91771.93",
+      "passed": true,
+      "runs": [
+        "95719.29",
+        "91771.93",
+        "82534.51"
+      ]
+    },
+    "write_read.rewriters": {
+      "baseline": "14409.15",
+      "delta_percent": "501.0800081892408643119129164",
+      "median": "86610.52",
+      "passed": true,
+      "runs": [
+        "84958.95",
+        "93278.73",
+        "86610.52"
+      ]
+    }
+  },
+  "passed": true,
+  "provenance": {
+    "host_arch": "arm64",
+    "iozone_driver_sha256": "86973a9de127d1224838e7a13e51219a07bf83263bd630afc4e8cfcda4b6c1a6",
+    "iozone_manifest_sha256": "26f53f0b5335a44042ccc2866ff19e70b68bcef7948f047187fa7e964ec23a67",
+    "macos": "26.5 (25F71)",
+    "qemu": "QEMU emulator version 11.0.0",
+    "rootfs_sha256": "636840a4feda55e10f5d1dce394fd733d16ed626b97668239024d9ac2c5aaef6",
+    "rustc": "rustc 1.96.0-nightly (03749d625 2026-03-14)",
+    "starryx_head": "a076bcc8d53da22ca0edf3be341d4ee24f875deb",
+    "starryx_source_sha256": "6e15e3d8ddd17851642dc57ec9fb53bbacd9c4e3019cf7e49412c93617754b7a",
+    "xtest_revision": "59faed8281fd17234d682144a7fcd70accb0a6ad",
+    "xtest_source_sha256": "05baf72d84d52677c53e987018b911bf7d84b5b93b66e17e3e9c39c9657c8229"
+  },
+  "runs": [
+    {
+      "directory": "target/xtest/riscv64/oscomp/6a8ada76-16b60e70-127fb",
+      "report_sha256": "9faa9533bf3307f71484b12324d8f3ee3289ade5b903064c29876d4d1342dcf0",
+      "run_id": "6a8ada76-16b60e70-127fb",
+      "serial_sha256": "552ed9302c770d5745f3629d629a52e308406610a7697c76ad1446ee15a44b86"
+    },
+    {
+      "directory": "target/xtest/riscv64/oscomp/6a8adae9-36fe5a98-12add",
+      "report_sha256": "cd79315b6466118c190bed727eb6130bbdf51682375f3a84528978682aabd0f2",
+      "run_id": "6a8adae9-36fe5a98-12add",
+      "serial_sha256": "7bd46fd35abcccc00c9caa07b614ff8d927a1a63807d06778cfa4020d1efcaf5"
+    },
+    {
+      "directory": "target/xtest/riscv64/oscomp/6a8adb5d-242fcb40-12db9",
+      "report_sha256": "d068090c6c62397e869b9623e0e6b8032de50c0805c8f2b6267efdefe21caa30",
+      "run_id": "6a8adb5d-242fcb40-12db9",
+      "serial_sha256": "62cd24a619753640891cb232000ab83fce5d7f58130ce50e5c81302821b2f696"
+    }
+  ],
+  "schema": 1
+}

@@ -329,7 +329,7 @@ impl FileNodeOps<RawMutex> for MemoryNode {
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
         let mut content = self.inode.as_file()?.lock();
         content.extend_from_slice(buf);
-        Ok((buf.len(), buf.len() as u64))
+        Ok((buf.len(), content.len() as u64))
     }
 
     fn set_len(&self, len: u64) -> VfsResult<()> {

@@ -9,6 +9,7 @@
 #![allow(clippy::len_without_is_empty)]
 
 pub mod api;
+pub mod cache;
 pub mod fanotify;
 pub mod fd;
 pub mod file;

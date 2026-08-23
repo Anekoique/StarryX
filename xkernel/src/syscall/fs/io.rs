@@ -2,8 +2,8 @@ use alloc::{sync::Arc, vec};
 use core::ffi::{c_char, c_int};
 
 use xerrno::{LinuxError, LinuxResult};
-use xfs::FileFlags;
-use xio::{Seek, SeekFrom};
+use xfs::{FileFlags, OpenOptions};
+use xio::SeekFrom;
 
 use crate::{
     fs::{
@@ -172,9 +172,7 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
         2 => SeekFrom::End(offset as _),
         _ => return Err(LinuxError::EINVAL),
     };
-    let off = File::from_fd(fd, FileFlags::empty(), FileFlags::empty())?
-        .inner()
-        .seek(pos)?;
+    let off = File::from_fd(fd, FileFlags::empty(), FileFlags::empty())?.seek(pos)?;
     Ok(off as _)
 }
 
@@ -187,9 +185,8 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> Linux
     let path = with_uspace(|uspace| uspace.read_str(path))?;
     trace!("sys_truncate <= {} {}", path, length);
     with_fs(AT_FDCWD, &path, |fs| {
-        fs.write_file(&path)?
-            .access(FileFlags::WRITE)?
-            .set_len(length as _)
+        let options = OpenOptions::new().read(true).write(true).clone();
+        File::new(fs.open(&options, &path)?.into_file()?)?.set_len(length as _)
     })?;
     Ok(0)
 }

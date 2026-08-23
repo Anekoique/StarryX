@@ -254,7 +254,7 @@ pub fn sys_unlinkat(dirfd: i32, path: UserConstPtr<c_char>, flags: usize) -> Lin
         if flags == AT_REMOVEDIR as _ {
             fs.remove_dir(&path)
         } else {
-            fs.remove_file(&path)
+            crate::fs::api::remove_file(fs, &path)
         }
     })?;
     Ok(0)

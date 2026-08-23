@@ -17,5 +17,5 @@ mod space;
 
 pub use backend::Backend;
 pub use fault::FaultResolution;
-pub use object::{SharedObject, VmObject};
+pub use object::{SharedObject, VmObject, VmPage, VmPageGuard, allocate_object_id};
 pub use space::VmSpace;

@@ -10,9 +10,10 @@ StarryX的文件系统架构可分为三层，最底层为arceos中支撑xfs运�
 
 ## 缓存设计
 
-当前 StarryX 的普通文件读写与文件映射读取直接进入 `xfs`/VFS。独立的
-`xcache` 组件仍保留在源码树中，但尚未接入运行时；这是后续重新设计页缓存并
-对照无页缓存基线进行性能测试的起点。当前文件系统仍包含以下底层缓存机制：
+当前 StarryX 对声明了稳定 cache identity 的普通文件启用 `xcache`：buffered
+I/O 与 file-backed mmap 共享同一组缓存页，`xkernel` 负责把 VFS 原始 I/O
+适配为 cache backing。伪文件、设备和未声明 identity 的文件系统仍显式走
+raw VFS 路径。页缓存之外，文件系统还包含以下底层缓存机制：
 
 1. 目录项缓存（DentryCache）：用于缓存路径查找结果。它存储了key(父目录inode, 文件名)到inode的映射。当内核需要解析一个路径时，它首先查询 dentry 缓存。如果命中，就可以立即获得目标的inode，避免了从磁盘上反复读取目录文件来查找 dentry的开销。这对于频繁访问相同文件或目录的场景，性能提升巨大。
 
@@ -39,7 +40,7 @@ pub struct DirNode<M> {
 }
 ```
 
-2. 块缓存（BlockCache）：这是最底层的缓存，用于缓存磁盘的物理块（Block）。它位于具体文件系统和块设备驱动之间。即使是文件系统的元数据（如 inode 表、位图）的读写，也会经过 block cache。未来页缓存应构建在明确的 VFS inode 生命周期之上，并与块缓存划分数据和元数据职责。
+2. 块缓存（BlockCache）：这是最底层的缓存，用于缓存磁盘的物理块（Block）。它位于具体文件系统和块设备驱动之间。即使是文件系统的元数据（如 inode 表、位图）的读写，也会经过 block cache。页缓存使用稳定的 VFS 文件生命周期统一文件数据视图，块缓存继续负责文件系统内部的块与元数据 I/O。
 
 ```rust
 pub struct SeekableDisk {

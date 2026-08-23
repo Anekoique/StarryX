@@ -129,7 +129,9 @@ fn map_segment(
         range.start,
         range.size(),
         mapping_flags,
-        Backend::shared(object.clone(), 0),
+        // Populate eagerly: a segment's frames are allocated up front, so a
+        // later fault could only report a shortage that already happened.
+        Backend::shared(object.clone(), 0, true),
     )?;
     if new_object {
         segment.set_object(object);

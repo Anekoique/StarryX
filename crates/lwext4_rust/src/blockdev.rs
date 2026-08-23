@@ -3,7 +3,7 @@ use core::{
     mem, ptr, slice,
 };
 
-use crate::{error::Context, ffi::*, Ext4Result};
+use crate::{Ext4Result, error::Context, ffi::*};
 use alloc::boxed::Box;
 
 /// Device block size.
@@ -18,6 +18,9 @@ pub trait BlockDevice {
 
     /// Gets the number of blocks on the device.
     fn num_blocks(&self) -> Ext4Result<u64>;
+
+    /// Commits completed writes to the backing device.
+    fn flush(&mut self) -> Ext4Result<()>;
 }
 
 /// Holds necessary resources for the ext4 block device, and automatically frees
@@ -87,6 +90,13 @@ impl<Dev: BlockDevice> Ext4BlockDevice<Dev> {
                 block_dev_iface,
             },
         })
+    }
+
+    pub fn flush(&mut self) -> Ext4Result<()> {
+        unsafe {
+            ext4_block_cache_flush(self.inner.as_mut()).context("ext4_block_cache_flush")?;
+        }
+        self._guard.dev.flush()
     }
 
     unsafe fn dev_read_fields<'a>(

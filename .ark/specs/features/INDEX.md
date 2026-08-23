@@ -12,7 +12,7 @@ The table below is managed by `ark agent spec register` — new rows appear when
 | `redesign-xtest` | Redesign xtest as test-rootfs pipeline | 2026-05-05 from task `redesign-xtest` |
 | `vdso-support` | Add vDSO support | 2026-05-06 from task `vdso-support` |
 | `xtest/INDEX.md` | redesign xtest framework | 2026-08-09 from task `redesign-xtest-framework` |
-| `kernel/INDEX.md` | redesign mm subsystem | 2026-08-16 from task `redesign-mm-subsystem` |
+| `kernel/INDEX.md` | redesign page cache | 2026-08-23 from task `redesign-page-cache` |
 
 <!-- ARK:FEATURES:END -->
 

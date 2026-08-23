@@ -1,9 +1,7 @@
-use alloc::{sync::Arc, vec};
-
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
 use xerrno::{LinuxError, LinuxResult};
 use xfs::FileFlags;
-use xhal::paging::{MappingFlags, PageSize};
+use xhal::paging::PageSize;
 use xtask::current;
 use xvma::{Backend, SharedObject};
 
@@ -12,7 +10,7 @@ use crate::{
         fd::{FD_TABLE, File},
         file::FileLike,
     },
-    mm::FileWrapper,
+    mm::FileVmObject,
     task::{XTaskExt, with_xprocess},
 };
 use xutils::ctypes::mm::{MmapFlags, MmapProt};
@@ -35,7 +33,8 @@ pub fn sys_mmap(
     offset: isize,
 ) -> LinuxResult<isize> {
     let xprocess = XTaskExt::from_task(&current()).xprocess();
-    let mut aspace = xprocess.uspace().aspace.lock();
+    let uspace = xprocess.uspace();
+    let mut aspace = uspace.aspace.lock();
     let mut permission_flags = MmapProt::from_bits_truncate(prot);
     let map_flags = MmapFlags::from_bits_truncate(flags);
     debug!(
@@ -77,39 +76,32 @@ pub fn sys_mmap(
         start, end, aligned_length, page_size
     );
 
+    let private = match map_flags & MmapFlags::TYPE {
+        MmapFlags::PRIVATE => true,
+        MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => false,
+        _ => return Err(LinuxError::EINVAL),
+    };
+
     // Resolve and validate the file before a fixed mapping can replace an old
     // range. The final backing is then constructed directly by xvma.
-    let file = if map_flags.contains(MmapFlags::ANONYMOUS) {
+    let file_mapping = if map_flags.contains(MmapFlags::ANONYMOUS) {
         None
     } else {
-        Some(
-            File::from_fd(fd, FileFlags::READ, FileFlags::empty())
-                .map_err(|_| LinuxError::EACCES)?,
-        )
-    };
-    let eager_file = file.is_some()
-        && (map_flags.contains(MmapFlags::POPULATE)
-            || map_flags.intersects(MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE));
-    let file_len = match (&file, eager_file) {
-        (Some(file), true) => {
-            Some(usize::try_from(file.len()?).map_err(|_| LinuxError::EOVERFLOW)?)
+        let mut required = FileFlags::READ;
+        if !private && permission_flags.contains(MmapProt::WRITE) {
+            required |= FileFlags::WRITE;
         }
-        _ => None,
+        let file =
+            File::from_fd(fd, required, FileFlags::empty()).map_err(|_| LinuxError::EACCES)?;
+        Some(file.mapping().ok_or(LinuxError::ENODEV)?)
     };
-    if eager_file && file_len.is_some_and(|len| offset as usize >= len) {
-        return Err(LinuxError::EINVAL);
-    }
 
-    let start_addr = if map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE) {
+    let fixed = map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE);
+    let start_addr = if fixed {
         if start == 0 {
             return Err(LinuxError::EINVAL);
         }
-        let dst_addr = VirtAddr::from(start);
-
-        if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
-            aspace.unmap(dst_addr, aligned_length)?;
-        }
-        dst_addr
+        VirtAddr::from(start)
     } else {
         aspace
             .find_free_area(
@@ -128,77 +120,35 @@ pub fn sys_mmap(
     };
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
-    let mut installed = false;
-    let map_result = (|| -> LinuxResult<()> {
-        match (map_flags & MmapFlags::TYPE, file) {
-            (MmapFlags::PRIVATE, None) => {
-                aspace.map(
-                    start_addr,
-                    aligned_length,
-                    permission_flags.into(),
-                    Backend::anonymous(populate),
-                )?;
-                installed = true;
-                Ok(())
-            }
-            (MmapFlags::PRIVATE, Some(file)) => {
-                aspace.map(
-                    start_addr,
-                    aligned_length,
-                    permission_flags.into(),
-                    Backend::file(
-                        Arc::new(FileWrapper(file.clone_inner())),
-                        offset as usize,
-                        populate,
-                    ),
-                )?;
-                installed = true;
-                Ok(())
-            }
-            (MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE, file) => {
-                let final_flags: MappingFlags = permission_flags.into();
-                let load_flags = if file.is_some() {
-                    final_flags | MappingFlags::READ | MappingFlags::WRITE
-                } else {
-                    final_flags
-                };
-                let object = SharedObject::new(aligned_length)?;
-                aspace.map(
-                    start_addr,
-                    aligned_length,
-                    load_flags,
-                    Backend::shared(object, 0),
-                )?;
-                installed = true;
-                if let Some(file) = file {
-                    // Compatibility contract: one eager snapshot object per
-                    // mmap, shared with forks but not coherent with another
-                    // mmap and not written back.
-                    let file_size = file_len.expect("file length was resolved");
-                    let count = core::cmp::min(length, file_size - offset as usize);
-                    let mut buffer = vec![0_u8; count];
-                    let read = file.read_at(&mut buffer, offset as u64)?;
-                    if read > count {
-                        return Err(LinuxError::EIO);
-                    }
-                    aspace.write_bytes(start_addr, &buffer[..read])?;
-                    if load_flags != final_flags {
-                        aspace.protect(start_addr, aligned_length, final_flags)?;
-                    }
-                }
-                Ok(())
-            }
-            _ => Err(LinuxError::EINVAL),
+    let file_object = match file_mapping {
+        Some(mapping) => {
+            // Every address space that maps a cached file must hear about its
+            // truncations, whether the mapping is private or shared.
+            uspace.mapped_files.attach(&mapping)?;
+            Some(FileVmObject::new(mapping))
         }
-    })();
-    if let Err(error) = map_result {
-        // The address range was reserved above; do not leak it when file
-        // validation, reading, or policy attachment fails.
-        if installed {
-            let _ = aspace.unmap(start_addr, aligned_length);
-        }
-        return Err(error);
+        None => None,
+    };
+    if fixed
+        && !map_flags.contains(MmapFlags::FIXED_NOREPLACE)
+        && let Err(error) = aspace.unmap(start_addr, aligned_length)
+    {
+        uspace.mapped_files.prune(&aspace);
+        return Err(error.into());
     }
+    let backend = match file_object {
+        Some(object) if private => Backend::private(object, offset as usize, populate),
+        Some(object) => Backend::shared(object, offset as usize, populate),
+        None if private => Backend::anonymous(populate),
+        // An anonymous shared region needs frames nothing else can reclaim.
+        None => Backend::shared(SharedObject::new(aligned_length)?, 0, populate),
+    };
+    let result = aspace.map(start_addr, aligned_length, permission_flags.into(), backend);
+    // MAP_FIXED may have removed the final VMA of another file; a failed map
+    // may also leave the just-attached file unused. In both cases the live VMA
+    // tree is the authority for which invalidation subscriptions remain.
+    uspace.mapped_files.prune(&aspace);
+    result?;
 
     Ok(start_addr.as_usize() as _)
 }
@@ -210,11 +160,13 @@ pub fn sys_mmap(
 /// * `length` - Length of the mapping to unmap
 pub fn sys_munmap(addr: usize, length: usize) -> LinuxResult<isize> {
     with_xprocess(|xprocess| {
-        let mut aspace = xprocess.uspace().aspace.lock();
+        let uspace = xprocess.uspace();
+        let mut aspace = uspace.aspace.lock();
         let length = align_up_4k(length);
         let start_addr = VirtAddr::from(addr);
 
         aspace.unmap(start_addr, length)?;
+        uspace.mapped_files.prune(&aspace);
         xhal::arch::flush_tlb(None);
         Ok(0)
     })
@@ -257,12 +209,28 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> LinuxResult<isize>
 /// * `_addr` - Starting address of the memory region (currently unused)
 /// * `_length` - Length of the memory region (currently unused)
 /// * `_flags` - Synchronization flags (currently unused)
-pub fn sys_msync(_addr: usize, _length: usize, _flags: u32) -> LinuxResult<isize> {
-    // let start = memory_addr::align_down_4k(addr);
-    // let end = memory_addr::align_up_4k(addr + length);
-    // let aligned_length = end - start;
-    warn!("sys_msync: not implemented");
-    Ok(0)
+pub fn sys_msync(addr: usize, length: usize, flags: u32) -> LinuxResult<isize> {
+    const MS_ASYNC: u32 = 1;
+    const MS_INVALIDATE: u32 = 2;
+    const MS_SYNC: u32 = 4;
+
+    if length == 0
+        || !addr.is_multiple_of(memory_addr::PAGE_SIZE_4K)
+        || flags & !(MS_ASYNC | MS_INVALIDATE | MS_SYNC) != 0
+        || flags & MS_ASYNC != 0 && flags & MS_SYNC != 0
+    {
+        return Err(LinuxError::EINVAL);
+    }
+    let end = addr.checked_add(length).ok_or(LinuxError::ENOMEM)?;
+    let range = VirtAddrRange::new(VirtAddr::from(addr), VirtAddr::from(end).align_up_4k());
+    with_xprocess(|xprocess| {
+        xprocess
+            .uspace()
+            .aspace
+            .lock()
+            .sync_object_range(range, flags & MS_SYNC != 0)?;
+        Ok(0)
+    })
 }
 
 pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> LinuxResult<isize> {

@@ -53,7 +53,9 @@ pub fn sys_execve(
     let (file_data, new_args) = load_file(Some(&path), &args)?;
 
     let mut aspace = uspace.aspace.lock();
-    let loaded = load_app(&mut aspace, file_data, &new_args, &envs, false)?;
+    let loaded = load_app(&mut aspace, file_data, &new_args, &envs, false);
+    uspace.mapped_files.prune(&aspace);
+    let loaded = loaded?;
     let entry_point = loaded.entry;
     let user_stack_base = loaded.user_sp;
     drop(aspace);

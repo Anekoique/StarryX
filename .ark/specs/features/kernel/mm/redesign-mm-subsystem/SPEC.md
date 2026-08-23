@@ -12,7 +12,8 @@
 
 - NG-1 Do not add typed frame metadata, metadata vtables, rmap, pin, reclaim,
   writeback, swap, or SMP TLB shootdown.
-- NG-2 Do not implement coherent shared file mappings or a page cache.
+- NG-2 Do not place file, page-cache, writeback, reclaim, or observer state in
+  `xmm` or `xvma`; those mechanisms belong to xcache and xkernel integration.
 - NG-3 Do not add a universal resident-frame `BTreeMap` beside the hardware
   page table. Normal and `PROT_NONE` resident pages remain PTE-owned and
   unindexed elsewhere.
@@ -34,10 +35,11 @@
   remain in the PTE. The mapped physical address remains recoverable; x86
   stores its address bits inverted while non-present to avoid L1TF exposure.
 - `xvma::VmSpace` owns VMA layout, fault, fork, COW, and backing policy.
-- `xvma::SharedObject` owns a homogeneous `Box<[Frame]>` and supplies clones to
-  shared Alloc PTEs.
-- Future `xcache` objects may retain `Frame`s and their own cache-specific
-  state; they do not extend `FrameMeta`.
+- `xvma::Backing` separates page source from private/shared write policy.
+- `xvma::VmObject` is the generic page-source boundary. `SharedObject` and a
+  cached-file adapter both implement it, but xvma stores no file/cache state.
+- `xcache` may retain `Frame`s and its own cache-specific state; it does not
+  extend `FrameMeta`.
 
 ### Data Structures
 
@@ -61,10 +63,11 @@ pub struct StaticFrameRange {
     allowed_flags: MappingFlags,
 }
 
-enum Backing {
+struct Backing { source: Source, private: bool }
+enum Source {
+    Zero,
     Static { frames: StaticFrameRange },
-    Private { source: Option<Arc<dyn VmObject>>, offset: usize },
-    Shared { object: Arc<SharedObject>, offset: usize },
+    Object { object: Arc<dyn VmObject>, offset: usize },
 }
 
 pub struct Backend {
@@ -73,8 +76,17 @@ pub struct Backend {
     populate: bool,
 }
 
-trait AreaBackend: Clone {
-    // Closed static dispatch for slice/merge, map/unmap, protect, fault and fork.
+pub type VmPageGuard = Arc<dyn Any + Send + Sync>;
+pub struct VmPage {
+    frame: Frame,
+    guard: Option<VmPageGuard>,
+}
+pub trait VmObject: Send + Sync {
+    fn id(&self) -> u64;
+    fn byte_len(&self) -> LinuxResult<u64>;
+    fn page(&self, index: u64, write: bool) -> LinuxResult<VmPage>;
+    fn sync(&self, range: Range<u64>, wait: bool) -> LinuxResult { Ok(()) }
+    fn requires_write_guard(&self) -> bool { false }
 }
 
 pub struct SharedObject {
@@ -82,17 +94,18 @@ pub struct SharedObject {
 }
 ```
 
-`Private { source: None }` is zero-filled anonymous memory. `Private` with a
-source is private file-sourced memory; both use the same COW policy. `Shared`
-retains one object reference per frame and supplies another reference to every
-mapped Alloc PTE. Static PTEs never contribute a reference count.
+`Source` determines where pages come from; `private` independently selects COW
+or write-through behavior. Anonymous private memory is `{ Zero, true }`;
+anonymous shared memory and files both use `Object`. A guarded object may
+publish shared WRITE only while `VmSpace` owns the returned guard. Static PTEs
+never contribute a reference count.
 
 Callers create every area through `VmSpace::map(..., Backend)`, replacing the
 kind-specific `map_alloc`, `map_static`, `map_file`, and `map_shared` surface.
 One-shot creation policy is converted into the private persistent `Backing`.
-`AreaBackend` is crate-private and implemented by the closed `Backing` enum;
-it centralizes VMA behavior without trait objects, per-area allocations, or
-moving private/shared policy into `xmm`.
+The closed `Source` enum provides crate-private static dispatch for VMA
+behavior; only page supply is dynamic. This avoids per-area boxed backends,
+file-specific variants, and duplicated private/shared policy.
 
 ### Why the old page types are removed
 
@@ -118,6 +131,9 @@ impl Frame {
     fn allocate_zeroed() -> Option<Frame>;
     fn physical_address(&self) -> PhysAddr;
     fn try_write_at(&mut self, offset: usize, source: &[u8]) -> bool;
+    fn is_unique(&self) -> bool;
+    fn read_bytes(&self, offset: usize, destination: &mut [u8]) -> XResult;
+    fn write_bytes(&self, offset: usize, source: &[u8]) -> XResult;
     fn deep_copy(&self) -> Option<Frame>;
 }
 
@@ -153,6 +169,7 @@ impl AddressSpace {
         page_size: PageSize,
     ) -> XResult;
     fn unmap_alloc_range(&mut self, va: VirtAddr, size: usize) -> XResult;
+    fn validate_alloc_range(&self, va: VirtAddr, size: usize) -> XResult;
     fn unmap_static_range(
         &mut self,
         va: VirtAddr,
@@ -195,6 +212,11 @@ impl ProtectionTransaction<'_> {
 impl VmSpace {
     fn map(&mut self, va: VirtAddr, size: usize, flags: MappingFlags, backend: Backend)
         -> XResult;
+    fn shared_object_at(&self, va: VirtAddr) -> Option<(u64, usize)>;
+    fn maps_object(&self, id: u64) -> bool;
+    fn validate_object_range(&self, id: u64, range: &Range<u64>) -> XResult;
+    fn unmap_object_range(&mut self, id: u64, range: &Range<u64>);
+    fn sync_object_range(&self, range: VirtAddrRange, wait: bool) -> LinuxResult;
 }
 ```
 
@@ -214,13 +236,19 @@ On success an `ALLOC_FRAME` PTE owns that reference. Alloc unmap and replacement
 remove or replace the leaf, invalidate its TLB entry, then restore and release
 the old reference. Wrong-kind unmap fails before mutation.
 
+`Frame::read_bytes` and `Frame::write_bytes` perform bounded copies on published
+allocator frames. Each call is available only in the supported one-hart model,
+holds `NoPreemptIrqSave` for the complete copy, and never exposes a Rust slice
+or reference to frame bytes. Ordinary `Frame` values cannot represent DMA-owned
+storage.
+
 `AddressSpace::read_bytes` checks READ on every leaf and rejects device memory;
 `write_alloc_bytes` additionally requires WRITE and `FrameKind::Alloc` on every
 leaf. `VmSpace::read_bytes`/`write_bytes` first enforce authoritative VMA
-permissions. ELF and shared-file snapshot construction temporarily maps Alloc
-frames writable, initializes them through this checked path, and restores final
-permissions before the address space becomes user-visible. No safe raw-copy API
-may bypass `StaticFrameRange` access or alias proofs.
+permissions. ELF construction temporarily maps Alloc frames writable,
+initializes them through this checked path, and restores final permissions
+before the address space becomes user-visible. No safe raw-copy API may bypass
+`StaticFrameRange` access or alias proofs.
 
 ### Constraints
 
@@ -258,7 +286,26 @@ may bypass `StaticFrameRange` access or alias proofs.
 - C-18 unmap and VmSpace teardown preflight authoritative leaves without
   allocating a resident-leaf vector; map-static rollback derives its installed
   prefix from iteration order rather than recording a second journal.
-- C-19 The xvma/xmm boundary avoids repeated observations of one leaf:
+- C-19 `Frame` byte-copy methods serialize each bounded copy on one hart
+  without exposing a Rust reference to published frame storage.
+- C-20 The xvma/xmm boundary avoids repeated observations of one leaf:
   page-fault dispatch obtains resident flags once, shared-frame cloning occurs
   only when required, and transactional protection computes per-leaf target
   flags inside one batch rather than issuing per-page transaction calls.
+- C-21 xvma contains no file/cache type or observer registration. One generic
+  `VmObject` supplies stable `(id, index)` frames; source and private/shared
+  policy remain orthogonal.
+- C-22 A guarded object page becomes writable only after guard storage is
+  reserved. Unmap, protect, invalidation and Drop remove WRITE and flush the TLB
+  before releasing the final guard.
+- C-23 Generic object invalidation validates all Alloc leaves before the
+  integration layer invokes its infallible removal phase.
+
+[**CHANGELOG**]
+
+- 2026-08-20: Replaced file-specific xvma backing/observer state with the
+  generic `VmObject` page source, orthogonal source/private policy, and opaque
+  shared-write guards; file registration remains in xkernel.
+- 2026-08-17: Added bounded one-hart byte copies for published allocator Frames,
+  while retaining the single-refcount FrameMeta and unique-only unpublished
+  initialization contract; the execution guard stays private to each copy.

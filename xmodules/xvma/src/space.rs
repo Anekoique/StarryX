@@ -1,15 +1,18 @@
-use alloc::{collections::BTreeMap, sync::Arc};
+use alloc::{collections::BTreeMap, vec::Vec};
+use core::ops::Range;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 use xerrno::{XError, XResult};
 use xmm::{AddressSpace, MappingFlags, PageSize};
 
-use crate::{SharedObject, area::VmArea, backend::Backend};
+use crate::{VmPageGuard, area::VmArea, backend::Backend};
 
 /// The sole policy/layout owner of one user virtual address space.
 pub struct VmSpace {
     pub(super) range: VirtAddrRange,
     pub(super) areas: BTreeMap<VirtAddr, VmArea>,
     pub(super) address_space: AddressSpace,
+    /// Owners keeping individual pages writably mapped, ordered by address.
+    write_guards: Vec<(VirtAddr, VmPageGuard)>,
 }
 
 impl VmSpace {
@@ -19,6 +22,7 @@ impl VmSpace {
             range,
             areas: BTreeMap::new(),
             address_space: AddressSpace::new_user(base, size)?,
+            write_guards: Vec::new(),
         })
     }
 
@@ -42,6 +46,15 @@ impl VmSpace {
     pub fn try_clone(&mut self) -> XResult<Self> {
         let mut child = Self::new_empty(self.range.start, self.range.size())?;
         child.areas = self.areas.clone();
+        child
+            .write_guards
+            .try_reserve(self.write_guards.len())
+            .map_err(|_| XError::NoMemory)?;
+        child.write_guards.extend(
+            self.write_guards
+                .iter()
+                .map(|(address, guard)| (*address, guard.clone())),
+        );
 
         for area in self.areas.values() {
             area.map_child(&self.address_space, &mut child.address_space)?;
@@ -170,13 +183,11 @@ impl VmSpace {
             .values()
             .filter(|area| area.range.overlaps(removed))
         {
-            let overlap = VirtAddrRange::new(
-                area.range.start.max(removed.start),
-                area.range.end.min(removed.end),
-            );
+            let overlap = area.overlap_with(removed);
             area.unmap(overlap, &mut self.address_space)?;
         }
         self.retain_outside(removed);
+        self.drop_write_guards(removed);
         Ok(())
     }
 
@@ -206,13 +217,7 @@ impl VmSpace {
                 committed_areas.insert(left.range.start, left);
             }
             let middle = area
-                .checked_slice(
-                    VirtAddrRange::new(
-                        area.range.start.max(protected.start),
-                        area.range.end.min(protected.end),
-                    ),
-                    flags,
-                )
+                .checked_slice(area.overlap_with(protected), flags)
                 .expect("split offsets were prevalidated");
             committed_areas.insert(middle.range.start, middle);
             if protected.end < area.range.end {
@@ -233,14 +238,12 @@ impl VmSpace {
             .values()
             .filter(|area| area.range.overlaps(protected))
         {
-            let overlap = VirtAddrRange::new(
-                area.range.start.max(protected.start),
-                area.range.end.min(protected.end),
-            );
+            let overlap = area.overlap_with(protected);
             area.protect(overlap, flags, &mut transaction)?;
         }
         transaction.commit();
         self.areas = committed_areas;
+        self.drop_write_guards(protected);
         Ok(())
     }
 
@@ -249,12 +252,133 @@ impl VmSpace {
             area.unmap(area.range, &mut self.address_space)?;
         }
         self.areas.clear();
+        self.write_guards.clear();
         Ok(())
     }
 
-    pub fn shared_mapping_at(&self, address: VirtAddr) -> Option<(usize, Arc<SharedObject>)> {
+    /// The identity and offset `address` maps to, if it is write-through.
+    ///
+    /// A private mapping has no answer: its stores are local, so anything keyed
+    /// on the result would wrongly pair unrelated address spaces.
+    pub fn shared_object_at(&self, address: VirtAddr) -> Option<(u64, usize)> {
         let area = self.area_at(address)?;
-        area.backing.shared_at(address - area.range.start)
+        if area.is_private() {
+            return None;
+        }
+        let (offset, object) = area.backing.object_at(address - area.range.start)?;
+        Some((object.id(), offset))
+    }
+
+    /// Whether any live VMA still draws from the object identified by `id`.
+    pub fn maps_object(&self, id: u64) -> bool {
+        self.areas
+            .values()
+            .filter_map(|area| area.backing.object_at(0))
+            .any(|(_, object)| object.id() == id)
+    }
+
+    /// Checks that every leaf an invalidation would remove can be removed.
+    ///
+    /// This is the only failable half of the protocol; the caller may abort
+    /// after it and leave the address space untouched.
+    pub fn validate_object_range(&self, id: u64, range: &Range<u64>) -> XResult {
+        if range.start >= range.end {
+            return Ok(());
+        }
+        for area in self.areas.values() {
+            if let Some(invalidated) = Self::invalidated_range(area, id, range) {
+                self.address_space
+                    .validate_alloc_range(invalidated.start, invalidated.size())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Applies an invalidation accepted by [`Self::validate_object_range`].
+    pub fn unmap_object_range(&mut self, id: u64, range: &Range<u64>) {
+        for area in self.areas.values() {
+            if let Some(invalidated) = Self::invalidated_range(area, id, range) {
+                area.unmap(invalidated, &mut self.address_space)
+                    .expect("preflighted object-backed leaves must remain removable");
+                self.write_guards
+                    .retain(|(address, _)| !invalidated.contains(*address));
+            }
+        }
+    }
+
+    fn invalidated_range(
+        area: &VmArea,
+        id: u64,
+        invalidated: &Range<u64>,
+    ) -> Option<VirtAddrRange> {
+        let (area_offset, object) = area.backing.object_at(0)?;
+        if object.id() != id {
+            return None;
+        }
+        let area_start = area_offset as u64;
+        let area_end = area_start
+            .checked_add(area.range.size() as u64)
+            .expect("validated object VMA offset must remain bounded");
+        let overlap_start = area_start.max(invalidated.start);
+        let overlap_end = area_end.min(invalidated.end);
+        if overlap_start >= overlap_end {
+            return None;
+        }
+        let start = area
+            .range
+            .start
+            .checked_add((overlap_start - area_start) as usize)
+            .expect("object overlap must lie inside its VMA")
+            .align_down_4k();
+        let end = area
+            .range
+            .start
+            .checked_add((overlap_end - area_start) as usize)
+            .expect("object overlap must lie inside its VMA")
+            .align_up_4k()
+            .min(area.range.end);
+        Some(VirtAddrRange::new(start, end))
+    }
+
+    /// Writes back every write-through object range overlapping `range`.
+    pub fn sync_object_range(&self, range: VirtAddrRange, wait: bool) -> xerrno::LinuxResult {
+        for area in self
+            .areas
+            .values()
+            .filter(|area| area.range.overlaps(range))
+        {
+            if area.is_private() {
+                continue;
+            }
+            let Some((area_offset, object)) = area.backing.object_at(0) else {
+                continue;
+            };
+            let overlap = area.overlap_with(range);
+            let start = area_offset as u64 + (overlap.start - area.range.start) as u64;
+            let end = start + overlap.size() as u64;
+            object.sync(start..end, wait)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn reserve_write_guard(&mut self) -> XResult {
+        self.write_guards
+            .try_reserve(1)
+            .map_err(|_| XError::NoMemory)
+    }
+
+    pub(super) fn insert_write_guard(&mut self, address: VirtAddr, guard: VmPageGuard) {
+        debug_assert!(self.write_guards.len() < self.write_guards.capacity());
+        let index = self
+            .write_guards
+            .binary_search_by_key(&address, |(address, _)| *address)
+            .unwrap_or_else(|index| index);
+        self.write_guards.insert(index, (address, guard));
+    }
+
+    fn drop_write_guards(&mut self, range: VirtAddrRange) {
+        self.write_guards
+            .retain(|(address, _)| !range.contains(*address));
     }
 
     fn validate_new_area(

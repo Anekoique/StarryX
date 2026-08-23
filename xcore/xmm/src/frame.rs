@@ -5,6 +5,7 @@ use core::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
+use kernel_guard::NoPreemptIrqSave;
 use lazyinit::LazyInit;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 use xalloc::global_allocator;
@@ -123,10 +124,8 @@ pub fn init_frame_database(storage_start: VirtAddr, storage_size: usize) -> usiz
         .checked_mul(mem::size_of::<FrameMeta>())
         .expect("frame metadata size overflow");
     let reserved_bytes = metadata_bytes
-        .checked_add(PAGE_SIZE_4K - 1)
-        .expect("frame metadata alignment overflow")
-        / PAGE_SIZE_4K
-        * PAGE_SIZE_4K;
+        .checked_next_multiple_of(PAGE_SIZE_4K)
+        .expect("frame metadata alignment overflow");
     assert!(
         reserved_bytes < storage_size,
         "free memory region is too small for frame metadata"
@@ -228,10 +227,57 @@ impl Frame {
         true
     }
 
+    /// Returns whether this is the only counted handle to the frame.
+    pub fn is_unique(&self) -> bool {
+        metadata(self.paddr)
+            .expect("allocated frame lies outside physical memory")
+            .is_unique()
+    }
+
+    fn access_at(&self, offset: usize, len: usize) -> XResult<(VirtAddr, NoPreemptIrqSave)> {
+        if xconfig::SMP != 1 {
+            return Err(XError::Unsupported);
+        }
+        let end = offset.checked_add(len).ok_or(XError::InvalidInput)?;
+        if end > PAGE_SIZE_4K {
+            return Err(XError::InvalidInput);
+        }
+        Ok((phys_to_virt(self.paddr) + offset, NoPreemptIrqSave::new()))
+    }
+
+    /// Copies bytes from a live frame without exposing an aliased Rust slice.
+    pub fn read_bytes(&self, offset: usize, destination: &mut [u8]) -> XResult {
+        let (source, _guard) = self.access_at(offset, destination.len())?;
+        // SAFETY: Frame keeps the page live, access_at bounds the copy and
+        // serializes local execution, and destination is an exclusive slice.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                source.as_ptr(),
+                destination.as_mut_ptr(),
+                destination.len(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Copies bytes into a live ordinary frame without exposing a Rust slice.
+    pub fn write_bytes(&self, offset: usize, source: &[u8]) -> XResult {
+        let (destination, _guard) = self.access_at(offset, source.len())?;
+        // SAFETY: access_at keeps the page live and confines the copy while
+        // interrupts and preemption are disabled in the supported one-hart
+        // execution model.
+        unsafe {
+            core::ptr::copy_nonoverlapping(source.as_ptr(), destination.as_mut_ptr(), source.len());
+        }
+        Ok(())
+    }
+
     pub fn deep_copy(&self) -> Option<Self> {
         let copy = Self::allocate_zeroed()?;
+        let _guard = NoPreemptIrqSave::new();
         // SAFETY: both counted handles keep distinct 4-KiB frames live, and
-        // the newly allocated destination has no aliases.
+        // the newly allocated destination has no aliases. Local execution is
+        // serialized for the complete snapshot in the supported one-hart model.
         unsafe {
             core::ptr::copy_nonoverlapping(
                 phys_to_virt(self.paddr).as_ptr(),
@@ -258,20 +304,21 @@ impl Frame {
         Ok(Self { paddr })
     }
 
-    pub(crate) fn pte_is_unique(paddr: PhysAddr) -> XResult<bool> {
+    /// The metadata of a frame that a live PTE must still reference.
+    fn live_metadata(paddr: PhysAddr) -> XResult<&'static FrameMeta> {
         let meta = metadata(paddr)?;
         if meta.ref_count.load(Ordering::Acquire) == 0 {
             return Err(XError::BadState);
         }
-        Ok(meta.is_unique())
+        Ok(meta)
+    }
+
+    pub(crate) fn pte_is_unique(paddr: PhysAddr) -> XResult<bool> {
+        Ok(Self::live_metadata(paddr)?.is_unique())
     }
 
     pub(crate) fn validate_pte(paddr: PhysAddr) -> XResult {
-        let meta = metadata(paddr)?;
-        if meta.ref_count.load(Ordering::Acquire) == 0 {
-            return Err(XError::BadState);
-        }
-        Ok(())
+        Self::live_metadata(paddr).map(|_| ())
     }
 
     /// Reconstructs the reference owned by a removed Alloc PTE.

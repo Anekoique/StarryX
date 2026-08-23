@@ -4,28 +4,40 @@ use alloc::{borrow::ToOwned, string::String, sync::Arc};
 use lock_api::RawMutex;
 use lwext4_rust::{FileAttr, InodeType};
 use xvfs::{
-    DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, FilesystemOps,
-    Metadata, MetadataUpdate, NodeOps, NodePermission, NodeType, Reference, VfsError, VfsResult,
-    WeakDirEntry,
+    CacheSlot, DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps,
+    FilesystemOps, Metadata, MetadataUpdate, NodeOps, NodePermission, NodeType, Reference,
+    VfsError, VfsResult, WeakDirEntry,
 };
 
 use super::{
     Ext4Filesystem,
+    fs::InodeSlot,
     util::{LwExt4Filesystem, into_vfs_err, into_vfs_type},
 };
 
-pub struct Inode<M> {
+pub struct Inode<M: RawMutex> {
     fs: Arc<Ext4Filesystem<M>>,
     ino: u32,
+    /// Shared alias token; its `Drop` releases a fully unlinked inode exactly
+    /// once, when the last alias, handle, or cache backing disappears.
+    slot: Option<Arc<InodeSlot<M>>>,
     this: Option<WeakDirEntry<M>>,
 }
+
 impl<M: RawMutex + Send + Sync + 'static> Inode<M> {
     pub(crate) fn new(
         fs: Arc<Ext4Filesystem<M>>,
         ino: u32,
+        node_type: NodeType,
         this: Option<WeakDirEntry<M>>,
     ) -> Arc<Self> {
-        Arc::new(Self { fs, ino, this })
+        let slot = (node_type == NodeType::RegularFile).then(|| fs.inode_slot(ino));
+        Arc::new(Self {
+            fs,
+            ino,
+            slot,
+            this,
+        })
     }
 
     fn create_entry(&self, entry: &lwext4_rust::DirEntry, name: impl Into<String>) -> DirEntry<M> {
@@ -33,15 +45,23 @@ impl<M: RawMutex + Send + Sync + 'static> Inode<M> {
             self.this.as_ref().and_then(WeakDirEntry::upgrade),
             name.into(),
         );
+        let node_type = into_vfs_type(entry.inode_type());
         if entry.inode_type() == InodeType::Directory {
             DirEntry::new_dir(
-                |this| DirNode::new(Inode::new(self.fs.clone(), entry.ino(), Some(this))),
+                |this| {
+                    DirNode::new(Inode::new(
+                        self.fs.clone(),
+                        entry.ino(),
+                        node_type,
+                        Some(this),
+                    ))
+                },
                 reference,
             )
         } else {
             DirEntry::new_file(
-                FileNode::new(Inode::new(self.fs.clone(), entry.ino(), None)),
-                into_vfs_type(entry.inode_type()),
+                FileNode::new(Inode::new(self.fs.clone(), entry.ino(), node_type, None)),
+                node_type,
                 reference,
             )
         }
@@ -116,7 +136,7 @@ impl<M: RawMutex + Send + Sync + 'static> NodeOps<M> for Inode<M> {
     }
 
     fn sync(&self, _data_only: bool) -> VfsResult<()> {
-        Ok(())
+        self.fs.lock().sync().map_err(into_vfs_err)
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -125,6 +145,10 @@ impl<M: RawMutex + Send + Sync + 'static> NodeOps<M> for Inode<M> {
 }
 
 impl<M: RawMutex + Send + Sync + 'static> FileNodeOps<M> for Inode<M> {
+    fn cache_slot(&self) -> Option<&Arc<CacheSlot<M>>> {
+        self.slot.as_ref().map(|slot| slot.cache_slot())
+    }
+
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
         self.fs
             .lock()
@@ -212,12 +236,12 @@ impl<M: RawMutex + Send + Sync + 'static> DirNodeOps<M> for Inode<M> {
         );
         Ok(if node_type == NodeType::Directory {
             DirEntry::new_dir(
-                |this| DirNode::new(Inode::new(self.fs.clone(), ino, Some(this))),
+                |this| DirNode::new(Inode::new(self.fs.clone(), ino, node_type, Some(this))),
                 reference,
             )
         } else {
             DirEntry::new_file(
-                FileNode::new(Inode::new(self.fs.clone(), ino, None)),
+                FileNode::new(Inode::new(self.fs.clone(), ino, node_type, None)),
                 node_type,
                 reference,
             )

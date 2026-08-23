@@ -1,16 +1,75 @@
-use core::ops::Deref;
+use core::{any::Any, ops::Deref};
 
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
+
+use lock_api::{Mutex, RawMutex};
 
 use crate::{VfsError, VfsResult};
 
 use super::NodeOps;
+
+/// The cache-attachment point shared by every live alias of one file.
+///
+/// A filesystem hands the same slot to every node object representing one
+/// file incarnation and installs a fresh slot before a recycled inode number
+/// represents another file. The attachment itself is opaque here: only the
+/// kernel composition layer knows its concrete type, so the VFS carries no
+/// cache dependency.
+pub struct CacheSlot<M> {
+    attachment: Mutex<M, Option<Weak<dyn Any + Send + Sync>>>,
+}
+
+impl<M: RawMutex> CacheSlot<M> {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            attachment: Mutex::new(None),
+        })
+    }
+
+    /// Returns the live attachment, if any.
+    pub fn get(&self) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.attachment.lock().as_ref().and_then(Weak::upgrade)
+    }
+
+    /// Installs `attachment` unless a live one exists, returning the winner.
+    pub fn attach_if_empty(
+        &self,
+        attachment: Arc<dyn Any + Send + Sync>,
+    ) -> Arc<dyn Any + Send + Sync> {
+        let mut guard = self.attachment.lock();
+        if let Some(existing) = guard.as_ref().and_then(Weak::upgrade) {
+            return existing;
+        }
+        *guard = Some(Arc::downgrade(&attachment));
+        attachment
+    }
+
+    /// Runs `f` on the live attachment, clearing the slot when `f` accepts.
+    ///
+    /// `f` runs under the slot lock, so no other holder can attach to or
+    /// upgrade through this slot while it decides.
+    pub fn detach_if(&self, f: impl FnOnce(Arc<dyn Any + Send + Sync>) -> bool) {
+        let mut guard = self.attachment.lock();
+        let Some(attachment) = guard.as_ref().and_then(Weak::upgrade) else {
+            *guard = None;
+            return;
+        };
+        if f(attachment) {
+            *guard = None;
+        }
+    }
+}
 
 /// Operations specific to file nodes
 ///
 /// This trait extends [`NodeOps`] with file-specific operations like
 /// reading, writing, and resizing files.
 pub trait FileNodeOps<M>: NodeOps<M> {
+    /// Returns the shared attachment slot when ordinary data is page-cache
+    /// coherent.
+    fn cache_slot(&self) -> Option<&Arc<CacheSlot<M>>> {
+        None
+    }
     /// Reads a number of bytes starting from a given offset.
     fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize>;
 

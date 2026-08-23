@@ -4,7 +4,7 @@ use memory_addr::{MemoryAddr, VirtAddrRange};
 use xerrno::XResult;
 use xmm::{AddressSpace, MappingFlags, PageSize, ProtectionTransaction};
 
-use crate::backend::{AreaBackend, Backing};
+use crate::backend::Backing;
 
 #[derive(Clone)]
 pub(super) struct VmArea {
@@ -15,6 +15,14 @@ pub(super) struct VmArea {
 }
 
 impl VmArea {
+    /// The part of `range` this area covers.
+    pub(super) fn overlap_with(&self, range: VirtAddrRange) -> VirtAddrRange {
+        VirtAddrRange::new(
+            self.range.start.max(range.start),
+            self.range.end.min(range.end),
+        )
+    }
+
     pub(super) fn checked_slice(&self, range: VirtAddrRange, flags: MappingFlags) -> Option<Self> {
         if !self.range.contains_range(range)
             || !range.start.is_aligned(self.page_size)
@@ -33,7 +41,7 @@ impl VmArea {
     }
 
     pub(super) fn is_private(&self) -> bool {
-        self.backing.is_private()
+        self.backing.private
     }
 
     pub(super) fn can_merge(left: &Self, right: &Self) -> bool {
@@ -79,71 +87,122 @@ impl VmArea {
 mod tests {
     use alloc::sync::Arc;
     use memory_addr::{VirtAddr, VirtAddrRange};
-    use xerrno::LinuxResult;
+    use xerrno::{LinuxError, LinuxResult};
     use xmm::{MappingFlags, PageSize, StaticFrameRange};
 
     use super::VmArea;
-    use crate::{SharedObject, VmObject, backend::Backing};
+    use crate::{
+        VmObject, VmPage,
+        backend::{Backing, Source},
+    };
 
     #[repr(align(4096))]
     struct AlignedBytes([u8; 0x3000]);
 
     static STATIC_BYTES: AlignedBytes = AlignedBytes([0; 0x3000]);
 
-    struct TestObject;
+    struct TestObject(u64);
 
     impl VmObject for TestObject {
-        fn read_at(&self, _output: &mut [u8], _offset: u64) -> LinuxResult<usize> {
-            Ok(0)
+        fn id(&self) -> u64 {
+            self.0
         }
 
         fn byte_len(&self) -> LinuxResult<u64> {
             Ok(0)
         }
+
+        fn page(&self, _index: u64, _write: bool) -> LinuxResult<VmPage> {
+            Err(LinuxError::ENOSYS)
+        }
+    }
+
+    fn object(id: u64) -> Arc<dyn VmObject> {
+        Arc::new(TestObject(id))
+    }
+
+    fn area(start: usize, size: usize, page_size: PageSize, backing: Backing) -> VmArea {
+        VmArea {
+            range: VirtAddrRange::from_start_size(VirtAddr::from(start), size),
+            flags: MappingFlags::READ,
+            page_size,
+            backing,
+        }
+    }
+
+    fn anonymous() -> Backing {
+        Backing {
+            source: Source::Zero,
+            private: true,
+        }
+    }
+
+    fn mapped(id: u64, offset: usize, private: bool) -> Backing {
+        Backing {
+            source: Source::Object {
+                object: object(id),
+                offset,
+            },
+            private,
+        }
     }
 
     #[test]
-    fn anonymous_private_slices_merge_when_equivalent() {
-        let flags = MappingFlags::READ | MappingFlags::USER;
-        let left = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x1000), 0x1000),
-            flags,
-            page_size: PageSize::Size4K,
-            backing: Backing::Private {
-                source: None,
-                offset: 0,
-            },
-        };
-        let right = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x2000), 0x1000),
-            flags,
-            page_size: PageSize::Size4K,
-            backing: Backing::Private {
-                source: None,
-                offset: 0,
-            },
-        };
+    fn anonymous_slices_merge_when_equivalent() {
+        let left = area(0x1000, 0x1000, PageSize::Size4K, anonymous());
+        let right = area(0x2000, 0x1000, PageSize::Size4K, anonymous());
         assert!(VmArea::can_merge(&left, &right));
+    }
+
+    #[test]
+    fn opposite_policies_never_merge() {
+        let left = area(0x1000, 0x1000, PageSize::Size4K, mapped(1, 0, true));
+        let right = area(0x2000, 0x1000, PageSize::Size4K, mapped(1, 0x1000, false));
+        assert!(!VmArea::can_merge(&left, &right));
+    }
+
+    #[test]
+    fn distinct_objects_never_merge() {
+        let left = area(0x1000, 0x1000, PageSize::Size4K, mapped(1, 0, false));
+        let right = area(0x2000, 0x1000, PageSize::Size4K, mapped(2, 0x1000, false));
+        assert!(!VmArea::can_merge(&left, &right));
+    }
+
+    #[test]
+    fn contiguous_object_offsets_merge() {
+        let left = area(0x1000, 0x1000, PageSize::Size4K, mapped(1, 0x4000, false));
+        let right = area(0x2000, 0x1000, PageSize::Size4K, mapped(1, 0x5000, false));
+        assert!(VmArea::can_merge(&left, &right));
+    }
+
+    #[test]
+    fn discontiguous_object_offsets_never_merge() {
+        let left = area(0x1000, 0x1000, PageSize::Size4K, mapped(1, 0x4000, false));
+        let right = area(0x2000, 0x1000, PageSize::Size4K, mapped(1, 0x9000, false));
+        assert!(!VmArea::can_merge(&left, &right));
     }
 
     #[test]
     fn static_slice_advances_frame_origin() {
         let frames = StaticFrameRange::from_static_readonly(&STATIC_BYTES.0).unwrap();
-        let area = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x1000), 0x3000),
-            flags: MappingFlags::READ,
-            page_size: PageSize::Size4K,
-            backing: Backing::Static { frames },
-        };
-        let tail = area
+        let region = area(
+            0x1000,
+            0x3000,
+            PageSize::Size4K,
+            Backing {
+                source: Source::Static { frames },
+                private: false,
+            },
+        );
+        let tail = region
             .checked_slice(
                 VirtAddrRange::from_start_size(VirtAddr::from(0x2000), 0x2000),
-                area.flags,
+                region.flags,
             )
             .unwrap();
-        let Backing::Static {
+        let Source::Static {
             frames: tail_frames,
-        } = tail.backing
+        } = tail.backing.source
         else {
             unreachable!();
         };
@@ -154,98 +213,83 @@ mod tests {
     #[test]
     fn static_areas_keep_one_proof_token_each() {
         let frames = StaticFrameRange::from_static_readonly(&STATIC_BYTES.0).unwrap();
-        let left = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x1000), 0x1000),
-            flags: MappingFlags::READ,
-            page_size: PageSize::Size4K,
-            backing: Backing::Static {
-                frames: frames.subrange(0, 0x1000).unwrap(),
+        let left = area(
+            0x1000,
+            0x1000,
+            PageSize::Size4K,
+            Backing {
+                source: Source::Static {
+                    frames: frames.subrange(0, 0x1000).unwrap(),
+                },
+                private: false,
             },
-        };
-        let right = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x2000), 0x2000),
-            flags: MappingFlags::READ,
-            page_size: PageSize::Size4K,
-            backing: Backing::Static {
-                frames: frames.subrange(0x1000, 0x2000).unwrap(),
+        );
+        let right = area(
+            0x2000,
+            0x2000,
+            PageSize::Size4K,
+            Backing {
+                source: Source::Static {
+                    frames: frames.subrange(0x1000, 0x2000).unwrap(),
+                },
+                private: false,
             },
-        };
+        );
         assert!(!VmArea::can_merge(&left, &right));
     }
 
     #[test]
     fn static_slice_must_follow_the_mapping_page_size() {
         let frames = StaticFrameRange::from_static_readonly(&STATIC_BYTES.0).unwrap();
-        let area = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x20_0000), 0x20_0000),
-            flags: MappingFlags::READ,
-            page_size: PageSize::Size2M,
-            backing: Backing::Static { frames },
-        };
+        let region = area(
+            0x20_0000,
+            0x20_0000,
+            PageSize::Size2M,
+            Backing {
+                source: Source::Static { frames },
+                private: false,
+            },
+        );
         assert!(
-            area.checked_slice(
-                VirtAddrRange::from_start_size(VirtAddr::from(0x20_0000), 0x1000),
-                area.flags,
-            )
-            .is_none()
+            region
+                .checked_slice(
+                    VirtAddrRange::from_start_size(VirtAddr::from(0x20_0000), 0x1000),
+                    region.flags,
+                )
+                .is_none()
         );
     }
 
     #[test]
-    fn private_source_slice_advances_offset_and_keeps_identity() {
-        let source: Arc<dyn VmObject> = Arc::new(TestObject);
-        let area = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x1000), 0x3000),
-            flags: MappingFlags::READ,
-            page_size: PageSize::Size4K,
-            backing: Backing::Private {
-                source: Some(source.clone()),
-                offset: 0x4000,
+    fn object_slice_advances_offset_and_keeps_identity() {
+        let source = object(7);
+        let region = area(
+            0x1000,
+            0x3000,
+            PageSize::Size4K,
+            Backing {
+                source: Source::Object {
+                    object: source.clone(),
+                    offset: 0x4000,
+                },
+                private: true,
             },
-        };
-        let tail = area
+        );
+        let tail = region
             .checked_slice(
                 VirtAddrRange::from_start_size(VirtAddr::from(0x2000), 0x2000),
-                area.flags,
+                region.flags,
             )
             .unwrap();
-        let Backing::Private {
-            source: Some(tail_source),
-            offset,
-        } = tail.backing
-        else {
-            unreachable!();
-        };
-        assert!(Arc::ptr_eq(&source, &tail_source));
-        assert_eq!(offset, 0x5000);
-    }
-
-    #[test]
-    fn shared_slice_advances_offset_and_keeps_identity() {
-        let object = SharedObject::new(0).unwrap();
-        let area = VmArea {
-            range: VirtAddrRange::from_start_size(VirtAddr::from(0x1000), 0x3000),
-            flags: MappingFlags::READ | MappingFlags::WRITE,
-            page_size: PageSize::Size4K,
-            backing: Backing::Shared {
-                object: object.clone(),
-                offset: 0x4000,
-            },
-        };
-        let tail = area
-            .checked_slice(
-                VirtAddrRange::from_start_size(VirtAddr::from(0x3000), 0x1000),
-                area.flags,
-            )
-            .unwrap();
-        let Backing::Shared {
+        assert!(tail.backing.private);
+        let Source::Object {
             object: tail_object,
             offset,
-        } = tail.backing
+        } = tail.backing.source
         else {
             unreachable!();
         };
-        assert!(Arc::ptr_eq(&object, &tail_object));
-        assert_eq!(offset, 0x6000);
+        assert!(Arc::ptr_eq(&source, &tail_object));
+        assert_eq!(offset, 0x5000);
     }
 }

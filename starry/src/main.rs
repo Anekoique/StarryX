@@ -55,6 +55,7 @@ fn print_logo() {
 fn main() {
     print_logo();
     xprocess::Process::new_init(xtask::current().id().as_u64() as _).build();
+    xkernel::fs::cache::init();
     xkernel::fs::pseudofs::init_root().expect("Failed to mount pseudofs");
     xkernel::fs::fd::init_stdio().expect("Failed to init stdio");
 
@@ -68,4 +69,5 @@ fn main() {
         .to_vec();
     let exit_code = entry::run_user_app(&args, &envs);
     info!("Init script exited with code: {:?}", exit_code);
+    xkernel::fs::cache::shutdown().expect("Failed to shut down page cache");
 }

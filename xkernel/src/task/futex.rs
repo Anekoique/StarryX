@@ -1,15 +1,11 @@
 //! Futex implementation.
 
-use alloc::{
-    collections::btree_map::BTreeMap,
-    sync::{Arc, Weak},
-};
+use alloc::{collections::btree_map::BTreeMap, sync::Arc};
 use core::{ops::Deref, sync::atomic::AtomicBool};
 
 use memory_addr::VirtAddr;
 use xsync::Mutex;
 use xtask::WaitQueue;
-use xvma::SharedObject;
 
 use crate::task::api::with_uspace;
 
@@ -21,35 +17,33 @@ pub enum FutexKey {
         address: usize,
     },
 
-    /// A futex in a shared memory region.
+    /// A futex in a region shared between processes.
     Shared {
-        /// The offset of the futex within the shared memory region.
+        /// The identity of the shared object holding the futex.
+        object: u64,
+        /// The offset of the futex within that object.
         offset: usize,
-        /// The shared memory region, represented as a weak reference to the
-        /// shared pages.
-        region: Weak<SharedObject>,
     },
 }
 impl FutexKey {
     /// Creates a new `FutexKey`.
+    ///
+    /// A write-through mapping is keyed by object identity so unrelated
+    /// processes mapping it at different addresses agree on the same futex.
     pub fn new(address: usize) -> Self {
         with_uspace(|uspace| {
             let aspace = &uspace.aspace.lock();
-            if let Some((offset, object)) = aspace.shared_mapping_at(VirtAddr::from_usize(address))
-            {
-                return Self::Shared {
-                    offset,
-                    region: Arc::downgrade(&object),
-                };
+            match aspace.shared_object_at(VirtAddr::from_usize(address)) {
+                Some((object, offset)) => Self::Shared { object, offset },
+                None => Self::Private { address },
             }
-            Self::Private { address }
         })
     }
 
-    fn table_key(&self) -> (usize, usize) {
+    fn table_key(&self) -> (u64, usize) {
         match self {
             FutexKey::Private { address } => (0, *address),
-            FutexKey::Shared { offset, region } => (region.as_ptr() as usize, *offset),
+            FutexKey::Shared { object, offset } => (*object, *offset),
         }
     }
 }
@@ -67,7 +61,7 @@ impl FutexEntry {
     }
 }
 
-pub struct FutexTable(Mutex<BTreeMap<(usize, usize), Arc<FutexEntry>>>);
+pub struct FutexTable(Mutex<BTreeMap<(u64, usize), Arc<FutexEntry>>>);
 impl FutexTable {
     #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
@@ -100,7 +94,7 @@ impl FutexTable {
 
 pub struct FutexGuard<'a> {
     table: &'a FutexTable,
-    key: (usize, usize),
+    key: (u64, usize),
     inner: Arc<FutexEntry>,
 }
 impl Deref for FutexGuard<'_> {
@@ -112,8 +106,14 @@ impl Deref for FutexGuard<'_> {
 }
 impl Drop for FutexGuard<'_> {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.inner) <= 2 && self.inner.wq.is_empty() {
-            self.table.0.lock().remove(&self.key);
+        let mut table = self.table.0.lock();
+        let unused = table.get(&self.key).is_some_and(|entry| {
+            Arc::ptr_eq(entry, &self.inner)
+                && Arc::strong_count(&self.inner) == 2
+                && self.inner.wq.is_empty()
+        });
+        if unused {
+            table.remove(&self.key);
         }
     }
 }

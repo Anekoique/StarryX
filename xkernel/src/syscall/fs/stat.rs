@@ -12,9 +12,19 @@ use crate::{
 use xuspace::{UserConstPtr, UserPtr, UserSpaceAccess, nullable};
 use xutils::ctypes::{
     __kernel_fsid_t, AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_FOLLOW,
-    fs::{AccessMode, metadata_to_kstat},
+    fs::{AccessMode, Kstat, metadata_to_kstat},
     stat, statfs, statx,
 };
+
+fn location_stat(location: &Location<RawMutex>) -> LinuxResult<Kstat> {
+    let mut metadata = location.metadata()?;
+    if location.is_file()
+        && let Some(length) = crate::fs::cache::cached_len(location.get_file_node().as_ref())
+    {
+        metadata.size = length;
+    }
+    Ok(metadata_to_kstat(&metadata))
+}
 
 /// Get file metadata by path and write into statbuf.
 ///
@@ -67,9 +77,7 @@ pub fn sys_fstatat(
         uspace.write(
             statbuf,
             with_location(dirfd, path.as_deref(), flags, |location| {
-                location
-                    .metadata()
-                    .map(|metadata| metadata_to_kstat(&metadata))
+                location_stat(location)
             })
             .or_else(|err| {
                 if err == LinuxError::EBADF {
@@ -110,9 +118,7 @@ pub fn sys_statx(
         uspace.write(
             statxbuf,
             with_location(dirfd, path.as_deref(), flags, |location| {
-                location
-                    .metadata()
-                    .map(|metadata| metadata_to_kstat(&metadata))
+                location_stat(location)
             })
             .or_else(|err| {
                 if err == LinuxError::EBADF {
@@ -170,9 +176,7 @@ pub fn sys_faccessat2(
     let required_mode = required_mode.bits();
 
     let file_mode = with_location(dirfd, path.as_deref(), flags, |location| {
-        location
-            .metadata()
-            .map(|metadata| metadata_to_kstat(&metadata))
+        location_stat(location)
     })
     .or_else(|err| {
         if err == LinuxError::EBADF {

@@ -88,7 +88,7 @@ block cache
 
 direntry cache
 
-page cache（`xcache` 原型保留，当前未接入运行时）
+page cache（`xcache` 已统一普通文件 buffered I/O 与 file-backed mmap）
 
 ## 1.5 抽象文件
 

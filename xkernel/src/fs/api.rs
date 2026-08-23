@@ -29,6 +29,21 @@ pub fn with_fs<R>(
     }
 }
 
+/// Removes one non-directory name, completing the cache side of the unlink.
+///
+/// The cache is consulted only after the directory entry is gone, and only a
+/// final link (`nlink == 0`) discards unowned pages, so a failed unlink or a
+/// surviving hard link never loses dirty data.
+pub fn remove_file(fs: &mut FsContext<RawMutex>, path: &str) -> LinuxResult<()> {
+    let entry = fs.resolve_no_follow(path)?;
+    let node = entry.is_file().then(|| entry.get_file_node());
+    fs.remove_file(path)?;
+    if let Some(node) = node {
+        super::cache::complete_unlink(node.as_ref());
+    }
+    Ok(())
+}
+
 pub fn with_file<R>(
     dirfd: c_int,
     required: FileFlags,

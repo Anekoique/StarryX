@@ -285,7 +285,13 @@ impl XTaskExtIf for XTaskExtImpl {
     fn switch_to_task() {}
 
     fn switch_from_task() {
-        time_stat_switch_from_old_task();
+        let current = xtask::current();
+        // Kernel workers carry no process extension, so time accounting applies
+        // only to user-thread-backed tasks.
+        // SAFETY: the pointer is only tested for null, never dereferenced.
+        if !unsafe { current.task_ext_ptr() }.is_null() {
+            time_stat_switch_from_old_task();
+        }
     }
 
     fn update_real_timer() {}

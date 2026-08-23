@@ -16,6 +16,7 @@ std = ["lwext4_rust?/std"]
 [dependencies]
 xdriver = { workspace = true, features = ["block"] }
 xerrno = { workspace = true }
+weak-map = { workspace = true }
 xio = { workspace = true, features = ["alloc"] }
 xns = { workspace = true, optional = true }
 xsync = { workspace = true, optional = true }

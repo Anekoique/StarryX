@@ -241,19 +241,19 @@ pub fn init_stdio() -> LinuxResult<()> {
     ));
     fd_table.add_file_like(
         0,
-        Arc::new(File::from_shared(file.clone())),
+        Arc::new(File::from_shared(file.clone())?),
         FileFlags::READ,
         false,
     )?;
     fd_table.add_file_like(
         1,
-        Arc::new(File::from_shared(file.clone())),
+        Arc::new(File::from_shared(file.clone())?),
         FileFlags::WRITE,
         false,
     )?;
     fd_table.add_file_like(
         2,
-        Arc::new(File::from_shared(file.clone())),
+        Arc::new(File::from_shared(file.clone())?),
         FileFlags::READ | FileFlags::WRITE,
         false,
     )?;

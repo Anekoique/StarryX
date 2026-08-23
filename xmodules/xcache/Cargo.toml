@@ -6,9 +6,10 @@ authors = ["Anekoique <ctolu01@gmail.com>"]
 
 [dependencies]
 xerrno = { workspace = true }
-xhal.workspace = true
+xmm = { workspace = true }
+weak-map = { workspace = true }
+xsync = { workspace = true }
+xtask = { workspace = true, features = ["multitask"] }
 
 log         = { workspace = true }
-lru         = "0.17"
-memory_addr = { workspace = true }
 spin        = { workspace = true }

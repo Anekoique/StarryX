@@ -24,4 +24,3 @@ kspin           = { workspace = true }
 memory_addr     = { workspace = true }
 xerrno         = { workspace = true }
 allocator       = { workspace = true, features = ["bitmap", "page-alloc-4g"] }
-crate_interface = { workspace = true }

@@ -3,7 +3,7 @@ use core::ffi::{c_char, c_int};
 use xerrno::{LinuxError, LinuxResult};
 use xfs::{FileFlags, OpenResult};
 use xsync::RawMutex;
-use xvfs::NodePermission;
+use xvfs::NodeType;
 
 use crate::{
     fs::{
@@ -16,14 +16,27 @@ use crate::{
 use xuspace::{UserConstPtr, UserSpaceAccess};
 use xutils::ctypes::{
     __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
-    F_SETLK, FD_CLOEXEC, O_CLOEXEC, O_NONBLOCK, O_RDWR, O_WRONLY, fs::flags_to_options,
+    F_SETLK, FD_CLOEXEC, O_APPEND, O_CLOEXEC, O_NONBLOCK, O_RDWR, O_WRONLY, fs::flags_to_options,
 };
 
 use crate::syscall::task::{sys_getegid, sys_geteuid};
 
-fn add_to_fd(flags: FileFlags, result: OpenResult<RawMutex>, cloexec: bool) -> LinuxResult<i32> {
+fn add_to_fd(
+    flags: FileFlags,
+    result: OpenResult<RawMutex>,
+    cloexec: bool,
+    truncate: bool,
+) -> LinuxResult<i32> {
     match result {
-        OpenResult::File(file) => File::new(file).add_to_fd_table(flags, cloexec),
+        OpenResult::File(file) => {
+            let truncate =
+                truncate && file.get_file_node().metadata()?.node_type == NodeType::RegularFile;
+            let file = File::new(file)?;
+            if truncate {
+                file.set_len(0)?;
+            }
+            file.add_to_fd_table(flags, cloexec)
+        }
         OpenResult::Dir(dir) => Directory::new(dir).add_to_fd_table(flags, cloexec),
     }
 }
@@ -48,8 +61,17 @@ pub fn sys_openat(
     );
 
     let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
-    with_fs(dirfd, &path, |fs| fs.open(&options, &path))
-        .and_then(|result| add_to_fd(options.to_flags()?, result, flags as u32 & O_CLOEXEC != 0))
+    let mut open_options = options.clone();
+    open_options.truncate(false);
+    with_fs(dirfd, &path, |fs| fs.open(&open_options, &path))
+        .and_then(|result| {
+            add_to_fd(
+                options.to_flags()?,
+                result,
+                flags as u32 & O_CLOEXEC != 0,
+                options.get_truncate(),
+            )
+        })
         .map(|fd| fd as isize)
 }
 
@@ -148,10 +170,11 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             Ok(new_fd)
         }
         F_SETFL => {
-            // if fd == 0 || fd == 1 || fd == 2 {
-            //     return Ok(0);
-            // }
-            get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0);
+            let descriptor = get_file_like(fd)?;
+            descriptor.set_nonblocking(arg & O_NONBLOCK as usize != 0);
+            if let Ok(file) = descriptor.clone().into_any().downcast::<File>() {
+                file.inner().set_append(arg & O_APPEND as usize != 0);
+            }
             Ok(0)
         }
         F_GETFD => {
@@ -165,22 +188,26 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
         }
         F_GETFL => {
             let f = get_file_like(fd)?;
-            let perm = NodePermission::from_bits_truncate(f.stat()?.mode as _);
-
             let mut ret = 0;
 
             if f.is_nonblocking() {
                 ret |= O_NONBLOCK;
             }
-
             ret |= match (
-                perm.contains(NodePermission::OWNER_READ),
-                perm.contains(NodePermission::OWNER_WRITE),
+                f.flags.contains(FileFlags::READ),
+                f.flags.contains(FileFlags::WRITE),
             ) {
                 (true, true) => O_RDWR,
                 (false, true) => O_WRONLY,
                 _ => 0,
             };
+            if f.clone()
+                .into_any()
+                .downcast::<File>()
+                .is_ok_and(|file| file.inner().get_flags().contains(FileFlags::APPEND))
+            {
+                ret |= O_APPEND;
+            }
 
             Ok(ret as _)
         }

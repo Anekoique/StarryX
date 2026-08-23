@@ -14,7 +14,7 @@ use xutils::ctypes::{SIGCHLD, clone_args, task::CloneFlags};
 use crate::{
     fs::fd::FD_TABLE,
     ipc::{IPC_MANAGER, inherit_proc_shm},
-    mm::{XUserSpace, copy_from_kernel},
+    mm::copy_from_kernel,
     task::{XProcess, XTaskExt, XThread, add_thread_to_table, new_user_task, with_uspace},
 };
 
@@ -106,10 +106,11 @@ fn do_clone(
             copy_from_kernel(&mut aspace)?;
             Arc::new(Mutex::new(aspace))
         };
+        let new_uspace = uspace.fork(aspace)?;
 
         new_task
             .ctx_mut()
-            .set_page_table_root(aspace.lock().page_table_root());
+            .set_page_table_root(new_uspace.aspace.lock().page_table_root());
 
         let signal_actions = if flags.contains(CloneFlags::SIGHAND) {
             parent
@@ -120,7 +121,7 @@ fn do_clone(
         };
         let process_data = XProcess::new(
             xprocess.exe_path.read().clone(),
-            XUserSpace::new(aspace),
+            new_uspace,
             signal_actions,
             exit_signal,
             Some(xprocess.rlimits.read().clone()),

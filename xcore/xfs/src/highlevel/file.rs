@@ -393,6 +393,11 @@ impl<M: RawMutex> FsFile<M> {
     pub fn get_flags(&self) -> FileFlags {
         self.flags
     }
+
+    /// Updates the append status of this open file description.
+    pub fn set_append(&mut self, append: bool) {
+        self.flags.set(FileFlags::APPEND, append);
+    }
 }
 
 impl<M: RawMutex> FsFile<M> {

@@ -1,0 +1,71 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cache="$root/xmodules/xcache"
+kernel="$root/xkernel/src"
+vma="$root/xmodules/xvma"
+
+fail() {
+    echo "page-cache boundary: $*" >&2
+    exit 1
+}
+
+rg -q '^#!\[forbid\(unsafe_code\)\]$' "$cache/src/lib.rs" \
+    || fail "xcache must forbid unsafe code"
+
+if rg -n '\bunsafe[[:space:]]*\{' "$cache/src"; then
+    fail "xcache contains an unsafe block"
+fi
+
+if rg -n '(^|[[:space:]"{(])(xfs|xvfs|xvma|xprocess|xkernel|xruntime)([[:space:]"}:;),]|$)' \
+    "$cache/Cargo.toml" "$cache/src"; then
+    fail "xcache depends on a filesystem, VMA, process, kernel, or runtime layer"
+fi
+
+if rg -n '\b(PhysAddr|alloc_page|dealloc_page|FileWrapper|StaticProtectionSnapshot)\b' \
+    "$cache/src"; then
+    fail "xcache crossed the Frame or retired-API boundary"
+fi
+
+# xvma owns only generic object/VMA policy. File/cache registration and the
+# allocator-to-cache callback are integration concerns and must not leak down.
+if rg -n '\b(VmFile[A-Za-z_]*|FileInvalidation[A-Za-z_]*|xcache)\b' "$vma/src"; then
+    fail "xvma contains a file/cache-specific boundary"
+fi
+if rg -n '\b(XAllocIf|evict_cache)\b' "$root/xcore/xalloc"; then
+    fail "xalloc contains a reverse page-cache callback"
+fi
+
+# A registration is the observer lifetime token; the cache registry itself is
+# weak so no mapping/observer/address-space reference cycle can form.
+rg -q '_observer: Arc<dyn InvalidationObserver>' "$cache/src/mapping/resize.rs" \
+    || fail "observer registration does not own its callback"
+
+# Regular-file syscalls must enter through xkernel's File wrapper instead of
+# constructing raw VFS file objects. The wrapper alone selects cache or bypass.
+if rg -n '\b(FsFile|FileNodeOps)\b' "$kernel/syscall/fs" "$kernel/syscall/mm"; then
+    fail "a syscall bypasses the kernel file/cache adapter"
+fi
+rg -q 'cache::mapping_for\(node\)' "$kernel/fs/fd/file.rs" \
+    || fail "the file wrapper does not select its cache mapping centrally"
+
+# The shared, type-opaque CacheSlot is the complete participation contract:
+# default bypass, with ext4 regular files currently the sole coherent
+# provider. The slot keeps xvfs free of any cache dependency.
+rg -q 'fn cache_slot\(&self\) -> Option<&Arc<CacheSlot<M>>>' \
+    "$root/xmodules/xvfs/src/node/file.rs" \
+    || fail "xvfs lacks the default cache bypass contract"
+rg -q 'fn cache_slot\(&self\) -> Option<&Arc<CacheSlot<M>>>' \
+    "$root/xcore/xfs/src/fs/ext4/inode.rs" \
+    || fail "ext4 regular files lack a coherent cache identity"
+providers=$(rg -l 'fn cache_slot\(&self\) -> Option<&Arc<CacheSlot<M>>>' \
+    "$root/xmodules" "$root/xcore" | wc -l | tr -d ' ')
+[ "$providers" = 2 ] || fail "cache participation changed without updating its inventory"
+if rg -n 'xcache' "$root/xmodules/xvfs/Cargo.toml" "$root/xmodules/xvfs/src"; then
+    fail "xvfs depends on the cache implementation"
+fi
+
+echo "page-cache boundary: ok"

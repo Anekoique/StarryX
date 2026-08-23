@@ -164,3 +164,18 @@ Separated page-table mechanisms from safe VMA policy with unified Frame ownershi
 | Hash | Message |
 |------|---------|
 | `cab58f7` | redesign mm subsystem |
+
+## Session 7: Redesign the page cache
+
+### Summary
+
+Unified buffered I/O and file mmap on one per-inode cache; all 33 iozone metrics strictly beat the no-cache baseline.
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| xcache | Single-flight mapping cache with sequence writeback, clock reclaim, worker. |
+| Identity | Per-inode `CacheSlot` attachment and one shared object-id allocator. |
+| Kernel seams | One `CachedMapping` adapter for files and mmap; shutdown zero-leak gate. |
+| Verification | Review and verify closed; cases 13/13, OS-COMP 10/10, iozone 33/33. |

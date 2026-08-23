@@ -312,6 +312,12 @@ impl AddressSpace {
         self.unmap_range(start, size, FrameKind::Alloc, PageSize::Size4K)
     }
 
+    /// Validates every resident allocated-frame leaf without changing it.
+    pub fn validate_alloc_range(&self, start: VirtAddr, size: usize) -> XResult {
+        self.preflight_range(start, size, FrameKind::Alloc, PageSize::Size4K)
+            .map(|_| ())
+    }
+
     fn protect_alloc_range(
         &mut self,
         start: VirtAddr,

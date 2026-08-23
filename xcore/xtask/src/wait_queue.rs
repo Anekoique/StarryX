@@ -1,4 +1,4 @@
-use alloc::collections::VecDeque;
+use alloc::collections::{TryReserveError, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -48,6 +48,11 @@ impl WaitQueue {
         Self {
             queue: SpinNoIrq::new(VecDeque::with_capacity(capacity)),
         }
+    }
+
+    /// Reserves waiter slots without changing scheduler state.
+    pub fn try_reserve(&self, additional: usize) -> Result<(), TryReserveError> {
+        self.queue.lock().try_reserve(additional)
     }
 
     /// Cancel events by removing the task from the wait queue.
@@ -101,6 +106,29 @@ impl WaitQueue {
             // Preemption may occur here.
         }
         self.cancel_events(curr, false);
+    }
+
+    /// Waits until `condition` becomes true after reserving a queue slot.
+    ///
+    /// Reservation happens while the wait-queue lock is held and before the
+    /// task is marked blocked, so allocation failure leaves no scheduler or
+    /// queue state behind.
+    pub fn try_wait_until<F>(&self, mut condition: F) -> Result<(), TryReserveError>
+    where
+        F: FnMut() -> bool,
+    {
+        let curr = crate::current();
+        loop {
+            let mut rq = current_run_queue::<NoPreemptIrqSave>();
+            let mut wq = self.queue.lock();
+            if condition() {
+                break;
+            }
+            wq.try_reserve(1)?;
+            rq.blocked_resched(wq);
+        }
+        self.cancel_events(curr, false);
+        Ok(())
     }
 
     /// Blocks the current task and put it into the wait queue, until other tasks

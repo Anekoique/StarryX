@@ -53,12 +53,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "allocator-api2"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -795,12 +789,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
-name = "foldhash"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
-
-[[package]]
 name = "fxmac_rs"
 version = "0.2.0"
 source = "git+https://github.com/elliott10/fxmac_rs.git?rev=0dbc3916#0dbc3916d5d5a0086916deda0c4c2dd8651c69ce"
@@ -883,7 +871,7 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
- "foldhash 0.1.5",
+ "foldhash",
 ]
 
 [[package]]
@@ -891,11 +879,6 @@ name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
-dependencies = [
- "allocator-api2",
- "equivalent",
- "foldhash 0.2.0",
-]
 
 [[package]]
 name = "heapless"
@@ -1192,15 +1175,6 @@ checksum = "236e72a07bb26b68662f7cc9dcb58cea50cf5e3d8b698e1b51ff7c36d633dd92"
 dependencies = [
  "bit_field",
  "bitflags 2.11.1",
-]
-
-[[package]]
-name = "lru"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0b564323a0fb6d54b864f625ae139de9612e27edb944dda37c109f05aac531"
-dependencies = [
- "hashbrown 0.17.0",
 ]
 
 [[package]]
@@ -2447,7 +2421,6 @@ version = "0.1.0"
 dependencies = [
  "allocator",
  "cfg-if",
- "crate_interface 0.3.0",
  "kspin",
  "log",
  "memory_addr",
@@ -2459,11 +2432,12 @@ name = "xcache"
 version = "0.1.0"
 dependencies = [
  "log",
- "lru",
- "memory_addr",
  "spin 0.10.0",
+ "weak-map",
  "xerrno",
- "xhal",
+ "xmm",
+ "xsync",
+ "xtask",
 ]
 
 [[package]]
@@ -2607,6 +2581,7 @@ dependencies = [
  "lwext4_rust",
  "slab",
  "spin 0.10.0",
+ "weak-map",
  "xdriver",
  "xdriver_block",
  "xerrno",
@@ -2678,6 +2653,7 @@ dependencies = [
  "syscalls",
  "x86",
  "xalloc",
+ "xcache",
  "xconfig",
  "xerrno",
  "xfeat",
@@ -2726,6 +2702,7 @@ dependencies = [
 name = "xmm"
 version = "0.1.0"
 dependencies = [
+ "kernel_guard",
  "kspin",
  "lazyinit",
  "log",

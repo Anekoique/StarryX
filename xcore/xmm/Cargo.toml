@@ -22,4 +22,5 @@ xerrno     = { workspace = true }
 lazyinit    = { workspace = true }
 memory_addr = { workspace = true }
 kspin       = { workspace = true }
+kernel_guard = { workspace = true }
 page_table_multiarch = { workspace = true }

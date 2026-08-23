@@ -85,8 +85,10 @@ restrictions and default quarantine live in manifests/profiles; every retained
 suite remains selectable through an explicit profile even when it is excluded
 from the ordinary batch profile.
 
-The host resolves a profile and optional CLI case filter before building. It
-then creates a unique run under
+The host resolves a profile and optional CLI case filter before building. A
+case sidecar or testsuit manifest may set `boot_count` from 1 through 8. A case
+with `boot_count > 1` must be the only selected case and cannot run in
+interactive mode. The host then creates a unique run under
 `target/xtest/<arch>/<profile>/<run-id>.partial/`, materializes all inputs and
 results there, and atomically renames it to `<run-id>/` only after terminal
 reports are written. Previous run directories are immutable and never reused.
@@ -109,10 +111,22 @@ contains:
 │   │   └── 0001/...
 │   └── bin/{cases,testsuits}/...
 ├── rootfs.img
-├── serial.log
+├── serial.log                    # one-boot run
+├── serial.boot-{1,2,...}.log     # multi-boot run
 ├── report.json
 └── report.tap
 ```
+
+For a multi-boot case, the host launches QEMU `boot_count` times against the
+same disposable `rootfs.img`. It does not rebuild, reinject, copy, or finalize
+the image between boots. Every boot starts a fresh protocol state machine and
+must pass before the next boot begins. The first non-passing boot stops the
+sequence. Host deadlines and process-group termination/reaping apply
+independently to every QEMU launch. The run is terminally passed only when all
+declared boots pass; only then are the combined JSON/TAP reports written and
+the `.partial` directory atomically finalized. The JSON report contains one
+`boots[]` entry per attempted boot, including status, QEMU exit, detail, and
+case results; TAP includes one diagnostic line per boot.
 
 The directory-shaped plan avoids shell evaluation and escaping. The guest
 constructs argv from numbered files and never evaluates plan content as shell
@@ -213,6 +227,7 @@ enum Arch {
 struct CaseMetadata {
     args: Vec<String>,
     timeout_secs: u64,
+    boot_count: u32,
     architectures: Vec<Arch>,
 }
 
@@ -240,6 +255,7 @@ struct TestsuitCase {
     working_directory: Option<String>,
     args: Vec<String>,
     timeout_secs: u64,
+    boot_count: u32,
     architectures: Vec<Arch>,
 }
 
@@ -248,6 +264,7 @@ struct ResolvedCase {
     program: PathBuf,
     args: Vec<String>,
     timeout_secs: u64,
+    boot_count: u32,
     origin: CaseOrigin,
 }
 
@@ -265,6 +282,7 @@ struct TestPlan {
     version: u32,
     run_id: String,
     arch: Arch,
+    boot_count: u32,
     cases: Vec<PlanCase>,
 }
 
@@ -293,8 +311,18 @@ struct RunSummary {
     run_id: String,
     arch: Arch,
     profile: String,
+    boot_count: u32,
     outcomes: Vec<CaseResult>,
     status: RunStatus,
+    boots: Vec<BootSummary>,
+}
+
+struct BootSummary {
+    boot: u32,
+    outcomes: Vec<CaseResult>,
+    status: RunStatus,
+    detail: Option<String>,
+    qemu_exit: Option<i32>,
 }
 
 enum RunStatus {
@@ -443,5 +471,22 @@ required block/network devices.
 - C-27: @source-scan: `suite-adapters|SUITE_SKIP|run-suite @ xtest/src xtest/guest`
   Suite-specific build/result/quarantine logic remains confined to
   `xtest/testsuits/<name>/` and declarative profiles.
+- C-28: @test-binding: multi_boot_case_requires_an_isolated_run
+  `boot_count` is in `1..=8`; a value greater than one requires that case to be
+  the run's sole selection and forbids interactive execution.
+- C-29: @judgment
+  A multi-boot run reuses exactly one disposable image, starts a fresh protocol
+  state and process group per boot, stops on the first non-pass, and finalizes
+  one immutable run only after writing boot-indexed serial logs and aggregate
+  JSON/TAP reports.
+- C-30: @test-binding: page_cache_persist
+  The two-boot page-cache persistence case writes and syncs on boot one and
+  validates the same image on boot two; both boot summaries must pass.
+
+[**CHANGELOG**]
+
+- 2026-08-17: Added bounded isolated multi-boot cases, same-image execution,
+  per-boot serial artifacts, and boot-aware JSON/TAP reporting for persistent
+  storage validation.
 
 ---

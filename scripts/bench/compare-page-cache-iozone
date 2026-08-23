@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+"""Validate three unchanged iozone runs against the no-cache baseline."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import platform
+import re
+import subprocess
+import sys
+from decimal import Decimal
+from pathlib import Path
+
+
+BASELINE = {
+    "auto.write": "19883",
+    "auto.rewrite": "17512",
+    "auto.read": "17395",
+    "auto.reread": "17359",
+    "auto.random_read": "15368",
+    "auto.random_write": "14165",
+    "auto.backward_read": "13549",
+    "auto.record_rewrite": "11671",
+    "auto.stride_read": "9899",
+    "auto.fwrite": "7736",
+    "auto.frewrite": "9601",
+    "auto.fread": "5813",
+    "auto.freread": "6595",
+    "write_read.initial_writers": "14932.09",
+    "write_read.rewriters": "14409.15",
+    "write_read.readers": "15909.74",
+    "write_read.re_readers": "14011.29",
+    "random.initial_writers": "16475.96",
+    "random.rewriters": "17756.47",
+    "random.random_readers": "14813.51",
+    "random.random_writers": "12720.95",
+    "backward.initial_writers": "16234.92",
+    "backward.rewriters": "12420.24",
+    "backward.reverse_readers": "14715.40",
+    "stride.initial_writers": "16874.84",
+    "stride.rewriters": "15491.26",
+    "stride.stride_readers": "12764.59",
+    "stdio.fwriters": "34065.80",
+    "stdio.freaders": "15157.02",
+    "positional.pwrite_writers": "12099.74",
+    "positional.pread_readers": "7222.52",
+    "vector_fallback.initial_writers": "13022.66",
+    "vector_fallback.rewriters": "13076.74",
+}
+
+EXPECTED = {
+    "starryx_baseline": "b76f4d7138e1d9bd02d660cf0bbad1c9c611ded6",
+    "xtest_revision": "59faed8281fd17234d682144a7fcd70accb0a6ad",
+    "rootfs_sha256": "636840a4feda55e10f5d1dce394fd733d16ed626b97668239024d9ac2c5aaef6",
+    "iozone_driver_sha256": "86973a9de127d1224838e7a13e51219a07bf83263bd630afc4e8cfcda4b6c1a6",
+    "iozone_manifest_sha256": "26f53f0b5335a44042ccc2866ff19e70b68bcef7948f047187fa7e964ec23a67",
+    "qemu": "QEMU emulator version 11.0.0",
+    "rustc": "rustc 1.96.0-nightly (03749d625 2026-03-14)",
+    "host_arch": "arm64",
+    "macos": "26.5 (25F71)",
+}
+
+COMMANDS = [
+    "-a -r 1k -s 4m",
+    "-t 4 -i 0 -i 1 -r 1k -s 1m",
+    "-t 4 -i 0 -i 2 -r 1k -s 1m",
+    "-t 4 -i 0 -i 3 -r 1k -s 1m",
+    "-t 4 -i 0 -i 5 -r 1k -s 1m",
+    "-t 4 -i 6 -i 7 -r 1k -s 1m",
+    "-t 4 -i 9 -i 10 -r 1k -s 1m",
+    "-t 4 -i 11 -i 12 -r 1k -s 1m",
+]
+
+PHASES = {
+    "write-read": (
+        "write_read",
+        ("initial writers", "rewriters", "readers", "re-readers"),
+    ),
+    "random-read": (
+        "random",
+        ("initial writers", "rewriters", "random readers", "random writers"),
+    ),
+    "read-backwards": (
+        "backward",
+        ("initial writers", "rewriters", "reverse readers"),
+    ),
+    "stride-read": (
+        "stride",
+        ("initial writers", "rewriters", "stride readers"),
+    ),
+    "fwrite-fread": ("stdio", ("fwriters", "freaders")),
+    "pwrite-pread": ("positional", ("pwrite writers", "pread readers")),
+    "pwritev-preadv": ("vector_fallback", ("initial writers", "rewriters")),
+}
+
+AUTO_NAMES = (
+    "write",
+    "rewrite",
+    "read",
+    "reread",
+    "random_read",
+    "random_write",
+    "backward_read",
+    "record_rewrite",
+    "stride_read",
+    "fwrite",
+    "frewrite",
+    "fread",
+    "freread",
+)
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+THROUGHPUT = re.compile(
+    r"Children see throughput for\s+4\s+(.+?)\s*=\s*([0-9]+(?:\.[0-9]+)?)\s+kB/sec"
+)
+
+
+def fail(message: str) -> None:
+    raise ValueError(message)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def source_snapshot_sha256(repository: Path, *paths: str) -> str:
+    """Hash the named source trees, including uncommitted and untracked files."""
+    result = subprocess.run(
+        ("git", "ls-files", "-co", "--exclude-standard", "-z", "--", *paths),
+        cwd=repository,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    digest = hashlib.sha256()
+    for raw_path in sorted(filter(None, result.stdout.split(b"\0"))):
+        path = repository / raw_path.decode()
+        if path.is_dir():
+            # Git includes initialized gitlinks in `ls-files`. Their checked
+            # out revision is a build input, while generated files inside the
+            # submodule are not. Refuse dirty gitlinks instead of hashing an
+            # unstable build directory.
+            head = command("git", "rev-parse", "HEAD", cwd=path)
+            if command("git", "status", "--porcelain", cwd=path):
+                fail(f"source snapshot gitlink is dirty: {path}")
+            data = f"gitlink:{head}".encode()
+            digest.update(len(raw_path).to_bytes(8, "big"))
+            digest.update(raw_path)
+            digest.update(len(data).to_bytes(8, "big"))
+            digest.update(data)
+            continue
+        if not path.is_file():
+            fail(f"source snapshot entry is not a file: {path}")
+        digest.update(len(raw_path).to_bytes(8, "big"))
+        digest.update(raw_path)
+        data = path.read_bytes()
+        digest.update(len(data).to_bytes(8, "big"))
+        digest.update(data)
+    return digest.hexdigest()
+
+
+def command(*args: str, cwd: Path | None = None) -> str:
+    result = subprocess.run(
+        args,
+        cwd=cwd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def normalize(text: str) -> str:
+    return ANSI.sub("", text).replace("\r", "")
+
+
+def parse_run(
+    run_dir: Path, repository: Path
+) -> tuple[dict[str, Decimal], dict[str, object]]:
+    report_path = run_dir / "report.json"
+    serial_path = run_dir / "serial.log"
+    if not report_path.is_file() or not serial_path.is_file():
+        fail(f"{run_dir}: report.json and serial.log are required")
+    report = json.loads(report_path.read_text())
+    expected_case = [{"id": "testsuit/iozone/run", "outcome": "pass", "exit_code": 0}]
+    if report.get("arch") != "riscv64" or report.get("profile") != "oscomp":
+        fail(f"{run_dir}: expected riscv64/oscomp evidence")
+    if report.get("status") != "passed" or report.get("qemu_exit") != 0:
+        fail(f"{run_dir}: xtest did not pass cleanly")
+    if report.get("cases") != expected_case:
+        fail(f"{run_dir}: expected only testsuit/iozone/run to pass")
+    if report.get("boot_count", 1) != 1:
+        fail(f"{run_dir}: benchmark must use one fresh boot")
+
+    serial = normalize(serial_path.read_text(errors="replace"))
+    for text in (
+        "build_mode = release",
+        "log_level = off",
+        "smp = 1",
+        "-m 1G -smp 1 -machine virt",
+        "Version $Revision: 3.506 $",
+        "#### OS COMP TEST GROUP START iozone ####",
+        "#### OS COMP TEST GROUP END iozone ####",
+    ):
+        if text not in serial:
+            fail(f"{run_dir}: missing provenance marker {text!r}")
+    for arguments in COMMANDS:
+        marker = f"Command line used: /xtest/bin/testsuits/iozone/iozone {arguments}"
+        if serial.count(marker) != 1:
+            fail(f"{run_dir}: expected exactly one command {arguments!r}")
+
+    rows = re.findall(r"^\s*4096\s+1\s+((?:\d+\s+){12}\d+)\s*$", serial, re.MULTILINE)
+    if len(rows) != 1:
+        fail(f"{run_dir}: expected exactly one automatic-mode result row")
+    auto_values = rows[0].split()
+    metrics = {
+        f"auto.{name}": Decimal(value)
+        for name, value in zip(AUTO_NAMES, auto_values, strict=True)
+    }
+
+    for label, (prefix, expected_labels) in PHASES.items():
+        terminal = f"testcase iozone {label} success"
+        if serial.count(terminal) != 1:
+            fail(f"{run_dir}: phase {label!r} did not succeed exactly once")
+        end = serial.index(terminal)
+        start = serial.rfind("Command line used:", 0, end)
+        if start < 0:
+            fail(f"{run_dir}: phase {label!r} has no command line")
+        values = {
+            " ".join(name.split()): Decimal(value)
+            for name, value in THROUGHPUT.findall(serial[start:end])
+        }
+        if tuple(values) != expected_labels:
+            fail(
+                f"{run_dir}: phase {label!r} labels {tuple(values)!r} "
+                f"do not match {expected_labels!r}"
+            )
+        for name, value in values.items():
+            metrics[f"{prefix}.{name.replace(' ', '_').replace('-', '_')}"] = value
+
+    if set(metrics) != set(BASELINE):
+        missing = sorted(set(BASELINE) - set(metrics))
+        extra = sorted(set(metrics) - set(BASELINE))
+        fail(f"{run_dir}: metric mismatch, missing={missing}, extra={extra}")
+    return metrics, {
+        "run_id": report["run_id"],
+        "directory": str(run_dir.relative_to(repository)),
+        "report_sha256": sha256(report_path),
+        "serial_sha256": sha256(serial_path),
+    }
+
+
+def host_provenance(repository: Path) -> dict[str, str]:
+    rootfs = repository / "rootfs-riscv64.img"
+    driver = repository / "xtest/testsuits/iozone/iozone_testcode.sh"
+    manifest = repository / "xtest/testsuits/iozone/xtest.toml"
+    actual = {
+        "starryx_head": command("git", "rev-parse", "HEAD", cwd=repository),
+        "starryx_source_sha256": source_snapshot_sha256(
+            repository,
+            "Cargo.lock",
+            "crates/lwext4_rust",
+            "starry",
+            "xcore",
+            "xkernel",
+            "xmodules",
+        ),
+        "xtest_revision": command("git", "rev-parse", "HEAD", cwd=repository / "xtest"),
+        "xtest_source_sha256": source_snapshot_sha256(repository / "xtest", "."),
+        "rootfs_sha256": sha256(rootfs),
+        "iozone_driver_sha256": sha256(driver),
+        "iozone_manifest_sha256": sha256(manifest),
+        "qemu": command("qemu-system-riscv64", "--version").splitlines()[0],
+        "rustc": command("rustc", "--version"),
+        "host_arch": platform.machine(),
+        "macos": f"{command('sw_vers', '-productVersion')} ({command('sw_vers', '-buildVersion')})",
+    }
+    for field in (
+        "xtest_revision",
+        "rootfs_sha256",
+        "iozone_driver_sha256",
+        "iozone_manifest_sha256",
+        "qemu",
+        "rustc",
+        "host_arch",
+        "macos",
+    ):
+        if actual[field] != EXPECTED[field]:
+            fail(f"provenance mismatch for {field}: {actual[field]!r} != {EXPECTED[field]!r}")
+    if command("git", "diff", "--quiet", "HEAD", "--", "testsuits/iozone", cwd=repository / "xtest"):
+        fail("unreachable")
+    return actual
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("run", nargs=3, type=Path, help="three completed xtest run directories")
+    parser.add_argument("--output", type=Path, help="write machine-readable JSON evidence")
+    args = parser.parse_args()
+    repository = Path(__file__).resolve().parents[2]
+
+    provenance = host_provenance(repository)
+    parsed = [parse_run(path.resolve(), repository) for path in args.run]
+    run_ids = [metadata["run_id"] for _, metadata in parsed]
+    if len(set(run_ids)) != 3:
+        fail("the three benchmark runs must have distinct run IDs")
+
+    comparisons = {}
+    passed = True
+    for name, baseline_text in BASELINE.items():
+        values = [metrics[name] for metrics, _ in parsed]
+        median = sorted(values)[1]
+        baseline = Decimal(baseline_text)
+        metric_passed = median > baseline
+        passed &= metric_passed
+        comparisons[name] = {
+            "runs": [str(value) for value in values],
+            "median": str(median),
+            "baseline": str(baseline),
+            "delta_percent": str((median / baseline - 1) * 100),
+            "passed": metric_passed,
+        }
+
+    evidence = {
+        "schema": 1,
+        "passed": passed,
+        "command": "make test ARCH=riscv64 CASE=testsuit/iozone/run SMP=1 MEM=1G LOG=off MODE=release",
+        "expected": EXPECTED,
+        "provenance": provenance,
+        "runs": [metadata for _, metadata in parsed],
+        "metrics": comparisons,
+    }
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+
+    print(f"{'metric':42} {'median':>12} {'baseline':>12} {'delta':>10} result")
+    for name, result in comparisons.items():
+        print(
+            f"{name:42} {result['median']:>12} {result['baseline']:>12} "
+            f"{Decimal(result['delta_percent']):>9.2f}% "
+            f"{'PASS' if result['passed'] else 'FAIL'}"
+        )
+    print(f"page-cache iozone gate: {'PASS' if passed else 'FAIL'}")
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        print(f"page-cache iozone gate: ERROR: {error}", file=sys.stderr)
+        sys.exit(2)

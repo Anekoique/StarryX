@@ -42,6 +42,12 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
     }
 
     if thread.exit(exit_code) {
+        let mut aspace = uspace.aspace.lock();
+        if let Err(error) = aspace.unmap_user_areas() {
+            warn!("failed to release user address space on exit: {error:?}");
+        }
+        uspace.mapped_files.prune(&aspace);
+        drop(aspace);
         process.exit();
         if let Some(parent) = process.parent() {
             if let Some(signo) = xprocess.exit_signal {
@@ -51,8 +57,6 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
                 data.child_exit_wq.notify_all(false)
             }
         }
-
-        process.exit();
         // TODO: clear namespace resources
         // FIXME: xns should drop all the resources
         FD_TABLE.clear();
