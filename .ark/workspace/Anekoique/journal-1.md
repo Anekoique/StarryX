@@ -167,6 +167,13 @@ Separated page-table mechanisms from safe VMA policy with unified Frame ownershi
 
 ## Session 7: Redesign the page cache
 
+**Date**: 2026-08-23
+**Slug**: redesign-page-cache
+**Branch**: `feat/redesign-page-cache`
+**Base Branch**: `main`
+**Start Head**: `a076bcc`
+**Closing Commit**: `44f70e1`
+
 ### Summary
 
 Unified buffered I/O and file mmap on one per-inode cache; all 33 iozone metrics strictly beat the no-cache baseline.
@@ -179,3 +186,9 @@ Unified buffered I/O and file mmap on one per-inode cache; all 33 iozone metrics
 | Identity | Per-inode `CacheSlot` attachment and one shared object-id allocator. |
 | Kernel seams | One `CachedMapping` adapter for files and mmap; shutdown zero-leak gate. |
 | Verification | Review and verify closed; cases 13/13, OS-COMP 10/10, iozone 33/33. |
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| _(none)_ |   |

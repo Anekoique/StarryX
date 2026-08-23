@@ -12,6 +12,7 @@
 | 4 | 2026-08-09 | Redesign xtest as a standalone framework | `redesign-xtest-framework` | `feat/redesign-xtest-framework` | `6a69433` | `journal-1.md` |
 | 5 | 2026-08-10 | Decouple xcache and establish an ext4 baseline | `remove-xcache` | `main` | `2cfb6ea` | `journal-1.md` |
 | 6 | 2026-08-16 | Redesign the MM subsystem | `redesign-mm-subsystem` | `feat/redesign-mm-subsystem` | `cab58f7` | `journal-1.md` |
+| 7 | 2026-08-23 | Redesign the page cache | `redesign-page-cache` | `feat/redesign-page-cache` | <PENDING:redesign-page-cache> | `journal-1.md` |
 
 <!-- ARK:SESSIONS:END -->
 
