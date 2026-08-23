@@ -182,6 +182,8 @@ does not yet contain the required LoongArch image.
 <!-- ARK:START -->
 Ark is installed in this project. Use `/ark:quick` or `/ark:design` to start tasks.
 
+Activating an ark-workflow requires an explicit user invocation of a skill or slash command; it cannot be automatically triggered by the agent.
+
 See `.ark/workflow.md` for the full workflow.
 
 @.ark/specs/INDEX.md

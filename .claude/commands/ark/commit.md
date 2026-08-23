@@ -41,7 +41,7 @@ If `$ARGUMENTS` includes `-m "<msg>"`, use it verbatim. Otherwise:
 
 ### Step 4: Append the journal entry (workspace) `[AI]`
 
-If `.ark/.developer` exists, append a session block to the active journal at `active_journal_path` (from `ark context --scope record`):
+If `.ark/.developer` exists, append one session block at the physical EOF of `active_journal_path` (from `ark context --scope record`). Never insert beside or move/reorder existing sessions; before Step 5, verify the new block is unstamped and its `## Session N:` heading is the file's last session heading.
 
 ```markdown
 ## Session N: <title>

@@ -200,7 +200,7 @@ ark agent task commit -m "<message>"
 - If `-m` was passed, use verbatim.
 - Otherwise: `git diff --cached` to see staged work, `git log -n 5 --oneline` for style, generate Conventional Commits subject (≤70 chars). **Show the message and ask for confirmation before invoking the CLI.**
 
-**Journal entry (workspace, when `.ark/.developer` exists):** append a session block to the path returned by `ark context --scope record`:
+**Journal entry (workspace, when `.ark/.developer` exists):** append one session block at the physical EOF of the path returned by `ark context --scope record`. Never insert beside or move/reorder existing sessions; before committing, verify the new block is unstamped and its `## Session N:` heading is the file's last session heading.
 
 ```markdown
 ## Session N: <title>
